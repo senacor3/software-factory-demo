@@ -1,0 +1,67 @@
+name: light-factory
+
+# Pipeline skeleton & gates (ticket 1).
+#
+# Job-level FSM skeleton only: analysis -> implementation (gated by the
+# plan-approval Environment) -> merge (gated by the evidence-approval
+# Environment). Stub steps only -- no real agent, state-file, PR, or merge
+# logic. See _bmad-output/initiative-light-factory/epic-light-factory-pipeline/
+# story-pipeline-skeleton-gates-plan.md for the plan this implements.
+
+on:
+  workflow_dispatch:
+    inputs:
+      story_file:
+        description: "Path to the triggering story file (e.g. stories/trivial-test-story.md)"
+        required: true
+        type: string
+
+# Keyed on the raw story_file input (not a derived slug) -- the concurrency
+# key is evaluated at trigger time from the workflow's own context, before
+# any job runs, so it cannot read a job output. A second dispatch for the
+# same story_file while a run is still in flight -- including one paused at
+# a gate -- cancels that run outright.
+concurrency:
+  group: light-factory-${{ github.event.inputs.story_file }}
+  cancel-in-progress: true
+
+jobs:
+  analysis:
+    name: "Job 1: Analysis"
+    runs-on: ubuntu-latest
+    outputs:
+      story-slug: ${{ steps.derive.outputs.story-slug }}
+      run-id: ${{ steps.derive.outputs.run-id }}
+    steps:
+      - name: Derive story-slug and run-id
+        id: derive
+        run: |
+          story_file="${{ github.event.inputs.story_file }}"
+          filename="$(basename "$story_file")"
+          slug="${filename%.md}"
+          echo "story-slug=${slug}" >> "$GITHUB_OUTPUT"
+          echo "run-id=run-${{ github.run_id }}" >> "$GITHUB_OUTPUT"
+
+      - name: Analysis stub
+        run: |
+          echo "Analysis stub -- story-slug=${{ steps.derive.outputs.story-slug }} run-id=${{ steps.derive.outputs.run-id }}"
+
+  implementation:
+    name: "Job 2: Implementation"
+    needs: analysis
+    environment: plan-approval
+    runs-on: ubuntu-latest
+    steps:
+      - name: Implementation stub
+        run: |
+          echo "Implementation stub -- story-slug=${{ needs.analysis.outputs.story-slug }} run-id=${{ needs.analysis.outputs.run-id }}"
+
+  merge:
+    name: "Job 3: Merge"
+    needs: implementation
+    environment: evidence-approval
+    runs-on: ubuntu-latest
+    steps:
+      - name: Merge stub
+        run: |
+          echo "Merge stub -- run complete"
