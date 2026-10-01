@@ -33,14 +33,19 @@ jobs:
       story-slug: ${{ steps.derive.outputs.story-slug }}
       run-id: ${{ steps.derive.outputs.run-id }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+
       - name: Derive story-slug and run-id
         id: derive
         run: |
-          story_file="${{ github.event.inputs.story_file }}"
-          filename="$(basename "$story_file")"
-          slug="${filename%.md}"
-          echo "story-slug=${slug}" >> "$GITHUB_OUTPUT"
-          echo "run-id=run-${{ github.run_id }}" >> "$GITHUB_OUTPUT"
+          uv run factory/scripts/state_io.py derive \
+            --story-file "${{ github.event.inputs.story_file }}" \
+            --github-run-id "${{ github.run_id }}" \
+            >> "$GITHUB_OUTPUT"
 
       - name: Analysis stub
         run: |
@@ -52,6 +57,32 @@ jobs:
     environment: plan-approval
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+
+      # Real pass/fail test of the needs: propagation (AD-8/AD-15): independently
+      # recompute the expected story-slug/run-id (same derivation, same github.run_id,
+      # which is constant across every job in this run) and compare against what this
+      # job actually received via needs.analysis.outputs -- fails loudly on mismatch.
+      - name: Assert story-slug/run-id propagation matches AD-8 derivation
+        run: |
+          set -euo pipefail
+          expected="$(uv run factory/scripts/state_io.py derive \
+            --story-file "${{ github.event.inputs.story_file }}" \
+            --github-run-id "${{ github.run_id }}")"
+          expected_slug="$(printf '%s\n' "$expected" | sed -n 's/^story-slug=//p')"
+          expected_run_id="$(printf '%s\n' "$expected" | sed -n 's/^run-id=//p')"
+          received_slug="${{ needs.analysis.outputs.story-slug }}"
+          received_run_id="${{ needs.analysis.outputs.run-id }}"
+          if [ "$expected_slug" != "$received_slug" ] || [ "$expected_run_id" != "$received_run_id" ]; then
+            echo "MISMATCH: expected story-slug=$expected_slug run-id=$expected_run_id, got story-slug=$received_slug run-id=$received_run_id" >&2
+            exit 1
+          fi
+          echo "PASS: propagation verified -- story-slug=$received_slug run-id=$received_run_id"
+
       - name: Implementation stub
         run: |
           echo "Implementation stub -- story-slug=${{ needs.analysis.outputs.story-slug }} run-id=${{ needs.analysis.outputs.run-id }}"
