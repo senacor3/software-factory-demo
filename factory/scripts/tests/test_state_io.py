@@ -318,3 +318,78 @@ def test_cli_write_rejects_unknown_stage_choice():
                 "drafted",
             ]
         )
+
+
+def test_cli_write_body_file_reads_body_from_disk(tmp_path, capsys):
+    body_file = tmp_path / "body.txt"
+    body_file.write_text("from a file", encoding="utf-8")
+    path = tmp_path / "plan.md"
+    rc = state_io.main(
+        [
+            "write",
+            "--path",
+            str(path),
+            "--story-slug",
+            "foo-bar",
+            "--stage",
+            "analysis",
+            "--status",
+            "drafted",
+            "--body-file",
+            str(body_file),
+        ]
+    )
+    capsys.readouterr()
+    assert rc == 0
+    _, body = state_io.read_state(path)
+    assert "from a file" in body
+
+
+def test_cli_write_body_file_missing_exits_2_not_traceback(tmp_path, capsys):
+    path = tmp_path / "plan.md"
+    rc = state_io.main(
+        [
+            "write",
+            "--path",
+            str(path),
+            "--story-slug",
+            "foo-bar",
+            "--stage",
+            "analysis",
+            "--status",
+            "drafted",
+            "--body-file",
+            str(tmp_path / "does-not-exist.txt"),
+        ]
+    )
+    captured = capsys.readouterr()
+    assert rc == 2
+    assert "error" in captured.err
+    assert not path.exists()
+
+
+def test_cli_write_body_and_body_file_together_exits_2(tmp_path, capsys):
+    body_file = tmp_path / "body.txt"
+    body_file.write_text("from a file", encoding="utf-8")
+    path = tmp_path / "plan.md"
+    rc = state_io.main(
+        [
+            "write",
+            "--path",
+            str(path),
+            "--story-slug",
+            "foo-bar",
+            "--stage",
+            "analysis",
+            "--status",
+            "drafted",
+            "--body",
+            "inline",
+            "--body-file",
+            str(body_file),
+        ]
+    )
+    captured = capsys.readouterr()
+    assert rc == 2
+    assert "error" in captured.err
+    assert not path.exists()

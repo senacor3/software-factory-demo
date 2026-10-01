@@ -67,6 +67,15 @@ jobs:
       # recompute the expected story-slug/run-id (same derivation, same github.run_id,
       # which is constant across every job in this run) and compare against what this
       # job actually received via needs.analysis.outputs -- fails loudly on mismatch.
+      #
+      # Verification-only: `$expected` below is discarded after this comparison and is
+      # never used to locate a file, name a branch/PR, or otherwise stand in for the
+      # propagated value (`Implementation stub` below uses needs.analysis.outputs.*
+      # exclusively). AD-8's "no job independently re-derives the slug from any other
+      # source" rule guards against a job acting on a self-computed slug instead of the
+      # propagated one; this step never acts on $expected, only asserts equality, so the
+      # collision risk the rule exists to prevent does not arise here. Do not read this
+      # step as license for a future job to re-derive and use its own value.
       - name: Assert story-slug/run-id propagation matches AD-8 derivation
         run: |
           set -euo pipefail

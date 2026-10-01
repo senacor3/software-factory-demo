@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # /// script
-# requires-python = ">=3.11"
+# requires-python = ">=3.13"
 # ///
 """state_io — shared `.factory/<story-slug>/<run-id>/` state I/O for the light-factory pipeline.
 
@@ -249,10 +249,13 @@ def cmd_derive(args) -> int:
 
 
 def cmd_write(args) -> int:
+    if args.body and args.body_file:
+        print("error: --body and --body-file are mutually exclusive", file=sys.stderr)
+        return 2
     body = args.body or ""
-    if args.body_file:
-        body = Path(args.body_file).read_text(encoding="utf-8")
     try:
+        if args.body_file:
+            body = Path(args.body_file).read_text(encoding="utf-8")
         meta = write_state(
             args.path,
             story_slug=args.story_slug,
@@ -261,7 +264,7 @@ def cmd_write(args) -> int:
             body=body,
             schema_version=args.schema_version,
         )
-    except ValueError as e:
+    except (ValueError, OSError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
     print(json.dumps({"ok": True, "path": str(args.path), "meta": meta}))
