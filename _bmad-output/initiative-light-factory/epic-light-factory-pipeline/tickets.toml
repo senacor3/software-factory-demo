@@ -1,0 +1,158 @@
+# tickets.toml — epic-light-factory-pipeline's agreed children, in build order.
+# Tracer bullet: entry 1. Refactor sweep: entry 12. Closing end-to-end suite: entry 13.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Pipeline skeleton & gates"
+description = "Stands up one workflow file with job stubs chained by needs:, both GitHub Environments with required reviewers, and the concurrency guard. Delivers only the pause/resume gate mechanics for CAP-3 and CAP-8, and a Job-3 stub for CAP-9 — no gate summary content (entries 5, 11) and no real merge (entry 11) yet."
+verify = "Triggering a run against a trivial story file pauses at plan-approval, resumes on approval, pauses at evidence-approval, resumes on approval, and completes."
+covers = ["CAP-3", "CAP-8", "CAP-9"]
+after = []
+hitl = true
+risk = "low"
+references = ["architecture-light-factory/architecture-light-factory.md#ad-1", "architecture-light-factory/architecture-light-factory.md#ad-2", "architecture-light-factory/architecture-light-factory.md#ad-3", "architecture-light-factory/architecture-light-factory.md#ad-7", "architecture-light-factory/architecture-light-factory.md#ad-9"]
+
+[[entry]]
+id = 2
+type = "story"
+title = "Shared state library"
+description = "Implements state_io.py: the shared frontmatter schema, the .factory/<story-slug>/<run-id>/ layout, and slug+run-id derivation threaded via needs: outputs."
+verify = "A unit test writes and reads a state file round-trip with the correct schema; a downstream stub job receives the same slug and run-id the first job derived."
+covers = []
+after = [1]
+hitl = false
+risk = "medium"
+references = ["architecture-light-factory/architecture-light-factory.md#ad-8", "architecture-light-factory/architecture-light-factory.md#ad-10", "architecture-light-factory/architecture-light-factory.md#ad-15"]
+
+[[entry]]
+id = 3
+type = "story"
+title = "Job 1: intake + analysis"
+description = "Adds the analysis skill and analysis_graph.py: intake completeness/scope check, solution proposal, subtasks and tests, writing plan.md and decisions.md through entry 2's state_io.py (no hand-rolled frontmatter)."
+verify = "A complete story produces plan.md/decisions.md with status ready-for-review; an incomplete or out-of-scope story halts with a clear reason and no plan written."
+covers = ["CAP-1", "CAP-2"]
+after = [2]
+hitl = false
+risk = "medium"
+unknown = "What operationally defines a complete/in-scope story file for the intake check — settle with the user at refine time."
+references = ["architecture-light-factory/architecture-light-factory.md#ad-8", "architecture-light-factory/architecture-light-factory.md#ad-10"]
+
+[[entry]]
+id = 4
+type = "story"
+title = "Bounded clarification loop"
+description = "Adds the graph-owned clarification-round counter to Job 1, capped at 2 rounds; cap-out writes status: awaiting-clarification and posts a commit comment with the open question(s)."
+verify = "A story seeded with an unresolvable open question runs exactly 2 rounds then halts with the commit comment; one that resolves within a round proceeds to plan-approval."
+covers = ["CAP-2"]
+after = [3]
+hitl = false
+risk = "medium"
+references = ["architecture-light-factory/architecture-light-factory.md#ad-13"]
+
+[[entry]]
+id = 5
+type = "story"
+title = "plan-approval gate wiring"
+description = "Connects Job 1's real output to the plan-approval gate: posts the commit-comment summary, pauses the GitHub Environment, and ends the run on reject."
+verify = "Approving resumes the same run into Job 2; rejecting ends the run with no further job executing."
+covers = ["CAP-3"]
+after = [4]
+hitl = false
+risk = "low"
+references = ["architecture-light-factory/architecture-light-factory.md#ad-4"]
+
+[[entry]]
+id = 6
+type = "story"
+title = "Deterministic PR-open step"
+description = "Implements open_implementation_pr.py: creates the isolated branch, makes a placeholder commit, opens the PR before any agent runs, and closes/links any PR it supersedes."
+verify = "Running Job 2 twice in a row for the same story-slug leaves exactly one open PR, with the older one closed and comment-linked."
+covers = ["CAP-4"]
+after = [5]
+hitl = false
+risk = "medium"
+references = ["architecture-light-factory/architecture-light-factory.md#ad-12", "architecture-light-factory/architecture-light-factory.md#ad-15"]
+
+[[entry]]
+id = 7
+type = "story"
+title = "Implementation agent"
+description = "Adds the implementation skill, scoped to write only on its isolated branch and its own state-file paths — no other stage's files, no merge/admin tools."
+verify = "The agent's tool-allowlist is inspected and confirmed unable to write plan.md, decisions.md, review.md, or push outside its branch; a sample story's code lands on the PR branch."
+covers = ["CAP-4"]
+after = [6]
+hitl = false
+risk = "high"
+references = ["architecture-light-factory/architecture-light-factory.md#ad-5"]
+
+[[entry]]
+id = 8
+type = "story"
+title = "Mechanical checks"
+description = "Wires build/test/lint/security as direct pipeline steps, recording pass/fail under evidence/checks/ through entry 2's state_io.py, never as agent-delegated work."
+verify = "A failing check is recorded under evidence/checks/ and fails the workflow step itself, with zero agent turns spent running it."
+covers = ["CAP-5"]
+after = [7]
+hitl = false
+risk = "low"
+references = ["architecture-light-factory/architecture-light-factory.md#ad-6", "architecture-light-factory/architecture-light-factory.md#ad-8", "architecture-light-factory/architecture-light-factory.md#ad-10"]
+
+[[entry]]
+id = 9
+type = "story"
+title = "Independent review agent"
+description = "Adds the read-only review skill and its graph node: no write/edit tool at all, evaluates the implementation against plan and acceptance criteria, writes review.md and evidence/review/ through entry 2's state_io.py."
+verify = "The review agent's tool list carries no write/edit capability; running it against a sample implementation produces review.md with findings or a clean pass."
+covers = ["CAP-6"]
+after = [8]
+hitl = false
+risk = "medium"
+references = ["architecture-light-factory/architecture-light-factory.md#ad-5", "architecture-light-factory/architecture-light-factory.md#ad-8", "architecture-light-factory/architecture-light-factory.md#ad-10"]
+
+[[entry]]
+id = 10
+type = "story"
+title = "Bounded fix loop"
+description = "Adds the graph-owned fix-cycle counter to review.md's frontmatter (via entry 2's state_io.py), capped at 2 cycles, re-running only the checks relevant to the finding(s) being fixed."
+verify = "Two consecutive review failures run exactly 2 cycles, each re-running only the relevant check, then proceed to evidence-approval with status: unresolved-after-cap."
+covers = ["CAP-7"]
+after = [9]
+hitl = false
+risk = "medium"
+references = ["architecture-light-factory/architecture-light-factory.md#ad-11", "architecture-light-factory/architecture-light-factory.md#ad-10"]
+
+[[entry]]
+id = 11
+type = "story"
+title = "evidence-approval gate + merge"
+description = "Posts the PR-comment evidence summary (metrics plus drillable diff), reading evidence/checks/ and evidence/review/ through entry 2's state_io.py, and on approval runs Job 3 as a deterministic merge step — no agent holds merge/admin tools."
+verify = "Approving evidence-approval merges the branch to target with no manual UI click and no agent invocation holding merge rights; rejecting ends the run with no merge."
+covers = ["CAP-8", "CAP-9"]
+after = [10]
+hitl = false
+risk = "high"
+unknown = "Merge strategy (squash/merge-commit/rebase) and source-branch deletion policy — AD-14 deliberately left this open; settle at refine time."
+references = ["architecture-light-factory/architecture-light-factory.md#ad-4", "architecture-light-factory/architecture-light-factory.md#ad-14", "architecture-light-factory/architecture-light-factory.md#ad-10"]
+
+[[entry]]
+id = 12
+type = "story"
+title = "Refactor sweep"
+description = "Cleans up scope deferred during the epic and findings surfaced by the review agent across entries 1-11; no new behavior."
+verify = "The checks suite passes, and every review finding deferred during entries 1-11 is either resolved or explicitly re-parked in Notes with a reason."
+covers = []
+after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 13
+type = "story"
+title = "Closing end-to-end suite"
+description = "Runs a real story through the full pipeline with real agents (not stubs), demonstrating the spec's Success signal end to end."
+verify = "A real story run completes to merge with both plan-approval and evidence-approval gates exercised, the clarification/fix loops staying within cap, and mechanical checks running with zero agent turns."
+covers = []
+after = [12]
+hitl = false
+risk = "low"

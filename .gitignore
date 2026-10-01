@@ -1,0 +1,23 @@
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Installed BMad skill packages — reconstructable from skills-lock.json
+# (npx skills add bmad-code-org/BMAD-METHOD --skill <name>)
+.agents/skills/
+.claude/skills/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
