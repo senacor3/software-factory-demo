@@ -1,0 +1,5 @@
+# Deferred work — initiative-light-factory
+
+- source_plan: `_bmad-output/initiative-light-factory/epic-light-factory-pipeline/story-pipeline-skeleton-gates-plan.md`
+  summary: Attach required-reviewers protection to the `plan-approval`/`evidence-approval` GitHub Environments in `DAICST/software-factory`, then re-exercise the actual pause/approve/resume gate path (acceptance criteria 1–3 of entry 1).
+  evidence: `gh api --method PUT repos/DAICST/software-factory/environments/<name>` with a `reviewers` payload returns 422 — required-reviewers protection on a private repo needs GitHub Team/Enterprise; `DAICST` org is on Free. Both environments exist today with `protection_rules: []`, so neither pauses a job yet; only the concurrency-guard edge case (AC4) is proven. User decision 2026-10-01: leave unresolved for now rather than upgrade billing or make the repo public. Unblock by either action, then re-run the `gh api` PUT for both environments with reviewer `leichtundkross` (id `1545432`) and re-trigger the workflow.
