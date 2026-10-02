@@ -12,7 +12,8 @@ story-job-1-intake-analysis-plan.md's I/O & Edge-Case Matrix):
   1. Incomplete or out-of-scope -- halt, no state file written, reason on stderr.
   2. Complete, in-scope, no open questions -- write plan.md + decisions.md via
      factory/scripts/state_io.py, status `ready-for-review`; then open the branch+PR
-     (AD-12) via factory/scripts/open_implementation_pr.py.
+     (AD-12) via factory/scripts/open_implementation_pr.py and post the gate-summary PR
+     comment (AD-4) via factory/scripts/post_summary.py.
   3. Complete, in-scope, open questions remain -- write both, status
      `awaiting-clarification`; branch+PR opened the same as outcome 2, then the open
      question(s) are posted as a comment on that PR and it is closed in the same call
@@ -25,10 +26,10 @@ distinct exception type (`AnalysisInvocationError` vs. `AnalysisHalted`) so call
 tell the two apart.
 
 A fifth case -- plan.md/decisions.md wrote successfully but a deterministic post-analysis
-step itself fails (`git`/`gh` subprocess error, whether from opening the branch/PR (AD-12)
-or from the clarification comment+close call (AD-13/AD-15)) -- raises
-`AnalysisPROpenError`, distinct from both of the above (per the `change-pr-at-intake`
-amendment, AD-12).
+step itself fails (`git`/`gh` subprocess error, whether from opening the branch/PR (AD-12),
+posting the gate-summary comment (AD-4), or from the clarification comment+close call
+(AD-13/AD-15)) -- raises `AnalysisPROpenError`, distinct from both of the above (per the
+`change-pr-at-intake` amendment, AD-12).
 
 The single-invocation call (`run_analysis`) is kept isolated from the LangGraph wiring
 (`build_graph`) for reuse and testability -- callers can invoke the subprocess/parse logic
@@ -50,6 +51,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import state_io  # noqa: E402
 import open_implementation_pr  # noqa: E402
+import post_summary  # noqa: E402
 
 SCHEMA_PATH = Path(__file__).resolve().parent / "schemas" / "analysis_result.schema.json"
 RESULT_FIELDS = ("complete", "in_scope", "reason", "proposal", "subtasks", "tests", "open_questions")
@@ -162,6 +164,26 @@ def _render_decisions_body(result: dict) -> str:
     return "\n".join(lines)
 
 
+def _render_plan_summary(result: dict) -> str:
+    """AD-4's gate-summary comment for the `plan-approval` gate: the proposal,
+    subtask/test counts, and a pointer to the full-detail files -- not their contents."""
+    subtasks = result.get("subtasks") or []
+    tests = result.get("tests") or []
+    lines = [
+        "## Plan ready for review",
+        "",
+        "### Proposal",
+        "",
+        (result.get("proposal") or "").strip() or "_none_",
+        "",
+        f"- Subtasks: {len(subtasks)}",
+        f"- Tests: {len(tests)}",
+        "",
+        "See `plan.md`/`decisions.md` for full detail.",
+    ]
+    return "\n".join(lines)
+
+
 def run_analysis(
     story_file: str,
     story_slug: str,
@@ -208,7 +230,11 @@ def run_analysis(
             open_implementation_pr.close_for_clarification(
                 pr["pr_number"], result["open_questions"], cwd=cwd
             )
-    except open_implementation_pr.PROpenError as e:
+        else:
+            post_summary.post_comment(
+                pr["pr_number"], _render_plan_summary(result), cwd=cwd
+            )
+    except (open_implementation_pr.PROpenError, post_summary.PostCommentError) as e:
         raise AnalysisPROpenError(str(e)) from e
 
     return {

@@ -29,6 +29,7 @@ import analysis_graph  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
 import state_io  # noqa: E402
 import open_implementation_pr  # noqa: E402
+import post_summary  # noqa: E402
 
 
 def _fake_proc(returncode=0, stdout="", stderr=""):
@@ -61,7 +62,8 @@ def test_complete_no_open_questions_writes_ready_for_review(tmp_path):
     fake_pr = {"branch": "light-factory/foo/run-1", "pr_number": 1, "pr_url": "https://example/1"}
     with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))), \
          patch("analysis_graph.open_implementation_pr.open_pr_for_story", return_value=fake_pr) as mock_open_pr, \
-         patch("analysis_graph.open_implementation_pr.close_for_clarification") as mock_close:
+         patch("analysis_graph.open_implementation_pr.close_for_clarification") as mock_close, \
+         patch("analysis_graph.post_summary.post_comment") as mock_post_summary:
         outcome = analysis_graph.run_analysis(
             "stories/foo.md", "foo", "run-1", state_base=tmp_path
         )
@@ -80,6 +82,12 @@ def test_complete_no_open_questions_writes_ready_for_review(tmp_path):
     mock_open_pr.assert_called_once_with("foo", "run-1", state_base=tmp_path, cwd=None)
     mock_close.assert_not_called()
 
+    mock_post_summary.assert_called_once()
+    posted_pr_number, posted_body = mock_post_summary.call_args[0]
+    assert posted_pr_number == 1
+    assert "do the thing" in posted_body
+    assert mock_post_summary.call_args[1] == {"cwd": None}
+
 
 # --- I/O Matrix row 2: complete, in-scope, open questions remain --------------------------
 
@@ -89,7 +97,8 @@ def test_complete_with_open_questions_writes_awaiting_clarification(tmp_path):
     fake_pr = {"branch": "light-factory/foo/run-1", "pr_number": 2, "pr_url": "https://example/2"}
     with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))), \
          patch("analysis_graph.open_implementation_pr.open_pr_for_story", return_value=fake_pr) as mock_open_pr, \
-         patch("analysis_graph.open_implementation_pr.close_for_clarification") as mock_close:
+         patch("analysis_graph.open_implementation_pr.close_for_clarification") as mock_close, \
+         patch("analysis_graph.post_summary.post_comment") as mock_post_summary:
         outcome = analysis_graph.run_analysis(
             "stories/foo.md", "foo", "run-1", state_base=tmp_path
         )
@@ -104,6 +113,7 @@ def test_complete_with_open_questions_writes_awaiting_clarification(tmp_path):
     assert outcome["pr"] == fake_pr
     mock_open_pr.assert_called_once_with("foo", "run-1", state_base=tmp_path, cwd=None)
     mock_close.assert_called_once_with(2, ["what about X?"], cwd=None)
+    mock_post_summary.assert_not_called()
 
 
 # --- I/O Matrix row 3: incomplete or out-of-scope -----------------------------------------
@@ -241,6 +251,26 @@ def test_close_for_clarification_failure_raises_analysis_pr_open_error_but_state
     assert dmeta["status"] == "awaiting-clarification"
 
 
+def test_post_summary_failure_raises_analysis_pr_open_error_but_state_files_remain(tmp_path):
+    result = _result()
+    fake_pr = {"branch": "light-factory/foo/run-1", "pr_number": 1, "pr_url": "https://example/1"}
+    with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))), \
+         patch("analysis_graph.open_implementation_pr.open_pr_for_story", return_value=fake_pr), \
+         patch(
+             "analysis_graph.post_summary.post_comment",
+             side_effect=post_summary.PostCommentError("gh pr comment failed: rate limited"),
+         ):
+        with pytest.raises(analysis_graph.AnalysisPROpenError, match="rate limited"):
+            analysis_graph.run_analysis("stories/foo.md", "foo", "run-1", state_base=tmp_path)
+
+    # plan.md/decisions.md and the PR remain exactly as entry 3 left them -- only the
+    # gate-summary comment step itself failed.
+    meta, _ = state_io.read_state(tmp_path / "foo" / "run-1" / "plan.md")
+    assert meta["status"] == "ready-for-review"
+    dmeta, _ = state_io.read_state(tmp_path / "foo" / "run-1" / "decisions.md")
+    assert dmeta["status"] == "ready-for-review"
+
+
 # --- command construction ------------------------------------------------------------------
 
 
@@ -293,7 +323,8 @@ def test_cli_main_success_exits_0(tmp_path, capsys, monkeypatch):
     result = _result()
     fake_pr = {"branch": "light-factory/foo/run-1", "pr_number": 1, "pr_url": "https://example/1"}
     with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))), \
-         patch("analysis_graph.open_implementation_pr.open_pr_for_story", return_value=fake_pr):
+         patch("analysis_graph.open_implementation_pr.open_pr_for_story", return_value=fake_pr), \
+         patch("analysis_graph.post_summary.post_comment"):
         rc = analysis_graph.main(
             ["--story-file", "stories/foo.md", "--story-slug", "foo", "--run-id", "run-1"]
         )
