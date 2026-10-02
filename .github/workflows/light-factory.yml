@@ -84,6 +84,13 @@ jobs:
     needs: analysis
     environment: plan-approval
     runs-on: ubuntu-latest
+    # AD-5/AD-6: contents:write scopes checkout_branch.py's git fetch/checkout and
+    # commit_push_implementation.py's git add/commit/push, nothing else -- the
+    # implementation agent's own tool-allowlist stays Read/Write/Edit/Grep/Glob
+    # regardless (no Bash/git/gh tool ever reaches it). No pull-requests:write -- no
+    # PR is opened or closed here (entry 3 already opened it).
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -98,7 +105,7 @@ jobs:
       #
       # Verification-only: `$expected` below is discarded after this comparison and is
       # never used to locate a file, name a branch/PR, or otherwise stand in for the
-      # propagated value (`Implementation stub` below uses needs.analysis.outputs.*
+      # propagated value ("Run implementation" below uses needs.analysis.outputs.*
       # exclusively). AD-8's "no job independently re-derives the slug from any other
       # source" rule guards against a job acting on a self-computed slug instead of the
       # propagated one; this step never acts on $expected, only asserts equality, so the
@@ -120,9 +127,27 @@ jobs:
           fi
           echo "PASS: propagation verified -- story-slug=$received_slug run-id=$received_run_id"
 
-      - name: Implementation stub
+      - name: Install Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code@latest
+
+      # Runs the implementation skill via implementation_graph.py (CAP-4 scoped
+      # implementation) -- see story-implementation-agent-plan.md. CLAUDE_CODE_OAUTH_TOKEN
+      # is read automatically by the `claude` CLI from the environment (AD-9). GH_TOKEN is
+      # not needed here -- unlike Job 1, no `gh` call happens in this job (no PR is
+      # opened/closed, only checkout_branch.py/commit_push_implementation.py's plain `git`
+      # calls, authenticated via the checkout action's own token).
+      - name: Run implementation
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
-          echo "Implementation stub -- story-slug=${{ needs.analysis.outputs.story-slug }} run-id=${{ needs.analysis.outputs.run-id }}"
+          uv run factory/graph/implementation_graph.py \
+            --story-slug "${{ needs.analysis.outputs.story-slug }}" \
+            --run-id "${{ needs.analysis.outputs.run-id }}"
 
   merge:
     name: "Job 3: Merge"
