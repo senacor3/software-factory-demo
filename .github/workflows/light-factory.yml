@@ -178,17 +178,21 @@ jobs:
             --story-slug "${{ needs.analysis.outputs.story-slug }}" \
             --run-id "${{ needs.analysis.outputs.run-id }}"
 
-      # CAP-6 independent review (AD-5/AD-8/AD-10): review_graph.py invokes the
-      # read-only light-factory-review skill (no Write/Edit/Bash/git/gh tool at all)
-      # and writes review.md + evidence/review/findings.json. A review that produces
-      # findings is a legitimate outcome, not a failure -- only the `claude` CLI
-      # invocation itself failing fails this step. CLAUDE_CODE_OAUTH_TOKEN is read
-      # automatically by the `claude` CLI from the environment (AD-9).
-      - name: Run review
+      # CAP-6 independent review (AD-5/AD-8/AD-10) + CAP-7 bounded fix loop (AD-11):
+      # fix_loop_graph.py runs review_graph.py's review, and -- while findings remain
+      # and the cycle count is under 2 -- re-engages the implementation skill with the
+      # findings as context, reruns build/test, and reviews again. A review that
+      # produces findings is a legitimate outcome, not a failure; hitting the 2-cycle
+      # cap and stamping `unresolved-after-cap` is also legitimate, not a failure --
+      # only a tooling failure (review/implementation CLI, checkout/commit/push) or a
+      # build/test regression introduced by a fix cycle fails this step.
+      # CLAUDE_CODE_OAUTH_TOKEN is read automatically by the `claude` CLI from the
+      # environment (AD-9).
+      - name: Run review (bounded fix loop)
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
-          uv run factory/graph/review_graph.py \
+          uv run factory/graph/fix_loop_graph.py \
             --story-slug "${{ needs.analysis.outputs.story-slug }}" \
             --run-id "${{ needs.analysis.outputs.run-id }}"
 

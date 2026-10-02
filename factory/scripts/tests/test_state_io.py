@@ -209,6 +209,37 @@ def test_implementation_stage_still_rejects_empty_status(tmp_path):
         state_io.write_state(path, story_slug="foo-bar", stage="implementation", status="")
 
 
+# --- write_state's optional extra kwarg (fix_loop_graph.py's fix_cycle counter) --
+
+
+def test_write_state_extra_merged_after_fixed_fields(tmp_path):
+    path = tmp_path / "review.md"
+    meta = state_io.write_state(
+        path,
+        story_slug="foo-bar",
+        stage="review",
+        status="resolved",
+        extra={"fix_cycle": 2},
+    )
+    assert meta["fix_cycle"] == 2
+    read_meta, _ = state_io.read_state(path)
+    assert read_meta["fix_cycle"] == "2"  # frontmatter values round-trip as strings
+
+
+def test_write_state_omitted_extra_unchanged_behavior(tmp_path):
+    path = tmp_path / "plan.md"
+    meta = state_io.write_state(path, story_slug="foo-bar", stage="analysis", status="drafted")
+    assert set(meta.keys()) == {"schema_version", "story_slug", "stage", "status", "updated"}
+
+
+def test_write_state_extra_none_unchanged_behavior(tmp_path):
+    path = tmp_path / "plan.md"
+    meta = state_io.write_state(
+        path, story_slug="foo-bar", stage="analysis", status="drafted", extra=None
+    )
+    assert set(meta.keys()) == {"schema_version", "story_slug", "stage", "status", "updated"}
+
+
 # --- robustness: frontmatter edge cases (mirrors memlog.py's split/render) --
 
 

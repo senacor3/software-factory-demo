@@ -199,12 +199,18 @@ def write_state(
     status: str,
     body: str = "",
     schema_version: int = SCHEMA_VERSION,
+    extra: "dict | None" = None,
 ) -> dict:
     """Write a stage's state file with AD-10's exact frontmatter schema.
 
     Validates `stage`/`status` against AD-10's per-stage enum (and that `story_slug` is
     non-empty) BEFORE touching disk -- on an invalid combination this raises ValueError
     and no file is written or modified. Returns the frontmatter dict actually written.
+
+    `extra`, when given, is merged into `meta` after the fixed AD-10 fields (so it can
+    add fields an AD-10 reader doesn't know about, e.g. the fix loop's `fix_cycle`
+    counter) -- never overrides a fixed field name. Every existing caller omits it;
+    behavior for them is unchanged.
     """
     validate_status(stage, status)
     if not story_slug:
@@ -216,6 +222,8 @@ def write_state(
         "status": status,
         "updated": now(),
     }
+    if extra:
+        meta.update(extra)
     write_atomic(Path(path), render(meta, body))
     return meta
 

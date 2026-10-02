@@ -68,11 +68,19 @@ class ImplementationInvocationError(RuntimeError):
 # --- the single invocation ----------------------------------------------------------
 
 
-def _build_command(plan_path: str, decisions_path: str, claude_bin: str) -> "list[str]":
+def _build_command(
+    plan_path: str,
+    decisions_path: str,
+    claude_bin: str,
+    review_path: "str | None" = None,
+) -> "list[str]":
+    prompt = f"/light-factory-implementation {plan_path} {decisions_path}"
+    if review_path:
+        prompt += f" {review_path}"
     return [
         claude_bin,
         "-p",
-        f"/light-factory-implementation {plan_path} {decisions_path}",
+        prompt,
         "--allowedTools",
         "Read Write Edit Grep Glob",
         "--permission-prompts",
@@ -88,12 +96,16 @@ def invoke_skill(
     *,
     claude_bin: str = "claude",
     cwd: "str | os.PathLike | None" = None,
+    review_path: "str | None" = None,
 ) -> str:
     """Shell out to the `claude` CLI with the implementation skill and return its raw
     stdout text. No JSON schema -- there is no judgment verdict to parse here, unlike
     `analysis_graph.invoke_skill`. Raises ImplementationInvocationError on any tooling
-    failure."""
-    cmd = _build_command(plan_path, decisions_path, claude_bin)
+    failure.
+
+    `review_path`, when given (a fix cycle, AD-11), is appended as the skill's third
+    argument so the agent re-engages with the review findings as added context."""
+    cmd = _build_command(plan_path, decisions_path, claude_bin, review_path)
     try:
         proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=False)
     except OSError as e:
@@ -113,6 +125,7 @@ def run_implementation(
     claude_bin: str = "claude",
     state_base: "str | os.PathLike" = state_io.FACTORY_DIR,
     cwd: "str | os.PathLike | None" = None,
+    review_path: "str | None" = None,
 ) -> dict:
     """Sequence checkout -> agent invocation -> commit/push.
 
@@ -122,6 +135,10 @@ def run_implementation(
     attempted), or `commit_push_implementation.CommitPushError` if the post-agent
     commit/push step fails (the agent's edits remain on disk uncommitted) -- each
     distinct, per the I/O & Edge-Case Matrix.
+
+    `review_path`, when given, is a fix cycle (AD-11/`fix_loop_graph.py`): the same
+    implementation skill is re-engaged with the review findings as added context,
+    rather than a fresh invocation of plan/decisions alone.
     """
     branch = checkout_branch.checkout_branch(story_slug, run_id, cwd=cwd)
 
@@ -129,7 +146,9 @@ def run_implementation(
     plan_path = str(state_directory / "plan.md")
     decisions_path = str(state_directory / "decisions.md")
 
-    output = invoke_skill(plan_path, decisions_path, claude_bin=claude_bin, cwd=cwd)
+    output = invoke_skill(
+        plan_path, decisions_path, claude_bin=claude_bin, cwd=cwd, review_path=review_path
+    )
 
     commit_result = commit_push_implementation.commit_and_push(
         branch, story_slug, run_id, cwd=cwd

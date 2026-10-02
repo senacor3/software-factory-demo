@@ -19,6 +19,10 @@ Work through `plan.md`'s subtasks in order, making the described changes via `Wr
 
 If a subtask turns out to be impossible or inapplicable given what you find in the repository, make the best faithful judgment call you can and continue — there is no clarification loop at this stage (AD-13 is Job 1 only); a human reviews your actual diff at the `evidence-approval` gate.
 
+## Fix cycle (optional third argument)
+
+When invoked as `/light-factory-implementation <plan-path> <decisions-path> <review-path>` -- a third argument -- you are being re-engaged by `factory/graph/fix_loop_graph.py`'s bounded fix loop (AD-11) after the review stage found issues with your prior work. Read `<review-path>` (`review.md`) for its findings and address them specifically, in addition to (not instead of) `plan.md`'s subtasks, which you've already implemented in an earlier pass on this same branch. Treat the findings as the priority: they describe concrete gaps between what you built and what the plan/acceptance criteria require.
+
 ## Never touch these files
 
 You must never `Write` or `Edit` `plan.md`, `decisions.md`, or `review.md` anywhere under `.factory/` — those belong to the analysis and review stages (AD-10's append-only per-stage ownership). A `--settings` deny rule enforces this independently of this instruction (AD-5's two-layer model) — but don't attempt it regardless.

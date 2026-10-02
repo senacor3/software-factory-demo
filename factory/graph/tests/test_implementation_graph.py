@@ -155,6 +155,51 @@ def test_build_command_passes_both_plan_and_decisions_paths():
     assert "/light-factory-implementation some/plan.md some/decisions.md" in cmd
 
 
+# --- review_path (fix cycle, AD-11) -----------------------------------------------------
+
+
+def test_build_command_omits_review_path_when_not_given():
+    cmd = implementation_graph._build_command("plan.md", "decisions.md", "claude")
+    assert "/light-factory-implementation plan.md decisions.md" in cmd
+
+
+def test_build_command_appends_review_path_when_given():
+    cmd = implementation_graph._build_command(
+        "plan.md", "decisions.md", "claude", review_path="review.md"
+    )
+    assert "/light-factory-implementation plan.md decisions.md review.md" in cmd
+
+
+def test_run_implementation_passes_review_path_through_to_invoke_skill(tmp_path):
+    with patch("implementation_graph.checkout_branch.checkout_branch", return_value=FAKE_BRANCH), \
+         patch("implementation_graph.subprocess.run", return_value=_fake_proc(stdout="done")) as mock_run, \
+         patch(
+             "implementation_graph.commit_push_implementation.commit_and_push",
+             return_value={"committed": True},
+         ):
+        implementation_graph.run_implementation(
+            "foo", "run-1", state_base=tmp_path, review_path="some/review.md"
+        )
+
+    cmd = mock_run.call_args[0][0]
+    prompt = cmd[cmd.index("-p") + 1]
+    assert prompt.endswith("some/review.md")
+
+
+def test_run_implementation_without_review_path_unchanged_behavior(tmp_path):
+    with patch("implementation_graph.checkout_branch.checkout_branch", return_value=FAKE_BRANCH), \
+         patch("implementation_graph.subprocess.run", return_value=_fake_proc(stdout="done")) as mock_run, \
+         patch(
+             "implementation_graph.commit_push_implementation.commit_and_push",
+             return_value={"committed": True},
+         ):
+        implementation_graph.run_implementation("foo", "run-1", state_base=tmp_path)
+
+    cmd = mock_run.call_args[0][0]
+    prompt = cmd[cmd.index("-p") + 1]
+    assert len(prompt.split(" ")) == 3  # "/light-factory-implementation <plan> <decisions>" only
+
+
 # --- CLI exit codes --------------------------------------------------------------------------
 
 
