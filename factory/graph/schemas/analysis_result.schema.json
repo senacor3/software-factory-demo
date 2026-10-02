@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LightFactoryAnalysisResult",
+  "description": "Structured verdict from the light-factory-analysis skill (CAP-1 intake judgment, CAP-2 solution proposal). Parsed by factory/graph/analysis_graph.py from the claude CLI's --json-schema structured_output.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "complete": {
+      "type": "boolean",
+      "description": "True when the story is clear enough to design a solution from."
+    },
+    "in_scope": {
+      "type": "boolean",
+      "description": "True when the story belongs in this codebase."
+    },
+    "reason": {
+      "type": "string",
+      "description": "Required (non-empty) when complete or in_scope is false -- the halt reason surfaced to the human. Empty string when both are true."
+    },
+    "proposal": {
+      "type": ["string", "null"],
+      "description": "Prose solution proposal. Null unless complete and in_scope are both true."
+    },
+    "subtasks": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Ordered concrete implementation steps. Empty unless complete and in_scope are both true."
+    },
+    "tests": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Concrete tests that would verify the solution. Empty unless complete and in_scope are both true."
+    },
+    "open_questions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Unresolved questions that materially affect the proposal. Empty when nothing is unresolved."
+    }
+  },
+  "required": ["complete", "in_scope", "reason", "proposal", "subtasks", "tests", "open_questions"]
+}

@@ -47,9 +47,27 @@ jobs:
             --github-run-id "${{ github.run_id }}" \
             >> "$GITHUB_OUTPUT"
 
-      - name: Analysis stub
+      - name: Install Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code@latest
+
+      # Runs the analysis skill via analysis_graph.py (CAP-1 intake judgment, CAP-2
+      # proposal) -- see story-job-1-intake-analysis-plan.md. CLAUDE_CODE_OAUTH_TOKEN is
+      # read automatically by the `claude` CLI from the environment (AD-9); this ticket
+      # defers the live dispatch until the secret is set (see deferred-work.md), so this
+      # step is wired but not yet exercised end-to-end.
+      - name: Run analysis
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
-          echo "Analysis stub -- story-slug=${{ steps.derive.outputs.story-slug }} run-id=${{ steps.derive.outputs.run-id }}"
+          uv run factory/graph/analysis_graph.py \
+            --story-file "${{ github.event.inputs.story_file }}" \
+            --story-slug "${{ steps.derive.outputs.story-slug }}" \
+            --run-id "${{ steps.derive.outputs.run-id }}"
 
   implementation:
     name: "Job 2: Implementation"
