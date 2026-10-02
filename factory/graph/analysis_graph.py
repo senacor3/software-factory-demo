@@ -14,21 +14,25 @@ story-job-1-intake-analysis-plan.md's I/O & Edge-Case Matrix):
      factory/scripts/state_io.py, status `ready-for-review`; then open the branch+PR
      (AD-12) via factory/scripts/open_implementation_pr.py.
   3. Complete, in-scope, open questions remain -- write both, status
-     `awaiting-clarification` (entry 4's clarification loop consumes this later); branch+PR
-     opened the same as outcome 2.
+     `awaiting-clarification`; branch+PR opened the same as outcome 2, then the open
+     question(s) are posted as a comment on that PR and it is closed in the same call
+     (AD-13/AD-15) -- single-pass halt-and-surface, no retry loop (entry 4's simplification,
+     2026-10-02).
 
 A fourth case -- the `claude` CLI invocation itself failing (non-zero exit, malformed or
 schema-invalid JSON) -- is a tooling failure, not a legitimate verdict, and is raised as a
-distinct exception type (`AnalysisInvocationError` vs. `AnalysisHalted`) so callers (and
-entry 4's future loop) can tell the two apart.
+distinct exception type (`AnalysisInvocationError` vs. `AnalysisHalted`) so callers can
+tell the two apart.
 
-A fifth case -- plan.md/decisions.md wrote successfully but the deterministic branch/PR-
-open step itself fails (`git`/`gh` subprocess error) -- raises `AnalysisPROpenError`,
-distinct from both of the above (per the `change-pr-at-intake` amendment, AD-12).
+A fifth case -- plan.md/decisions.md wrote successfully but a deterministic post-analysis
+step itself fails (`git`/`gh` subprocess error, whether from opening the branch/PR (AD-12)
+or from the clarification comment+close call (AD-13/AD-15)) -- raises
+`AnalysisPROpenError`, distinct from both of the above (per the `change-pr-at-intake`
+amendment, AD-12).
 
 The single-invocation call (`run_analysis`) is kept isolated from the LangGraph wiring
-(`build_graph`) so entry 4 can import and re-call `run_analysis` directly inside its own
-loop node rather than duplicating the subprocess logic.
+(`build_graph`) for reuse and testability -- callers can invoke the subprocess/parse logic
+directly without going through the graph.
 
 Per AD-6, deterministic checks never become graph nodes -- this graph's one node is pure
 judgment work (shelling out to the analysis skill), nothing else.
@@ -67,9 +71,10 @@ class AnalysisHalted(RuntimeError):
 
 
 class AnalysisPROpenError(RuntimeError):
-    """plan.md/decisions.md were written (the analysis succeeded), but the deterministic
-    branch/PR-open step (AD-12) itself failed -- distinct from AnalysisHalted (a CAP-1
-    judgment) and AnalysisInvocationError (a `claude` CLI tooling failure)."""
+    """plan.md/decisions.md were written (the analysis succeeded), but a deterministic
+    post-analysis step itself failed -- either the branch/PR-open step (AD-12) or the
+    clarification comment+close step (AD-13/AD-15) -- distinct from AnalysisHalted (a
+    CAP-1 judgment) and AnalysisInvocationError (a `claude` CLI tooling failure)."""
 
 
 # --- the single invocation (isolated so entry 4 can re-call it from its own loop) -------
@@ -199,6 +204,10 @@ def run_analysis(
         pr = open_implementation_pr.open_pr_for_story(
             story_slug, run_id, state_base=state_base, cwd=cwd
         )
+        if status == "awaiting-clarification":
+            open_implementation_pr.close_for_clarification(
+                pr["pr_number"], result["open_questions"], cwd=cwd
+            )
     except open_implementation_pr.PROpenError as e:
         raise AnalysisPROpenError(str(e)) from e
 
@@ -215,10 +224,9 @@ def run_analysis(
 
 
 def build_graph():
-    """A minimal single-node LangGraph graph wrapping run_analysis. Entry 4 wraps this
-    node in a clarification-round loop (AD-13) -- kept separate from run_analysis itself
-    so that later loop node can import and re-call run_analysis without duplicating the
-    subprocess/parse logic above."""
+    """A minimal single-node LangGraph graph wrapping run_analysis -- kept separate from
+    run_analysis itself so the subprocess/parse logic above stays reusable and testable
+    without going through the graph."""
     from langgraph.graph import END, StateGraph
     from typing_extensions import TypedDict
 

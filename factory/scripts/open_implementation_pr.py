@@ -124,3 +124,16 @@ def open_pr_for_story(
     if created is None:
         raise PROpenError(f"gh pr create reported success but no open PR found for branch {branch!r}")
     return created
+
+
+def close_for_clarification(
+    pr_number: int,
+    open_questions: "list[str]",
+    *,
+    cwd: "str | os.PathLike | None" = None,
+) -> None:
+    """Post `open_questions` as a comment on `pr_number` and close it in the same call
+    (AD-13/AD-15) -- never `--delete-branch`, per AD-10/AD-12/AD-15's audit-trail-over-
+    cleanup posture. Raises PROpenError on any subprocess failure."""
+    comment = "Open questions from analysis:\n\n" + "\n".join(f"- {q}" for q in open_questions)
+    _run(["gh", "pr", "close", str(pr_number), "--comment", comment], cwd=cwd)

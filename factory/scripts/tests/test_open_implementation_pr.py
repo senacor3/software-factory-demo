@@ -163,6 +163,39 @@ def test_subprocess_oserror_raises_pr_open_error(tmp_path):
 # --- state_base is forwarded to state_io.state_dir, not hardcoded -------------------------
 
 
+# --- close_for_clarification --------------------------------------------------------------
+
+
+def test_close_for_clarification_posts_comment_and_closes_pr():
+    calls = []
+
+    def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
+        calls.append(cmd)
+        return _ok()
+
+    with patch("open_implementation_pr.subprocess.run", side_effect=fake_run):
+        open_implementation_pr.close_for_clarification(42, ["what about X?", "and Y?"])
+
+    assert len(calls) == 1
+    cmd = calls[0]
+    assert cmd[:3] == ["gh", "pr", "close"]
+    assert cmd[3] == "42"
+    assert "--comment" in cmd
+    comment = cmd[cmd.index("--comment") + 1]
+    assert "what about X?" in comment
+    assert "and Y?" in comment
+    assert "--delete-branch" not in cmd
+
+
+def test_close_for_clarification_subprocess_failure_raises_pr_open_error():
+    def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
+        return _fail(stderr="gh: pull request not found")
+
+    with patch("open_implementation_pr.subprocess.run", side_effect=fake_run):
+        with pytest.raises(open_implementation_pr.PROpenError, match="not found"):
+            open_implementation_pr.close_for_clarification(42, ["what about X?"])
+
+
 def test_state_base_override_is_used_for_git_add_paths(tmp_path):
     custom_base = tmp_path / "custom-factory-base"
     calls = []

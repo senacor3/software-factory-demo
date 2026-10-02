@@ -60,7 +60,8 @@ def test_complete_no_open_questions_writes_ready_for_review(tmp_path):
     result = _result()
     fake_pr = {"branch": "light-factory/foo/run-1", "pr_number": 1, "pr_url": "https://example/1"}
     with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))), \
-         patch("analysis_graph.open_implementation_pr.open_pr_for_story", return_value=fake_pr) as mock_open_pr:
+         patch("analysis_graph.open_implementation_pr.open_pr_for_story", return_value=fake_pr) as mock_open_pr, \
+         patch("analysis_graph.open_implementation_pr.close_for_clarification") as mock_close:
         outcome = analysis_graph.run_analysis(
             "stories/foo.md", "foo", "run-1", state_base=tmp_path
         )
@@ -77,6 +78,7 @@ def test_complete_no_open_questions_writes_ready_for_review(tmp_path):
 
     assert outcome["pr"] == fake_pr
     mock_open_pr.assert_called_once_with("foo", "run-1", state_base=tmp_path, cwd=None)
+    mock_close.assert_not_called()
 
 
 # --- I/O Matrix row 2: complete, in-scope, open questions remain --------------------------
@@ -86,7 +88,8 @@ def test_complete_with_open_questions_writes_awaiting_clarification(tmp_path):
     result = _result(open_questions=["what about X?"])
     fake_pr = {"branch": "light-factory/foo/run-1", "pr_number": 2, "pr_url": "https://example/2"}
     with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))), \
-         patch("analysis_graph.open_implementation_pr.open_pr_for_story", return_value=fake_pr) as mock_open_pr:
+         patch("analysis_graph.open_implementation_pr.open_pr_for_story", return_value=fake_pr) as mock_open_pr, \
+         patch("analysis_graph.open_implementation_pr.close_for_clarification") as mock_close:
         outcome = analysis_graph.run_analysis(
             "stories/foo.md", "foo", "run-1", state_base=tmp_path
         )
@@ -100,6 +103,7 @@ def test_complete_with_open_questions_writes_awaiting_clarification(tmp_path):
 
     assert outcome["pr"] == fake_pr
     mock_open_pr.assert_called_once_with("foo", "run-1", state_base=tmp_path, cwd=None)
+    mock_close.assert_called_once_with(2, ["what about X?"], cwd=None)
 
 
 # --- I/O Matrix row 3: incomplete or out-of-scope -----------------------------------------
@@ -215,6 +219,26 @@ def test_pr_open_failure_raises_analysis_pr_open_error_but_state_files_remain(tm
     assert meta["status"] == "ready-for-review"
     dmeta, _ = state_io.read_state(tmp_path / "foo" / "run-1" / "decisions.md")
     assert dmeta["status"] == "ready-for-review"
+
+
+def test_close_for_clarification_failure_raises_analysis_pr_open_error_but_state_files_remain(tmp_path):
+    result = _result(open_questions=["what about X?"])
+    fake_pr = {"branch": "light-factory/foo/run-1", "pr_number": 2, "pr_url": "https://example/2"}
+    with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))), \
+         patch("analysis_graph.open_implementation_pr.open_pr_for_story", return_value=fake_pr), \
+         patch(
+             "analysis_graph.open_implementation_pr.close_for_clarification",
+             side_effect=open_implementation_pr.PROpenError("gh pr close failed: not found"),
+         ):
+        with pytest.raises(analysis_graph.AnalysisPROpenError, match="not found"):
+            analysis_graph.run_analysis("stories/foo.md", "foo", "run-1", state_base=tmp_path)
+
+    # plan.md/decisions.md and the PR (per the mock) remain exactly as entry 3 left them --
+    # only the comment/close step itself failed.
+    meta, _ = state_io.read_state(tmp_path / "foo" / "run-1" / "plan.md")
+    assert meta["status"] == "awaiting-clarification"
+    dmeta, _ = state_io.read_state(tmp_path / "foo" / "run-1" / "decisions.md")
+    assert dmeta["status"] == "awaiting-clarification"
 
 
 # --- command construction ------------------------------------------------------------------
