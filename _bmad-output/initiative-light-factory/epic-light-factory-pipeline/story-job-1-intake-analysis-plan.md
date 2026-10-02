@@ -95,7 +95,7 @@ The initial implementation subagent (first three files: SKILL.md, analysis_graph
 **Commands:**
 - `uv run --with pytest pytest factory/graph/tests/test_analysis_graph.py` -- expected: all pass, `claude` subprocess call mocked
 - `uv run --with pyyaml python3 -c "import yaml; yaml.safe_load(open('.github/workflows/light-factory.yml'))"` -- expected: `YAML OK`
-- **Deferred** (see `deferred-work.md`): `gh workflow run light-factory.yml -f story_file=stories/trivial-test-story.md` then `gh run view <run-id> --log` -- expected once `CLAUDE_CODE_OAUTH_TOKEN` is set: `analysis` job logs a real verdict and writes `.factory/trivial-test-story/run-<id>/plan.md`+`decisions.md`, or halts with a reason if the fixture story is judged incomplete
+- `gh workflow run light-factory.yml -f story_file=stories/trivial-test-story.md` then `gh run view <run-id> --log` -- **run live 2026-10-02** (run `36970131400`), once the user set `CLAUDE_CODE_OAUTH_TOKEN` as a repo secret: the CLI invocation, skill dispatch, and structured-output parse all worked end-to-end; the `analysis` job halted cleanly (exit 1) with reason "The story is an explicit placeholder used only to trigger and verify the light-factory.yml pipeline skeleton ... there is nothing to design a solution from" -- the correct `AnalysisHalted` outcome for this fixture (CAP-1 judged it in-scope but not actionable), matching the halt-on-incomplete branch already covered by unit tests. No `plan.md`/`decisions.md` written, as expected for a halt.
 
 **Manual checks (if no CLI):**
 - Read the written `plan.md`/`decisions.md` frontmatter and confirm it matches AD-10's schema exactly (no extra/renamed fields).
