@@ -240,10 +240,17 @@ stateDiagram-v2
   factory/
     graph/
       analysis_graph.py                 # LangGraph: intake, analysis, single-pass clarification halt (AD-13)
-      implementation_graph.py           # LangGraph: implement, review, bounded fix loop (counter owned here, AD-11)
+      implementation_graph.py           # LangGraph: implementation agent invocation, scoped Edit/Write (AD-5)
+      review_graph.py                   # LangGraph: independent read-only review agent (CAP-6, AD-5)
+      fix_loop_graph.py                 # bounded fix loop: review -> fix -> recheck, counter owned here, hard cap 2 cycles (AD-11)
     scripts/
+      checkout_branch.py                # deterministic: checks out the branch entry 3 already opened, never creates one (AD-12)
+      commit_push_implementation.py     # deterministic: commits/pushes the implementation agent's edits, no-op if none
+      run_checks.py                     # deterministic: build/test (real) + lint/security (v1 placeholders) checks (AD-6, CAP-5)
       open_implementation_pr.py         # deterministic: creates isolated branch, commits plan.md/decisions.md as the real first commit, opens PR, closes/links any superseded PR -- invoked from Job 1 once CAP-1 passes; Job 2 checks out the same branch rather than creating one (AD-12, AD-15)
-      post_summary.py                   # posts stage summary as a PR comment (AD-4)
+      post_summary.py                   # posts a stage-gate summary as a PR comment (AD-4) -- shared by both gates; reused directly by analysis_graph.py (plan-approval) and by post_evidence_summary.py (evidence-approval)
+      post_evidence_summary.py          # evidence-approval's own evidence-gathering + rendering, posts via post_summary.py (AD-4, CAP-8)
+      merge_story.py                    # deterministic: squash-merges and deletes the branch on evidence-approval, never an agent (AD-5, AD-14, CAP-9)
       state_io.py                       # reads/writes .factory/ state files; owns the shared frontmatter schema (AD-10)
   .claude/
     skills/
@@ -272,8 +279,8 @@ stateDiagram-v2
 | CAP-3 Plan-approval human gate | `plan-approval` GitHub Environment | AD-2, AD-4 |
 | CAP-4 Scoped implementation | Job 1 opens the isolated branch + PR once CAP-1 proceeds; Job 2 reuses it for code | AD-5, AD-8, AD-12, AD-15 |
 | CAP-5 Automated mechanical checks | Job 2, `.github/workflows/` steps | AD-6 |
-| CAP-6 Independent agent review | Job 2 (`implementation_graph.py`) | AD-5, AD-8, AD-10 |
-| CAP-7 Bounded fix loop | Job 2 (`implementation_graph.py`) | AD-11 |
+| CAP-6 Independent agent review | Job 2 (`review_graph.py`) | AD-5, AD-8, AD-10 |
+| CAP-7 Bounded fix loop | Job 2 (`fix_loop_graph.py`) | AD-11 |
 | CAP-8 Evidence-approval human gate | `evidence-approval` GitHub Environment | AD-2, AD-4 |
 | CAP-9 Approval and merge | Job 3 | AD-14 |
 
