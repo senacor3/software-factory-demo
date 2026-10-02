@@ -87,10 +87,12 @@ jobs:
     # AD-5/AD-6: contents:write scopes checkout_branch.py's git fetch/checkout and
     # commit_push_implementation.py's git add/commit/push, nothing else -- the
     # implementation agent's own tool-allowlist stays Read/Write/Edit/Grep/Glob
-    # regardless (no Bash/git/gh tool ever reaches it). No pull-requests:write -- no
-    # PR is opened or closed here (entry 3 already opened it).
+    # regardless (no Bash/git/gh tool ever reaches it). pull-requests:write scopes
+    # the new post_evidence_summary.py step's `gh pr comment` call (AD-4/CAP-8) --
+    # no PR is opened or closed here (entry 3 already opened it).
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -196,12 +198,46 @@ jobs:
             --story-slug "${{ needs.analysis.outputs.story-slug }}" \
             --run-id "${{ needs.analysis.outputs.run-id }}"
 
+      # CAP-8 evidence-approval gate summary (AD-4): reads evidence/checks/*.json
+      # (ticket 8) and review.md's status/fix_cycle + evidence/review/findings.json
+      # (tickets 9/10), posts a concise summary as a PR comment via the shared
+      # post_summary module. Runs -- and succeeds -- whether review.md's status is
+      # `resolved` or `unresolved-after-cap`; both are legitimate, human-decides-at-
+      # the-gate outcomes. GH_TOKEN authenticates the `gh pr comment` call.
+      - name: Post evidence-approval summary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          uv run factory/scripts/post_evidence_summary.py \
+            --story-slug "${{ needs.analysis.outputs.story-slug }}" \
+            --run-id "${{ needs.analysis.outputs.run-id }}"
+
   merge:
     name: "Job 3: Merge"
-    needs: implementation
+    needs: [analysis, implementation]
     environment: evidence-approval
     runs-on: ubuntu-latest
+    # AD-5/AD-14: contents:write + pull-requests:write scope merge_story.py's `gh pr
+    # merge --squash --delete-branch` call -- a deterministic script, never an agent
+    # (no `claude` CLI invocation anywhere in this job).
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
-      - name: Merge stub
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+
+      # CAP-9 approval and merge (AD-14): a deterministic pipeline step, triggered
+      # automatically on evidence-approval's approval -- never an agent action. A
+      # merge conflict or other `gh` failure just fails this step; auto-resolution
+      # is out of scope -- the human resolves out-of-band and re-triggers.
+      - name: Merge
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          echo "Merge stub -- run complete"
+          uv run factory/scripts/merge_story.py \
+            --story-slug "${{ needs.analysis.outputs.story-slug }}" \
+            --run-id "${{ needs.analysis.outputs.run-id }}"

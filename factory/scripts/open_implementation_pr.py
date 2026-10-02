@@ -50,7 +50,7 @@ def _run(cmd: "list[str]", *, cwd: "str | os.PathLike | None" = None) -> str:
     return proc.stdout.strip()
 
 
-def _find_existing_pr(branch: str, *, cwd: "str | os.PathLike | None" = None) -> "dict | None":
+def find_open_pr(branch: str, *, cwd: "str | os.PathLike | None" = None) -> "dict | None":
     out = _run(
         ["gh", "pr", "list", "--head", branch, "--state", "open", "--json", "number,url"],
         cwd=cwd,
@@ -79,7 +79,7 @@ def open_pr_for_story(
     """
     branch = f"light-factory/{story_slug}/{run_id}"
 
-    existing = _find_existing_pr(branch, cwd=cwd)
+    existing = find_open_pr(branch, cwd=cwd)
     if existing is not None:
         return existing
 
@@ -120,7 +120,7 @@ def open_pr_for_story(
         cwd=cwd,
     )
 
-    created = _find_existing_pr(branch, cwd=cwd)
+    created = find_open_pr(branch, cwd=cwd)
     if created is None:
         raise PROpenError(f"gh pr create reported success but no open PR found for branch {branch!r}")
     return created
