@@ -29,6 +29,12 @@ jobs:
   analysis:
     name: "Job 1: Analysis"
     runs-on: ubuntu-latest
+    # AD-5/AD-12: contents:write + pull-requests:write scope the new deterministic
+    # open_implementation_pr.py script's git push + gh pr create, nothing else -- the
+    # analysis agent's own tool-allowlist stays read-only (Read Grep Glob) regardless.
+    permissions:
+      contents: write
+      pull-requests: write
     outputs:
       story-slug: ${{ steps.derive.outputs.story-slug }}
       run-id: ${{ steps.derive.outputs.run-id }}
@@ -57,12 +63,16 @@ jobs:
 
       # Runs the analysis skill via analysis_graph.py (CAP-1 intake judgment, CAP-2
       # proposal) -- see story-job-1-intake-analysis-plan.md. CLAUDE_CODE_OAUTH_TOKEN is
-      # read automatically by the `claude` CLI from the environment (AD-9); this ticket
-      # defers the live dispatch until the secret is set (see deferred-work.md), so this
-      # step is wired but not yet exercised end-to-end.
+      # read automatically by the `claude` CLI from the environment (AD-9), live-verified
+      # 2026-10-02 (run 36970131400). GH_TOKEN authenticates the `gh` CLI calls inside
+      # open_implementation_pr.py once a non-halted result proceeds to open the PR
+      # (AD-12) -- the job's `permissions:` block above only grants the API scope; `gh`
+      # itself needs a token explicitly in its environment or every `gh pr list`/`gh pr
+      # create` call fails auth, even though the permission is correctly present.
       - name: Run analysis
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           uv run factory/graph/analysis_graph.py \
             --story-file "${{ github.event.inputs.story_file }}" \

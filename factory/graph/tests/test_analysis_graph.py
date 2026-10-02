@@ -6,9 +6,13 @@
 
 Covers the I/O & Edge-Case Matrix in story-job-1-intake-analysis-plan.md: complete/in-scope
 with no open questions (ready-for-review), complete/in-scope with open questions
-(awaiting-clarification), incomplete-or-out-of-scope (halt, no file written), and a `claude`
-CLI tooling failure (distinct exception, no file written). The `claude` subprocess call is
-mocked throughout -- no live CLI/network dependency.
+(awaiting-clarification), incomplete-or-out-of-scope (halt, no file written), a `claude`
+CLI tooling failure (distinct exception, no file written), and -- per the
+`change-pr-at-intake` amendment -- the deterministic branch/PR-open step's own failure
+mode. The `claude` subprocess call is mocked throughout -- no live CLI/network dependency
+-- and `open_implementation_pr.open_pr_for_story` is mocked wholesale here (its own real
+body is tested in factory/scripts/tests/test_open_implementation_pr.py); no real
+`git`/`gh` process ever runs in this suite.
 """
 
 import json
@@ -24,6 +28,7 @@ import analysis_graph  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
 import state_io  # noqa: E402
+import open_implementation_pr  # noqa: E402
 
 
 def _fake_proc(returncode=0, stdout="", stderr=""):
@@ -53,7 +58,9 @@ def _cli_output(result):
 
 def test_complete_no_open_questions_writes_ready_for_review(tmp_path):
     result = _result()
-    with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))):
+    fake_pr = {"branch": "light-factory/foo/run-1", "pr_number": 1, "pr_url": "https://example/1"}
+    with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))), \
+         patch("analysis_graph.open_implementation_pr.open_pr_for_story", return_value=fake_pr) as mock_open_pr:
         outcome = analysis_graph.run_analysis(
             "stories/foo.md", "foo", "run-1", state_base=tmp_path
         )
@@ -68,13 +75,18 @@ def test_complete_no_open_questions_writes_ready_for_review(tmp_path):
     assert dmeta["status"] == "ready-for-review"
     assert "_none_" in dbody  # no open questions
 
+    assert outcome["pr"] == fake_pr
+    mock_open_pr.assert_called_once_with("foo", "run-1", state_base=tmp_path, cwd=None)
+
 
 # --- I/O Matrix row 2: complete, in-scope, open questions remain --------------------------
 
 
 def test_complete_with_open_questions_writes_awaiting_clarification(tmp_path):
     result = _result(open_questions=["what about X?"])
-    with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))):
+    fake_pr = {"branch": "light-factory/foo/run-1", "pr_number": 2, "pr_url": "https://example/2"}
+    with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))), \
+         patch("analysis_graph.open_implementation_pr.open_pr_for_story", return_value=fake_pr) as mock_open_pr:
         outcome = analysis_graph.run_analysis(
             "stories/foo.md", "foo", "run-1", state_base=tmp_path
         )
@@ -85,6 +97,9 @@ def test_complete_with_open_questions_writes_awaiting_clarification(tmp_path):
     dmeta, dbody = state_io.read_state(tmp_path / "foo" / "run-1" / "decisions.md")
     assert dmeta["status"] == "awaiting-clarification"
     assert "what about X?" in dbody
+
+    assert outcome["pr"] == fake_pr
+    mock_open_pr.assert_called_once_with("foo", "run-1", state_base=tmp_path, cwd=None)
 
 
 # --- I/O Matrix row 3: incomplete or out-of-scope -----------------------------------------
@@ -99,12 +114,14 @@ def test_incomplete_halts_with_reason_and_writes_nothing(tmp_path):
         subtasks=[],
         tests=[],
     )
-    with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))):
+    with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))), \
+         patch("analysis_graph.open_implementation_pr.open_pr_for_story") as mock_open_pr:
         with pytest.raises(analysis_graph.AnalysisHalted) as exc_info:
             analysis_graph.run_analysis("stories/foo.md", "foo", "run-1", state_base=tmp_path)
 
     assert "too vague" in exc_info.value.reason
     assert not (tmp_path / "foo").exists()
+    mock_open_pr.assert_not_called()
 
 
 def test_out_of_scope_halts_with_reason_and_writes_nothing(tmp_path):
@@ -116,12 +133,14 @@ def test_out_of_scope_halts_with_reason_and_writes_nothing(tmp_path):
         subtasks=[],
         tests=[],
     )
-    with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))):
+    with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))), \
+         patch("analysis_graph.open_implementation_pr.open_pr_for_story") as mock_open_pr:
         with pytest.raises(analysis_graph.AnalysisHalted) as exc_info:
             analysis_graph.run_analysis("stories/foo.md", "foo", "run-1", state_base=tmp_path)
 
     assert "not something this codebase builds" in exc_info.value.reason
     assert not (tmp_path / "foo").exists()
+    mock_open_pr.assert_not_called()
 
 
 # --- I/O Matrix row 4: claude CLI invocation itself fails ---------------------------------
@@ -178,6 +197,26 @@ def test_subprocess_oserror_raises_invocation_error(tmp_path):
     assert not (tmp_path / "foo").exists()
 
 
+# --- I/O Matrix row 5: branch/PR-open step itself fails ----------------------------------
+
+
+def test_pr_open_failure_raises_analysis_pr_open_error_but_state_files_remain(tmp_path):
+    result = _result()
+    with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))), \
+         patch(
+             "analysis_graph.open_implementation_pr.open_pr_for_story",
+             side_effect=open_implementation_pr.PROpenError("gh pr create failed: auth error"),
+         ):
+        with pytest.raises(analysis_graph.AnalysisPROpenError, match="auth error"):
+            analysis_graph.run_analysis("stories/foo.md", "foo", "run-1", state_base=tmp_path)
+
+    # plan.md/decisions.md were written before the PR-open step ran -- they stay on disk.
+    meta, _ = state_io.read_state(tmp_path / "foo" / "run-1" / "plan.md")
+    assert meta["status"] == "ready-for-review"
+    dmeta, _ = state_io.read_state(tmp_path / "foo" / "run-1" / "decisions.md")
+    assert dmeta["status"] == "ready-for-review"
+
+
 # --- command construction ------------------------------------------------------------------
 
 
@@ -228,7 +267,9 @@ def test_cli_main_invocation_error_exits_3(tmp_path, capsys, monkeypatch):
 def test_cli_main_success_exits_0(tmp_path, capsys, monkeypatch):
     monkeypatch.chdir(tmp_path)
     result = _result()
-    with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))):
+    fake_pr = {"branch": "light-factory/foo/run-1", "pr_number": 1, "pr_url": "https://example/1"}
+    with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))), \
+         patch("analysis_graph.open_implementation_pr.open_pr_for_story", return_value=fake_pr):
         rc = analysis_graph.main(
             ["--story-file", "stories/foo.md", "--story-slug", "foo", "--run-id", "run-1"]
         )
@@ -237,3 +278,19 @@ def test_cli_main_success_exits_0(tmp_path, capsys, monkeypatch):
     out = json.loads(captured.out.strip())
     assert out["ok"] is True
     assert out["status"] == "ready-for-review"
+
+
+def test_cli_main_pr_open_error_exits_4(tmp_path, capsys, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = _result()
+    with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))), \
+         patch(
+             "analysis_graph.open_implementation_pr.open_pr_for_story",
+             side_effect=open_implementation_pr.PROpenError("gh pr create failed: auth error"),
+         ):
+        rc = analysis_graph.main(
+            ["--story-file", "stories/foo.md", "--story-slug", "foo", "--run-id", "run-1"]
+        )
+    captured = capsys.readouterr()
+    assert rc == 4
+    assert "auth error" in captured.err
