@@ -149,6 +149,35 @@ jobs:
             --story-slug "${{ needs.analysis.outputs.story-slug }}" \
             --run-id "${{ needs.analysis.outputs.run-id }}"
 
+      # CAP-5 mechanical checks (AD-6): 4 direct pipeline steps, never a graph node or
+      # agent tool call. build/test are real checks -- a failing step exits non-zero and
+      # stops the job; lint/security have no tool wired for v1 and always record
+      # status: skipped (never pass), so they always exit 0. See
+      # factory/scripts/run_checks.py and story-mechanical-checks-plan.md.
+      - name: Build check
+        run: |
+          uv run factory/scripts/run_checks.py build \
+            --story-slug "${{ needs.analysis.outputs.story-slug }}" \
+            --run-id "${{ needs.analysis.outputs.run-id }}"
+
+      - name: Test check
+        run: |
+          uv run factory/scripts/run_checks.py test \
+            --story-slug "${{ needs.analysis.outputs.story-slug }}" \
+            --run-id "${{ needs.analysis.outputs.run-id }}"
+
+      - name: Lint check (placeholder)
+        run: |
+          uv run factory/scripts/run_checks.py lint \
+            --story-slug "${{ needs.analysis.outputs.story-slug }}" \
+            --run-id "${{ needs.analysis.outputs.run-id }}"
+
+      - name: Security check (placeholder)
+        run: |
+          uv run factory/scripts/run_checks.py security \
+            --story-slug "${{ needs.analysis.outputs.story-slug }}" \
+            --run-id "${{ needs.analysis.outputs.run-id }}"
+
   merge:
     name: "Job 3: Merge"
     needs: implementation
