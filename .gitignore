@@ -15,8 +15,8 @@ Thumbs.db
 # light-factory's own pipeline-agent skills (architecture's Namespace mapping), committed
 # deliverables, not installed packages.
 .agents/skills/
-.claude/skills/bmad*/
-.claude/skills/bmod*/
+.claude/skills/bmad*
+.claude/skills/bmod*
 
 # BMad render cache — reproducible via _bmad/scripts/render_skill.py
 _bmad/render/
