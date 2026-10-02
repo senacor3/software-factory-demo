@@ -41,9 +41,9 @@ references = ["architecture-light-factory/architecture-light-factory.md#ad-8", "
 [[entry]]
 id = 4
 type = "story"
-title = "Bounded clarification loop"
-description = "Adds the graph-owned clarification-round counter to Job 1, capped at 2 rounds; cap-out writes status: awaiting-clarification and posts a comment with the open question(s). Amendment (2026-10-02, change-pr-at-intake): each round commits to the branch/PR entry 3 opened at intake, not a bare commit; cap-out posts and closes that PR (AD-13/AD-15), rather than posting a commit comment."
-verify = "A story seeded with an unresolvable open question runs exactly 2 rounds, each committing to the already-open PR, then halts with a PR comment and the PR closed; one that resolves within a round proceeds to plan-approval with the PR still open."
+title = "Clarification halt (single-pass, v1)"
+description = "Simplified 2026-10-02 (user's call, see deferred-work.md): no loop. When entry 3's single analysis pass returns any open_questions (status: awaiting-clarification), post them as a comment on the PR entry 3 already opened at intake, then close that PR (AD-13/AD-15). When it returns no open_questions, nothing new here -- the PR stays open for plan-approval exactly as entry 3 already leaves it."
+verify = "A story seeded with an unresolvable open question halts immediately after the one analysis pass, with a PR comment carrying the question(s) and the PR closed; one with no open questions is unaffected by this entry -- PR stays open, proceeds to plan-approval."
 covers = ["CAP-2"]
 after = [3]
 hitl = false
