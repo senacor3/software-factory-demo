@@ -71,6 +71,8 @@ Workflow, trivial story file, and both GitHub Environments created exactly per t
 
 ## Plan Change Log
 
+- **2026-10-02 — entry 6 retired, cross-reference stale.** Triggering finding: the `change-pr-at-intake` sprint change proposal moves branch+PR creation from Job 2 (entry 6, "Deterministic PR-open step") into Job 1's intake (entry 3's amendment). This ticket's `Never` bullet ("no PR/branch creation (entry 6)") now points at a retired entry — that capability lives in entry 3's amendment instead. No functional change to this ticket's own built code: it never created a branch or PR, and still doesn't.
+
 ## Review Triage Log
 
 - **Gate protection not attached, AC1–3 unmet** — verdict: `high`. Verified: `environment:` on a job with no protection rule attached does not pause it; `protection_rules: []` on both environments confirmed via `gh api`. Real, but already resolved by explicit user decision 2026-10-01 ("leave it for now") — routed `defer`, logged to `deferred-work.md` rather than looped back, since re-litigating a decision already made twice this session would be pure overhead.

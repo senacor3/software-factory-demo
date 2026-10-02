@@ -77,6 +77,8 @@ The initial implementation subagent (first three files: SKILL.md, analysis_graph
 
 ## Plan Change Log
 
+- **2026-10-02 — amend to open branch+PR once CAP-1 proceeds.** Triggering finding: the `change-pr-at-intake` sprint change proposal (`_bmad-output/initiative-light-factory/change-pr-at-intake/change-pr-at-intake.md`) moves AD-12's branch+PR-open step from Job 2's start into Job 1, firing once `run_analysis` returns a non-halted result — entry 6 ("Deterministic PR-open step") is retired, its capability absorbed here. Amended: add the conditional deterministic script call after a non-halted result — commit `plan.md`/`decisions.md` as the branch's first real commit (no placeholder commit needed), open the PR against the target branch. On `AnalysisHalted`, behavior is unchanged: skip entirely, exactly as today. Job 1's workflow step gains `contents: write`/`pull-requests: write` token scope it has none of today. Known-bad state avoided: this must not touch `invoke_skill`/`run_analysis`'s own judgment logic or its 14 existing tests — only wrap a new step around the existing non-halted branch. **KEEP:** all 57 currently-passing tests, the schema, the skill prompt, and the live-verified halt path (run `36970131400`, 2026-10-02) must still pass/behave identically after the amendment — re-run both as part of this amendment's own verification before marking it built.
+
 ## Review Triage Log
 
 - **Tasks & Acceptance checklist stale** — verdict: `low`. Verified: all six checkboxes read `- [ ]` despite Implementation Notes describing the work as fully built and tested. Same pattern as entry 1's and entry 2's review findings. Smallest fix is correcting the checkboxes to match reality (no code touched); routed `patch`, applied directly above.
