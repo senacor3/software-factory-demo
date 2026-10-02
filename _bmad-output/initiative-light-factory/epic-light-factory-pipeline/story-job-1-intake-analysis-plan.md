@@ -3,7 +3,7 @@ title: 'Job 1: intake + analysis'
 type: 'feature'
 ticket: '3'
 created: '2026-10-01'
-status: 'in-review'
+status: 'built'
 baseline_revision: '2bc22eea6018d19b8b6cee8c1bd98494147bd4a6'
 route: 'full'
 route_source: 'auto'
@@ -77,7 +77,7 @@ context: ['_bmad-output/initiative-light-factory/architecture-light-factory/arch
 - [x] `factory/graph/tests/test_analysis_graph.py` -- new tests covering the amended I/O Matrix's 5th row (PR-open failure) and confirming the two existing non-halted rows now also assert branch/PR creation was invoked (including that `state_base` is forwarded), with `git`/`gh` mocked (no real branch/PR created by the test suite)
 - [x] `factory/scripts/tests/test_open_implementation_pr.py` -- **new**: dedicated tests for `open_pr_for_story`'s own real body (fresh-create, idempotent-reuse, subprocess-failure), `subprocess.run` mocked — closes the amendment's Acceptance Criterion 3, which had zero automated coverage in the first pass
 - [x] Run `uv run --with pytest pytest factory/graph/tests/test_analysis_graph.py factory/scripts/tests/test_open_implementation_pr.py factory/scripts/tests/test_state_io.py` -- all pass, including the pre-existing 14+43 -- **66/66 passed** (16 + 7 + 43)
-- [ ] Re-run `gh workflow run light-factory.yml -f story_file=stories/trivial-test-story.md` -- confirm the halt path still halts with the same reason and creates no branch/PR after the amendment -- **not done this pass** (live dispatch against the real `DAICST/software-factory` repo, left for explicit confirmation — see Implementation Notes)
+- [x] Re-run `gh workflow run light-factory.yml -f story_file=stories/trivial-test-story.md` -- confirm the halt path still halts with the same reason and creates no branch/PR after the amendment -- **run live 2026-10-02** (run `36982544175`): confirmed, see Verification below
 
 **Acceptance Criteria (original, still binding):**
 - Given a story file the skill judges complete and in-scope with no open questions, when the analysis job runs, then `plan.md` and `decisions.md` exist under `.factory/<story-slug>/<run-id>/` with `status: ready-for-review`.
@@ -136,6 +136,7 @@ The initial implementation subagent (first three files: SKILL.md, analysis_graph
 - `uv run --with pytest pytest factory/graph/tests/test_analysis_graph.py` -- expected: all pass, `claude` subprocess call mocked
 - `uv run --with pyyaml python3 -c "import yaml; yaml.safe_load(open('.github/workflows/light-factory.yml'))"` -- expected: `YAML OK`
 - `gh workflow run light-factory.yml -f story_file=stories/trivial-test-story.md` then `gh run view <run-id> --log` -- **run live 2026-10-02** (run `36970131400`), once the user set `CLAUDE_CODE_OAUTH_TOKEN` as a repo secret: the CLI invocation, skill dispatch, and structured-output parse all worked end-to-end; the `analysis` job halted cleanly (exit 1) with reason "The story is an explicit placeholder used only to trigger and verify the light-factory.yml pipeline skeleton ... there is nothing to design a solution from" -- the correct `AnalysisHalted` outcome for this fixture (CAP-1 judged it in-scope but not actionable), matching the halt-on-incomplete branch already covered by unit tests. No `plan.md`/`decisions.md` written, as expected for a halt.
+- **Re-run live after the amendment, 2026-10-02** (run `36982544175`, after pushing commit `0831c86` to `origin/main`): same halt path, same outcome -- exit 1, reason "The story is a placeholder used only to trigger and verify the light-factory.yml pipeline skeleton ... There is nothing to design or build from it, so any proposal would be a guess" (near-identical rewording, same judgment). Confirmed via `gh api repos/DAICST/software-factory/pulls` and `.../branches` that no branch or PR matching `light-factory/trivial-test-story*` exists -- the amendment's PR-open step correctly never ran for this halted run, closing the amendment's own Acceptance Criterion 2. The proceed-path's branch+PR creation itself remains unit-tested only (see Never above) -- no actionable fixture story exists in this repo to exercise it live without creating a real artifact.
 
 **Manual checks (if no CLI):**
 - Read the written `plan.md`/`decisions.md` frontmatter and confirm it matches AD-10's schema exactly (no extra/renamed fields).
