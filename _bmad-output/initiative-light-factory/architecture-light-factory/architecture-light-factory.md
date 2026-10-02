@@ -110,11 +110,11 @@ Dependency arrows only point from GitHub-Actions-specific wiring inward. `factor
 - **Prevents:** ambiguity about when/how the PR backing the rest of the run comes into existence; an analysis or implementation agent holding an unscoped git-push/PR-create capability AD-5's tool-allowlist model never named; a dangling open PR surviving a clarification cap-out or plan-approval reject with no closing action (see AD-2, AD-13, AD-15)
 - **Rule:** once Job 1's CAP-1 intake judgment decides to proceed (not on a halt), a deterministic pipeline script — not the agent — creates the isolated branch named from AD-8's story-slug and AD-15's run-id (`light-factory/<story-slug>/<run-id>`), commits the analysis stage's own first write of `plan.md`/`decisions.md` as the branch's first real commit (no placeholder commit needed — this is genuine content, not a GitHub-API workaround), and opens the PR against the target branch. This PR is the single artifact for the rest of the run: `plan.md`/`decisions.md` updates across clarification rounds (AD-13), the `plan-approval` gate summary (AD-4), all of Job 2's automated-check output, review findings, and fix-loop commits, and the `evidence-approval` gate summary all land on it. Job 2 reuses this same branch — it checks it out via the propagated branch name (AD-8/AD-15 outputs), it does not create a new one. Because this is a script step under AD-5's per-job token scoping (not the agent's own tool-allowlist), neither the analysis agent nor the implementation agent ever receives a branch-create or PR-create tool. A run that halts at CAP-1 (incomplete/out-of-scope) never reaches this script — no branch or PR exists for it. The same script closes any prior open PR for this story-slug it supersedes (AD-15) — branches and state directories are never deleted, only the superseded PR closes.
 
-### AD-13 — Bounded clarification loop, hard cap at 2 rounds
+### AD-13 — Clarification: single-pass for v1, halt immediately on any open question
 
-- **Binds:** Job 1's LangGraph graph (intake, analysis, clarification loop)
-- **Prevents:** an unbounded pre-approval loop burning agent turns waiting on a slow or unavailable human — the same risk AD-11 closes for the fix loop, left open here until now
-- **Rule:** `decisions.md`'s frontmatter tracks a clarification-round counter, incremented only by the orchestration graph's own loop-control node — never by the analysis agent itself (mirrors AD-11's counter-ownership rule exactly, including the persisted-counter requirement). The graph enforces a hard cap of 2 rounds: on the 2nd unresolved clarification round, it must not loop again — it halts intake, writes `plan.md`/`decisions.md` with `status: awaiting-clarification` (AD-10's existing enum — no new status needed), and posts the remaining open question(s) as a comment on the PR AD-12 opened at intake, and closes that PR per AD-15 (this path ends the run without reaching a gate, so AD-4's Rule doesn't itself cover the comment step — the convention is shared, the authority is this AD). The developer answers out-of-band and re-triggers the pipeline as a new run, consistent with AD-2's reject-is-terminal/re-trigger pattern and v1's manual-trigger-only model — the loop never continues within the same run past the cap.
+- **Binds:** Job 1's LangGraph graph (intake, analysis)
+- **Prevents:** ambiguity about what happens when analysis can't fully resolve the story alone — without this, intake would either guess (undermining CAP-1/CAP-2) or silently stall
+- **Rule:** for v1, Job 1 makes exactly one analysis invocation (entry 3). If it returns any `open_questions`, the graph halts intake immediately — no retry, no loop — writes `plan.md`/`decisions.md` with `status: awaiting-clarification` (AD-10's existing enum — no new status needed), posts the open question(s) as a comment on the PR AD-12 opened at intake, and closes that PR per AD-15 (this path ends the run without reaching a gate, so AD-4's Rule doesn't itself cover the comment step — the convention is shared, the authority is this AD). The developer answers out-of-band and re-triggers the pipeline as a new run, consistent with AD-2's reject-is-terminal/re-trigger pattern and v1's manual-trigger-only model. **Deferred post-v1** (see `deferred-work.md`): a real bounded multi-round mechanism — either the agent re-attempting resolution with accumulated context across rounds (mirrors AD-11's fix-loop pattern), or a live human-reply exchange reusing AD-2's Environment-gate pattern — was the original design intent for this AD and the SPEC's CAP-2 criterion before being simplified for v1 (user's call, 2026-10-02).
 
 ### AD-14 — Merge is a deterministic pipeline step, never an agent action
 
@@ -139,7 +139,7 @@ Dependency arrows only point from GitHub-Actions-specific wiring inward. `factor
 | Data & formats (state-file frontmatter) | Shared field names across every state file: `schema_version`, `story_slug`, `stage`, `status`, `updated` — see AD-10 for the canonical `status` enum per file |
 | State & cross-cutting (mutation, permissions) | Each stage owns and writes only its own state file (append-only across stages, AD-10); agent permissions are enforced both via Claude Code tool-allowlists scoped to specific state-file paths (not just the branch) and via GitHub token/branch-protection scoping — never one alone (AD-5) |
 | State & cross-cutting (identifiers) | `story-slug` is computed once, in the workflow's first job, and threaded to every other job via `needs:` outputs — never independently re-derived (AD-8) |
-| State & cross-cutting (bounded loops) | Both agent loops are hard-capped and counted the same way: a counter owned solely by the orchestration graph's loop-control node, never by the agent. Clarification loop (Job 1): cap 2 rounds, `status: awaiting-clarification` on cap-out (AD-13). Fix loop (Job 2): cap 2 cycles, `status: unresolved-after-cap` on cap-out (AD-11) |
+| State & cross-cutting (bounded loops) | Fix loop (Job 2): hard-capped at 2 cycles, counted by a counter owned solely by the orchestration graph's loop-control node, never by the agent; `status: unresolved-after-cap` on cap-out (AD-11). Clarification (Job 1): no loop for v1 — a single analysis pass halts immediately on any open question, `status: awaiting-clarification` (AD-13); the real bounded/counted mechanism is deferred post-v1 |
 | Naming (PR/comment target) | The PR exists from the moment Job 1's CAP-1 judgment decides to proceed (AD-12) — both `plan-approval` and `evidence-approval` summaries post as PR comments on it (AD-4). A clarification cap-out or a `plan-approval` reject closes that PR with a comment (AD-15); a re-trigger's new PR closes and links to any PR it supersedes (AD-15) |
 
 ## Stack
@@ -173,24 +173,22 @@ stateDiagram-v2
     end note
 
     state "Job 1: Analysis (GitHub Actions)" as Job1_Analysis {
-        state "LangGraph: intake -> analysis (CAP-1/CAP-2)" as LG1a
+        state "LangGraph: intake -> analysis (CAP-1/CAP-2), single pass (AD-13)" as LG1a
         state "Pipeline script: create branch, commit plan.md/decisions.md, open PR\n(AD-12, deterministic -- not an agent action)" as OpenPR1
-        state "LangGraph: clarification loop (cap 2 rounds, AD-13)" as LG1b
         [*] --> LG1a
         LG1a --> Halted: incomplete/out-of-scope, no branch/PR opened
         LG1a --> OpenPR1: proceed (CAP-1 passed)
-        OpenPR1 --> LG1b
-        LG1b --> WritePlan: resolved, writes plan.md, decisions.md (status: ready-for-review) on existing branch/PR
-        LG1b --> CapOutA: cap exceeded, writes status: awaiting-clarification, closes PR (AD-15)
+        OpenPR1 --> WritePlan: resolved, writes plan.md, decisions.md (status: ready-for-review)
+        OpenPR1 --> NeedsClarification: any open_questions, writes status: awaiting-clarification, closes PR (AD-13/AD-15)
         WritePlan --> PostSummary1: PR comment summary (AD-4)
-        CapOutA --> PostSummaryCapA: PR comment, open question(s) surfaced, PR closed
+        NeedsClarification --> PostSummaryCapA: PR comment, open question(s) surfaced, PR closed
         PostSummary1 --> [*]
         PostSummaryCapA --> [*]: run ends here, no GateA (see RunEndsClarify below)
         Halted --> [*]: run ends here, no branch/PR ever existed
     }
 
     Job1_Analysis --> GateA: normal path, Environment pause (same run)
-    Job1_Analysis --> RunEndsClarify: clarification cap exceeded (AD-13)
+    Job1_Analysis --> RunEndsClarify: any open question, single pass (AD-13)
 
     state "Run ends, no plan-approval attempt.\nHuman answers out-of-band, re-triggers\nJob 1 as a NEW run (new run-id, AD-15)." as RunEndsClarify
     RunEndsClarify --> [*]
@@ -241,7 +239,7 @@ stateDiagram-v2
                                          # chained via needs:; story-slug computed in the intake job, threaded as a needs: output
   factory/
     graph/
-      analysis_graph.py                 # LangGraph: intake, analysis, clarification loop
+      analysis_graph.py                 # LangGraph: intake, analysis, single-pass clarification halt (AD-13)
       implementation_graph.py           # LangGraph: implement, review, bounded fix loop (counter owned here, AD-11)
     scripts/
       open_implementation_pr.py         # deterministic: creates isolated branch, commits plan.md/decisions.md as the real first commit, opens PR, closes/links any superseded PR -- invoked from Job 1 once CAP-1 passes; Job 2 checks out the same branch rather than creating one (AD-12, AD-15)

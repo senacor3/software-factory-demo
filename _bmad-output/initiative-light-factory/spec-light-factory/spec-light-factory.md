@@ -20,7 +20,7 @@ AI coding agents now generate more code than a developer can responsibly review 
 
 - **CAP-2**
   - **intent:** An agent can analyze the story, propose a solution, derive subtasks and tests, run a clarification loop on open questions, and document decisions as they resolve.
-  - **success:** `plan.md` and `decisions.md` exist with no unresolved open question before the `plan-approval` gate is reached. The clarification loop is bounded at 2 rounds; if a question remains unanswered after that, intake halts and surfaces the remaining question(s) directly to the developer instead of looping further.
+  - **success:** `plan.md` and `decisions.md` exist with no unresolved open question before the `plan-approval` gate is reached. For v1, intake makes exactly one analysis pass; if it produces any open question, intake halts immediately and surfaces the question(s) directly to the developer instead of looping — a bounded multi-round retry or live human-reply exchange is deferred post-v1 (see deferred-work.md).
 
 - **CAP-3**
   - **intent:** The requesting developer can review and confirm the proposed plan before any code is written.
