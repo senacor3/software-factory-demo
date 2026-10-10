@@ -1,0 +1,102 @@
+# tickets.toml — epic-demo-app's agreed children, in build order.
+# Tracer bullet: entry 1. Refactor sweep: entry 8. Closing end-to-end suite: entry 9.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Project scaffold & CI"
+description = "Scaffolds the Spring Boot backend and Angular frontend as separate buildable projects in this repo, with CI running each project's build+test, and a trivial end-to-end path (a health-check endpoint rendered on one Angular page, its label in German) proving the two connect."
+verify = "CI goes green on a fresh clone; the Angular page shows a live value from the Spring Boot health endpoint behind a German-language label."
+covers = ["D1"]
+after = []
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 2
+type = "story"
+title = "Tender domain model & persistence"
+description = "Models Tender (origin, destination, status open/closed) with Remark and Offer as child records atop entry 1's Spring Boot scaffold, persisted via Spring Data, backed by unit tests for the open/closed state transition."
+verify = "A unit test creates a tender, adds a remark and an offer, and closing the tender is reflected in its persisted status."
+covers = ["D2"]
+after = [1]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 3
+type = "story"
+title = "Create/close-tender API + enforce the open/closed rule"
+description = "Adds POST /tenders and POST /tenders/{id}/close atop entry 2's domain model, enforcing that remarks/offers can only be added to an open tender -- the epic's one non-trivial business rule."
+verify = "At the service layer, a test asserts adding a remark/offer to a closed tender is rejected with a clear error; creating and closing a tender both succeed via the API."
+covers = ["D2"]
+after = [2]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 4
+type = "story"
+title = "Tender overview + detail API"
+description = "Adds GET /tenders (filterable open/closed) and GET /tenders/{id} with its remarks and offers, plus POST endpoints to add a remark or offer to an existing open tender, re-enforcing entry 3's rule at the HTTP layer now that these endpoints exist."
+verify = "A test lists open and closed tenders filtered correctly, fetches one tender's full detail including its remarks and offers, and confirms POSTing a remark/offer against a closed tender is rejected via these endpoints."
+covers = ["D2"]
+after = [3]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 5
+type = "story"
+title = "Frontend: tender overview"
+description = "An Angular view listing open and closed tenders, consuming entry 4's list endpoint, with all labels and messages in German -- the backend API/data stay English, only this UI layer translates."
+verify = "The overview page shows open and closed tenders separately with German labels, matching what the backend returns."
+covers = ["D2"]
+after = [4]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 6
+type = "story"
+title = "Frontend: create & view tender"
+description = "An Angular form to create a new tender (entry 3's create endpoint) and a detail page for one tender showing its remarks/offers with add-forms (entry 4's endpoints), disabled once the tender is closed -- all form labels, buttons, and messages (including the disabled-state explanation) in German."
+verify = "Creating a tender via the German-labeled form shows it in entry 5's overview; its detail page accepts a remark and an offer while open, and the add-forms are disabled once closed with a German message explaining why."
+covers = ["D2"]
+after = [5]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 7
+type = "story"
+title = "Wire light-factory onto this repo"
+description = "Copies light-factory's workflow blueprint (.github/workflows/light-factory.yml, factory/, .claude/skills/) onto this repo and sets up its required GitHub Environments/secrets -- only needs entry 1's repo/CI to exist, not the domain, and touches none of entries 2-6's src/ files, so it can build alongside them."
+verify = "A trivial dispatch against this repo reaches and pauses at plan-approval, proving the gates are live here, same as the original repo."
+covers = ["D3"]
+after = [1]
+hitl = true
+risk = "medium"
+unknown = "Depends on initiative-light-factory's epic-pipeline-open-issues being built first, so this repo starts from the fixed blueprint -- a cross-initiative dependency no `after` can express; confirm timing with the user when this entry starts."
+
+[[entry]]
+id = 8
+type = "story"
+title = "Refactor sweep"
+description = "Closes out scope deferred during entries 1-7 and findings surfaced along the way; no new behavior."
+verify = "The full test suite (backend + frontend) passes, and every finding deferred across entries 1-7 is resolved or re-parked in Notes with a reason."
+covers = []
+after = [1, 2, 3, 4, 5, 6, 7]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 9
+type = "story"
+title = "Closing end-to-end suite"
+description = "Dispatches a real, non-trivial story through light-factory against this repo end to end (both gates exercised), and polishes the README/walkthrough (in English, like the rest of the docs -- the German UI is the app's, not the repo's documentation) so the repo and that run are presentable as a demo."
+verify = "A real story run completes to merge through this repo's light-factory pipeline, and the README gives a semi-technical reader everything needed to follow it without extra prep."
+covers = ["D3", "D4"]
+after = [8]
+hitl = true
+risk = "medium"
