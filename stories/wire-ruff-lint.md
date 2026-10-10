@@ -30,6 +30,13 @@ work:
 - If running real `ruff` against the current `factory/` tree surfaces actual
   lint findings, fix them as part of this change so the check starts from a
   clean baseline — don't ship a lint check that fails on its own first run.
+- **Do not edit `.github/workflows/light-factory.yml`.** It's fine (and
+  expected) for the workflow step there to keep saying "Lint check
+  (placeholder)" even after this change — update the Python module's own
+  comments/docstring instead. The implementation agent's commit can't push a
+  change to any file under `.github/workflows/` (GitHub rejects it
+  regardless of token permissions), so a plan that touches it will fail to
+  push, no matter how small the edit.
 
 ## Why
 
