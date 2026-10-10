@@ -1,0 +1,86 @@
+# tickets.toml — epic-pipeline-open-issues's agreed children, in build order.
+# Tracer bullet: entry 1. Refactor sweep: entry 6. Closing end-to-end suite: entry 7.
+
+[[entry]]
+id = 1
+type = "spike"
+title = "Clarification-loop mechanism: decide and design"
+description = "Resolve via bmad-correct-course which real bounded-clarification model to build -- agent-retry across rounds vs. live human-reply -- and amend spec/architecture (CAP-2, AD-13, AD-2 if needed) to match."
+verify = "A Sprint Change Proposal is approved by the user and the spec/architecture docs reflect the decided mechanism."
+covers = ["CAP-2"]
+after = []
+hitl = true
+risk = "medium"
+references = ["spec-light-factory/spec-light-factory.md#capabilities", "architecture-light-factory/architecture-light-factory.md#ad-2", "architecture-light-factory/architecture-light-factory.md#ad-13", "deferred-work.md"]
+
+[[entry]]
+id = 2
+type = "story"
+title = "Build the real clarification-loop mechanism"
+description = "Implement the mechanism entry 1 decided on, replacing v1's single-pass-halt-immediately behavior in the analysis job."
+verify = "A story with a genuinely resolvable open question triggers the loop, which resolves within its decided cap without exceeding it."
+covers = ["CAP-2"]
+after = [1]
+hitl = false
+risk = "medium"
+unknown = "Implementation shape depends entirely on entry 1's decision -- cannot be planned further until then."
+references = ["architecture-light-factory/architecture-light-factory.md#ad-13", "deferred-work.md"]
+
+[[entry]]
+id = 3
+type = "story"
+title = "Real security tooling"
+description = "Wire a real security scanner (e.g. bandit) into run_checks.py's run_security, replacing the permanent 'skipped' placeholder, mirroring how lint went real in ticket 1.13."
+verify = "run_security reports a genuine pass/fail against a real finding, not status: skipped."
+covers = ["CAP-5"]
+after = []
+hitl = false
+risk = "low"
+references = ["spec-light-factory/spec-light-factory.md#capabilities", "architecture-light-factory/architecture-light-factory.md#ad-6", "deferred-work.md"]
+
+[[entry]]
+id = 4
+type = "story"
+title = "AD-15 supersession-closing"
+description = "On a re-triggered run for a story-slug with an existing open PR, search for and close it with a 'superseded by #N' comment, and post 'retry of #M' on the new PR."
+verify = "Two sequential dispatches for the same story-slug leave exactly one open PR, the older one closed and linked."
+covers = ["CAP-1"]
+after = []
+hitl = false
+risk = "medium"
+references = ["architecture-light-factory/architecture-light-factory.md#ad-15", "deferred-work.md"]
+
+[[entry]]
+id = 5
+type = "story"
+title = "Reject-closes-PR for both gates"
+description = "Query GitHub's deployment-review API to distinguish a genuine reviewer reject from an ordinary job failure, and close the PR with a comment on a real reject at either plan-approval or evidence-approval."
+verify = "A real reject at either gate closes its PR with an explanatory comment; an ordinary check failure does not."
+covers = ["CAP-3", "CAP-8"]
+after = []
+hitl = false
+risk = "medium"
+unknown = "Exact deployment-review API query/fields needed to distinguish a reject from a job failure were never resolved in deferred-work.md -- settle at refine time."
+references = ["architecture-light-factory/architecture-light-factory.md#ad-2", "architecture-light-factory/architecture-light-factory.md#ad-4", "deferred-work.md"]
+
+[[entry]]
+id = 6
+type = "story"
+title = "Refactor sweep"
+description = "Closes out doc drift and deferred findings accumulated across entries 1-5, per the epic's own closing-sweep convention; no new behavior."
+verify = "The checks suite passes, and every review finding deferred across entries 1-5 is either resolved or explicitly re-parked in Notes with a reason."
+covers = []
+after = [1, 2, 3, 4, 5]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 7
+type = "story"
+title = "Closing end-to-end suite"
+description = "Runs live dispatches that exercise the clarification-or-fix loop, a real gate reject with automatic PR-closing, and a retriggered supersession -- proving entries 1-5's Done-when criteria live, not just unit-tested."
+verify = "A live run demonstrates loop engagement within its cap, a reject correctly closing its PR, and a retrigger superseding its predecessor's PR cleanly."
+covers = []
+after = [6]
+hitl = true
+risk = "medium"
