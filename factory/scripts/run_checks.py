@@ -11,11 +11,11 @@ implementation".
 
 `build` (`python -m compileall factory -q` -- this repo has no packaging/build step,
 so syntax/import sanity is the closest real equivalent) and `test` (the existing
-pytest suite) are real checks that can genuinely pass or fail. `lint` and `security`
-have no tool configured in this repo yet (no `pyproject.toml`, no ruff/bandit
-config) -- user's call, 2026-10-02: ship them as honest placeholders
-(`status: "skipped"`, never `"pass"`) rather than wire real tooling now; see
-deferred-work.md.
+pytest suite) and `lint` (`ruff check` over `factory/`, configured by the root
+`ruff.toml`) are real checks that can genuinely pass or fail. `security` has no tool
+configured in this repo yet (no bandit config) -- user's call, 2026-10-02: it ships
+as an honest placeholder (`status: "skipped"`, never `"pass"`) rather than wiring
+real tooling now; see deferred-work.md.
 
 Evidence is written to `evidence/checks/<name>.json` via `state_io.write_atomic`
 *before* `main()` inspects the result's status to decide the exit code -- a failing
@@ -24,10 +24,10 @@ check always leaves a record, never just a non-zero exit with nothing on disk.
 Commands (each `--story-slug S --run-id R`):
   build     python -m compileall factory -q
   test      uv run --with pytest pytest factory/graph/tests/ factory/scripts/tests/
-  lint      placeholder, always status: skipped
+  lint      uv run --with ruff ruff check factory/
   security  placeholder, always status: skipped
 
-Exits 1 only when the written result's status is `"fail"` (build/test); 0 for
+Exits 1 only when the written result's status is `"fail"` (build/test/lint); 0 for
 `"pass"` or `"skipped"`.
 """
 
@@ -45,7 +45,7 @@ import state_io
 
 CHECK_NAMES = ("build", "test", "lint", "security")
 
-PLACEHOLDER_DETAIL = "no lint/security tool wired for v1 -- see deferred-work.md"
+PLACEHOLDER_DETAIL = "no security tool wired for v1 -- see deferred-work.md"
 
 
 def _write_evidence(
@@ -143,11 +143,9 @@ def run_lint(
     state_base: str | os.PathLike = state_io.FACTORY_DIR,
     cwd: str | os.PathLike | None = None,
 ) -> dict:
-    """Always a placeholder -- never runs a command, never reports `"pass"` (see
-    module docstring and deferred-work.md)."""
-    result = {"status": "skipped", "command": None, "detail": PLACEHOLDER_DETAIL}
-    _write_evidence("lint", story_slug, run_id, result, state_base=state_base)
-    return result
+    """Run ruff over `factory/` via uv, using the repo-root `ruff.toml`."""
+    cmd = ["uv", "run", "--with", "ruff", "ruff", "check", "factory/"]
+    return _run_command_check("lint", cmd, story_slug, run_id, state_base=state_base, cwd=cwd)
 
 
 def run_security(
