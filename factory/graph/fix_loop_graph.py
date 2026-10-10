@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # /// script
-# requires-python = ">=3.13"
+# requires-python = ">=3.13,<3.14"
 # dependencies = ["langgraph>=1.2.12,<2"]
 # ///
 """fix_loop_graph -- Job 2's bounded fix loop (CAP-7, AD-11).

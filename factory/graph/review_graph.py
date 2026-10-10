@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # /// script
-# requires-python = ">=3.13"
+# requires-python = ">=3.13,<3.14"
 # dependencies = ["langgraph>=1.2.12,<2"]
 # ///
 """review_graph -- Job 2's independent review stage (CAP-6 independent agent review).
