@@ -17,8 +17,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import state_io  # noqa: E402
-
+import state_io
 
 # --- derive_story_slug / derive_run_id (AD-8 / AD-15) -----------------------
 
@@ -110,7 +109,7 @@ def test_round_trip_all_five_ad10_fields(tmp_path):
     assert meta["status"] == "drafted"
     assert meta["schema_version"] == 1
     assert isinstance(meta["schema_version"], int)
-    assert "updated" in meta and meta["updated"]
+    assert meta.get("updated")
     assert body.strip() == "## Plan\n\nhello"
 
 

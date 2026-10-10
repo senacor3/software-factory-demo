@@ -29,7 +29,7 @@ class CheckoutError(RuntimeError):
     """A `git` subprocess call failed while checking out the implementation branch."""
 
 
-def _run(cmd: "list[str]", *, cwd: "str | os.PathLike | None" = None) -> str:
+def _run(cmd: list[str], *, cwd: str | os.PathLike | None = None) -> str:
     try:
         proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=False)
     except OSError as e:
@@ -46,7 +46,7 @@ def checkout_branch(
     story_slug: str,
     run_id: str,
     *,
-    cwd: "str | os.PathLike | None" = None,
+    cwd: str | os.PathLike | None = None,
 ) -> str:
     """Fetch and check out the branch entry 3 already opened. Never creates a branch.
 

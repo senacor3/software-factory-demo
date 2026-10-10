@@ -22,8 +22,8 @@ from unittest.mock import patch
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import run_checks  # noqa: E402
-import state_io  # noqa: E402
+import run_checks
+import state_io
 
 
 def _ok(stdout=""):

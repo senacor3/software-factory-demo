@@ -44,14 +44,16 @@ Commands:
 `derive`'s stdout is shaped for direct `>> "$GITHUB_OUTPUT"` redirection in a workflow step.
 """
 
-from __future__ import annotations  # keep type-hint syntax lazy so the script runs on 3.8+
+from __future__ import (
+    annotations,  # keep type-hint syntax lazy so the script runs on 3.8+
+)
 
 import argparse
 import json
 import os
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 FACTORY_DIR = ".factory"
@@ -74,13 +76,13 @@ _KEBAB_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
 
 def now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 # --- AD-8 / AD-15: slug and run-id derivation -------------------------------
 
 
-def derive_story_slug(story_file: "str | os.PathLike") -> str:
+def derive_story_slug(story_file: str | os.PathLike) -> str:
     """Derive the story-slug from the triggering story file's name (AD-8).
 
     Expects `<anything>/<story-slug>.md` with the slug itself kebab-case. Raises
@@ -99,7 +101,7 @@ def derive_story_slug(story_file: "str | os.PathLike") -> str:
     return slug
 
 
-def derive_run_id(github_run_id: "str | int") -> str:
+def derive_run_id(github_run_id: str | int) -> str:
     """Derive the run-id from GitHub's own run identifier (AD-15): `run-<github.run_id>`."""
     run_id = str(github_run_id).strip()
     if not run_id:
@@ -110,7 +112,7 @@ def derive_run_id(github_run_id: "str | int") -> str:
 # --- AD-8 / AD-15: directory layout -----------------------------------------
 
 
-def state_dir(story_slug: str, run_id: str, base: "str | os.PathLike" = FACTORY_DIR) -> Path:
+def state_dir(story_slug: str, run_id: str, base: str | os.PathLike = FACTORY_DIR) -> Path:
     """The per-story, per-run state directory: `.factory/<story-slug>/<run-id>/` (AD-8/AD-15)."""
     if not story_slug:
         raise ValueError("story_slug must not be empty")
@@ -119,7 +121,7 @@ def state_dir(story_slug: str, run_id: str, base: "str | os.PathLike" = FACTORY_
     return Path(base) / story_slug / run_id
 
 
-def ensure_layout(story_slug: str, run_id: str, base: "str | os.PathLike" = FACTORY_DIR) -> Path:
+def ensure_layout(story_slug: str, run_id: str, base: str | os.PathLike = FACTORY_DIR) -> Path:
     """Create the run's directory tree and return it.
 
     Only creates directories -- `evidence/checks/` (deterministic pipeline-step output)
@@ -154,7 +156,7 @@ def validate_status(stage: str, status: str) -> None:
         )
 
 
-def split(text: str) -> "tuple[dict, str]":
+def split(text: str) -> tuple[dict, str]:
     """Return (frontmatter dict in source order, body str). Mirrors memlog.py's split.
 
     The closing fence is the first line that is *exactly* `---`, so a `---` inside a
@@ -166,7 +168,7 @@ def split(text: str) -> "tuple[dict, str]":
     end = next((i for i in range(1, len(lines)) if lines[i] == "---"), None)
     if end is None:
         raise ValueError("state file frontmatter is not terminated")
-    meta: "dict[str, str]" = {}
+    meta: dict[str, str] = {}
     for line in lines[1:end]:
         if ":" in line:
             k, v = line.split(":", 1)
@@ -192,14 +194,14 @@ def write_atomic(path: Path, text: str) -> None:
 
 
 def write_state(
-    path: "str | os.PathLike",
+    path: str | os.PathLike,
     *,
     story_slug: str,
     stage: str,
     status: str,
     body: str = "",
     schema_version: int = SCHEMA_VERSION,
-    extra: "dict | None" = None,
+    extra: dict | None = None,
 ) -> dict:
     """Write a stage's state file with AD-10's exact frontmatter schema.
 
@@ -228,7 +230,7 @@ def write_state(
     return meta
 
 
-def read_state(path: "str | os.PathLike") -> "tuple[dict, str]":
+def read_state(path: str | os.PathLike) -> tuple[dict, str]:
     """Read a state file back as (meta, body). `schema_version` is parsed back to int."""
     text = Path(path).read_text(encoding="utf-8")
     meta, body = split(text)
@@ -289,7 +291,7 @@ def cmd_read(args) -> int:
     return 0
 
 
-def main(argv: "list[str] | None" = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
 

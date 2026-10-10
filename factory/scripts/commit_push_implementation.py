@@ -26,7 +26,7 @@ class CommitPushError(RuntimeError):
     agent's edits."""
 
 
-def _run(cmd: "list[str]", *, cwd: "str | os.PathLike | None" = None) -> str:
+def _run(cmd: list[str], *, cwd: str | os.PathLike | None = None) -> str:
     try:
         proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=False)
     except OSError as e:
@@ -44,7 +44,7 @@ def commit_and_push(
     story_slug: str,
     run_id: str,
     *,
-    cwd: "str | os.PathLike | None" = None,
+    cwd: str | os.PathLike | None = None,
 ) -> dict:
     """Commit and push the implementation agent's edits, if any.
 

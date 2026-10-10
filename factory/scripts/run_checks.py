@@ -41,7 +41,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import state_io  # noqa: E402
+import state_io
 
 CHECK_NAMES = ("build", "test", "lint", "security")
 
@@ -54,7 +54,7 @@ def _write_evidence(
     run_id: str,
     result: dict,
     *,
-    state_base: "str | os.PathLike" = state_io.FACTORY_DIR,
+    state_base: str | os.PathLike = state_io.FACTORY_DIR,
 ) -> Path:
     path = (
         state_io.state_dir(story_slug, run_id, base=state_base)
@@ -68,12 +68,12 @@ def _write_evidence(
 
 def _run_command_check(
     name: str,
-    cmd: "list[str]",
+    cmd: list[str],
     story_slug: str,
     run_id: str,
     *,
-    state_base: "str | os.PathLike" = state_io.FACTORY_DIR,
-    cwd: "str | os.PathLike | None" = None,
+    state_base: str | os.PathLike = state_io.FACTORY_DIR,
+    cwd: str | os.PathLike | None = None,
 ) -> dict:
     """Run `cmd`, write its evidence, and return the result dict.
 
@@ -93,7 +93,13 @@ def _run_command_check(
         }
     else:
         status = "pass" if proc.returncode == 0 else "fail"
-        detail = "" if status == "pass" else (proc.stderr.strip() or proc.stdout.strip())
+        # Concatenate both streams rather than preferring stderr -- a command run via
+        # `uv run --with X X ...` (lint's `ruff`, test's `pytest`) writes uv's own
+        # download/install banner to stderr and the wrapped tool's real findings to
+        # stdout; picking stderr-first (the previous behavior) silently discarded the
+        # actionable output and surfaced only uv's noise. Discovered live during
+        # ticket 13's end-to-end run.
+        detail = "" if status == "pass" else "\n".join(p for p in (proc.stdout.strip(), proc.stderr.strip()) if p)
         result = {"status": status, "command": cmd, "returncode": proc.returncode, "detail": detail}
 
     _write_evidence(name, story_slug, run_id, result, state_base=state_base)
@@ -104,8 +110,8 @@ def run_build(
     story_slug: str,
     run_id: str,
     *,
-    state_base: "str | os.PathLike" = state_io.FACTORY_DIR,
-    cwd: "str | os.PathLike | None" = None,
+    state_base: str | os.PathLike = state_io.FACTORY_DIR,
+    cwd: str | os.PathLike | None = None,
 ) -> dict:
     cmd = [sys.executable, "-m", "compileall", "factory", "-q"]
     return _run_command_check("build", cmd, story_slug, run_id, state_base=state_base, cwd=cwd)
@@ -115,8 +121,8 @@ def run_test(
     story_slug: str,
     run_id: str,
     *,
-    state_base: "str | os.PathLike" = state_io.FACTORY_DIR,
-    cwd: "str | os.PathLike | None" = None,
+    state_base: str | os.PathLike = state_io.FACTORY_DIR,
+    cwd: str | os.PathLike | None = None,
 ) -> dict:
     cmd = [
         "uv",
@@ -134,8 +140,8 @@ def run_lint(
     story_slug: str,
     run_id: str,
     *,
-    state_base: "str | os.PathLike" = state_io.FACTORY_DIR,
-    cwd: "str | os.PathLike | None" = None,
+    state_base: str | os.PathLike = state_io.FACTORY_DIR,
+    cwd: str | os.PathLike | None = None,
 ) -> dict:
     """Always a placeholder -- never runs a command, never reports `"pass"` (see
     module docstring and deferred-work.md)."""
@@ -148,8 +154,8 @@ def run_security(
     story_slug: str,
     run_id: str,
     *,
-    state_base: "str | os.PathLike" = state_io.FACTORY_DIR,
-    cwd: "str | os.PathLike | None" = None,
+    state_base: str | os.PathLike = state_io.FACTORY_DIR,
+    cwd: str | os.PathLike | None = None,
 ) -> dict:
     """Always a placeholder -- never runs a command, never reports `"pass"` (see
     module docstring and deferred-work.md)."""
@@ -172,7 +178,7 @@ def _add_check_subparser(sub, name: str):
     return pc
 
 
-def main(argv: "list[str] | None" = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
     for name in CHECK_NAMES:

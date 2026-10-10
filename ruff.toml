@@ -1,0 +1,12 @@
+# Minimal ruff config, added 2026-10-10 while establishing a clean lint baseline
+# for CAP-5's real `lint` check (factory/scripts/run_checks.py).
+#
+# SIM117 (combine nested `with` statements) is ignored: this repo's test suite
+# consistently nests `with patch(...): with pytest.raises(...):` -- one assertion
+# per line, readable diffs when a mock is added/removed -- across every test file,
+# including ones written independently by the real pipeline's own implementation
+# agent. That's an established convention here, not accidental debt; flattening
+# all ~42 occurrences into parenthesized multi-context `with` statements would be
+# pure churn against a pattern that keeps getting reproduced anyway.
+[lint]
+ignore = ["SIM117"]

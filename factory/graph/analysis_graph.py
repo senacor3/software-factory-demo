@@ -49,9 +49,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-import state_io  # noqa: E402
-import open_implementation_pr  # noqa: E402
-import post_summary  # noqa: E402
+import open_implementation_pr
+import post_summary
+import state_io
 
 SCHEMA_PATH = Path(__file__).resolve().parent / "schemas" / "analysis_result.schema.json"
 RESULT_FIELDS = ("complete", "in_scope", "reason", "proposal", "subtasks", "tests", "open_questions")
@@ -82,7 +82,7 @@ class AnalysisPROpenError(RuntimeError):
 # --- the single invocation (isolated so entry 4 can re-call it from its own loop) -------
 
 
-def _build_command(story_file: str, schema_text: str, claude_bin: str) -> "list[str]":
+def _build_command(story_file: str, schema_text: str, claude_bin: str) -> list[str]:
     # See story-job-1-intake-analysis-plan.md's Design Notes: `--bare` is never used here
     # (it skips skill auto-discovery and would require ANTHROPIC_API_KEY, contradicting
     # AD-9's subscription-OAuth requirement). Skill invocation is by literal `/skill-name`
@@ -129,7 +129,7 @@ def invoke_skill(
     story_file: str,
     *,
     claude_bin: str = "claude",
-    cwd: "str | os.PathLike | None" = None,
+    cwd: str | os.PathLike | None = None,
 ) -> dict:
     """Shell out to the `claude` CLI with the analysis skill and return the parsed,
     schema-validated result dict. Raises AnalysisInvocationError on any tooling failure."""
@@ -190,8 +190,8 @@ def run_analysis(
     run_id: str,
     *,
     claude_bin: str = "claude",
-    state_base: "str | os.PathLike" = state_io.FACTORY_DIR,
-    cwd: "str | os.PathLike | None" = None,
+    state_base: str | os.PathLike = state_io.FACTORY_DIR,
+    cwd: str | os.PathLike | None = None,
 ) -> dict:
     """Run the single analysis invocation and route to one of the three I/O Matrix
     outcomes. Returns the written state on the two write outcomes. Raises AnalysisHalted
@@ -284,7 +284,7 @@ def build_graph():
 # --- CLI ---------------------------------------------------------------------------------
 
 
-def main(argv: "list[str] | None" = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--story-file", required=True, help="path to the triggering story file")
     p.add_argument("--story-slug", required=True)

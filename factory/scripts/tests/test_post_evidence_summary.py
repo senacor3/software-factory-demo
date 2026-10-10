@@ -21,10 +21,10 @@ from unittest.mock import patch
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import post_evidence_summary  # noqa: E402
-import open_implementation_pr  # noqa: E402
-import post_summary  # noqa: E402
-import state_io  # noqa: E402
+import open_implementation_pr
+import post_evidence_summary
+import post_summary
+import state_io
 
 
 def _write_checks(state_directory, statuses):
@@ -69,7 +69,7 @@ def test_posts_summary_when_review_resolved(tmp_path):
 
     find_pr.assert_called_once_with("light-factory/foo-bar/run-1", cwd=None)
     assert post_comment.call_count == 1
-    args, kwargs = post_comment.call_args
+    args, _kwargs = post_comment.call_args
     assert args[0] == 7
     body = args[1]
     assert "build: pass" in body

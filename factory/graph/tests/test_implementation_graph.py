@@ -26,12 +26,11 @@ from unittest.mock import patch
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import implementation_graph  # noqa: E402
+import implementation_graph
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
-import state_io  # noqa: E402
-import checkout_branch  # noqa: E402
-import commit_push_implementation  # noqa: E402
+import checkout_branch
+import commit_push_implementation
 
 
 def _fake_proc(returncode=0, stdout="", stderr=""):

@@ -20,8 +20,8 @@ from unittest.mock import patch
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import merge_story  # noqa: E402
-import open_implementation_pr  # noqa: E402
+import merge_story
+import open_implementation_pr
 
 
 def _ok(stdout=""):
@@ -71,7 +71,7 @@ def test_subprocess_oserror_raises_merge_error():
 
 
 def test_no_open_pr_raises_merge_error():
-    with patch("merge_story.open_implementation_pr.find_open_pr", return_value=None) as find_pr, \
+    with patch("merge_story.open_implementation_pr.find_open_pr", return_value=None), \
          patch("merge_story.subprocess.run") as mock_run:
         with pytest.raises(merge_story.MergeError, match="no open PR"):
             merge_story.merge_story("foo-bar", "run-1")
@@ -83,6 +83,5 @@ def test_find_open_pr_failure_raises_merge_error():
     with patch(
         "merge_story.open_implementation_pr.find_open_pr",
         side_effect=open_implementation_pr.PROpenError("gh: authentication required"),
-    ):
-        with pytest.raises(merge_story.MergeError, match="authentication required"):
-            merge_story.merge_story("foo-bar", "run-1")
+    ), pytest.raises(merge_story.MergeError, match="authentication required"):
+        merge_story.merge_story("foo-bar", "run-1")

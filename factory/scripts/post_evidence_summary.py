@@ -28,9 +28,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import state_io  # noqa: E402
-import open_implementation_pr  # noqa: E402
-import post_summary  # noqa: E402
+import open_implementation_pr
+import post_summary
+import state_io
 
 CHECK_NAMES = ("build", "test", "lint", "security")
 
@@ -81,8 +81,8 @@ def post_evidence_summary(
     story_slug: str,
     run_id: str,
     *,
-    state_base: "str | os.PathLike" = state_io.FACTORY_DIR,
-    cwd: "str | os.PathLike | None" = None,
+    state_base: str | os.PathLike = state_io.FACTORY_DIR,
+    cwd: str | os.PathLike | None = None,
 ) -> dict:
     """Render and post the evidence-approval gate summary. Returns `{"pr": dict, "body":
     str, "review_status": str}`. Raises EvidenceSummaryError if no open PR is found or
@@ -114,7 +114,7 @@ def post_evidence_summary(
 # --- CLI ---------------------------------------------------------------------
 
 
-def main(argv: "list[str] | None" = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--story-slug", required=True)
     p.add_argument("--run-id", required=True)

@@ -21,10 +21,10 @@ from unittest.mock import patch
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import review_graph  # noqa: E402
+import review_graph
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
-import state_io  # noqa: E402
+import state_io
 
 
 def _fake_proc(returncode=0, stdout="", stderr=""):

@@ -30,14 +30,14 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import state_io  # noqa: E402
+import state_io
 
 
 class PROpenError(RuntimeError):
     """A `git` or `gh` subprocess call failed while opening the implementation PR."""
 
 
-def _run(cmd: "list[str]", *, cwd: "str | os.PathLike | None" = None) -> str:
+def _run(cmd: list[str], *, cwd: str | os.PathLike | None = None) -> str:
     try:
         proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=False)
     except OSError as e:
@@ -50,7 +50,7 @@ def _run(cmd: "list[str]", *, cwd: "str | os.PathLike | None" = None) -> str:
     return proc.stdout.strip()
 
 
-def find_open_pr(branch: str, *, cwd: "str | os.PathLike | None" = None) -> "dict | None":
+def find_open_pr(branch: str, *, cwd: str | os.PathLike | None = None) -> dict | None:
     out = _run(
         ["gh", "pr", "list", "--head", branch, "--state", "open", "--json", "number,url"],
         cwd=cwd,
@@ -69,8 +69,8 @@ def open_pr_for_story(
     run_id: str,
     *,
     target_branch: str = "main",
-    state_base: "str | os.PathLike" = state_io.FACTORY_DIR,
-    cwd: "str | os.PathLike | None" = None,
+    state_base: str | os.PathLike = state_io.FACTORY_DIR,
+    cwd: str | os.PathLike | None = None,
 ) -> dict:
     """Create the isolated branch, commit plan.md/decisions.md, push, and open the PR.
 
@@ -128,9 +128,9 @@ def open_pr_for_story(
 
 def close_for_clarification(
     pr_number: int,
-    open_questions: "list[str]",
+    open_questions: list[str],
     *,
-    cwd: "str | os.PathLike | None" = None,
+    cwd: str | os.PathLike | None = None,
 ) -> None:
     """Post `open_questions` as a comment on `pr_number` and close it in the same call
     (AD-13/AD-15) -- never `--delete-branch`, per AD-10/AD-12/AD-15's audit-trail-over-

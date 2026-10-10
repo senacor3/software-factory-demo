@@ -39,7 +39,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-import state_io  # noqa: E402
+import state_io
 
 SCHEMA_PATH = Path(__file__).resolve().parent / "schemas" / "review_result.schema.json"
 RESULT_FIELDS = ("findings",)
@@ -55,7 +55,7 @@ class ReviewInvocationError(RuntimeError):
 # --- the single invocation ----------------------------------------------------------
 
 
-def _build_command(plan_path: str, decisions_path: str, schema_text: str, claude_bin: str) -> "list[str]":
+def _build_command(plan_path: str, decisions_path: str, schema_text: str, claude_bin: str) -> list[str]:
     # Mirrors analysis_graph.py's _build_command: no `--bare` (skips skill
     # auto-discovery and would require ANTHROPIC_API_KEY, contradicting AD-9).
     return [
@@ -101,7 +101,7 @@ def invoke_skill(
     decisions_path: str,
     *,
     claude_bin: str = "claude",
-    cwd: "str | os.PathLike | None" = None,
+    cwd: str | os.PathLike | None = None,
 ) -> dict:
     """Shell out to the `claude` CLI with the review skill and return the parsed,
     schema-validated result dict. Raises ReviewInvocationError on any tooling failure."""
@@ -137,8 +137,8 @@ def run_review(
     run_id: str,
     *,
     claude_bin: str = "claude",
-    state_base: "str | os.PathLike" = state_io.FACTORY_DIR,
-    cwd: "str | os.PathLike | None" = None,
+    state_base: str | os.PathLike = state_io.FACTORY_DIR,
+    cwd: str | os.PathLike | None = None,
 ) -> dict:
     """Run the single review invocation and write its outcome.
 
@@ -206,7 +206,7 @@ def build_graph():
 # --- CLI ---------------------------------------------------------------------------------
 
 
-def main(argv: "list[str] | None" = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--story-slug", required=True)
     p.add_argument("--run-id", required=True)

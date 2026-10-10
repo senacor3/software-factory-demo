@@ -27,7 +27,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import open_implementation_pr  # noqa: E402
+import open_implementation_pr
 
 
 class MergeError(RuntimeError):
@@ -35,7 +35,7 @@ class MergeError(RuntimeError):
     the `gh pr merge` subprocess call itself failed (conflict or other `gh` failure)."""
 
 
-def _run(cmd: "list[str]", *, cwd: "str | os.PathLike | None" = None) -> str:
+def _run(cmd: list[str], *, cwd: str | os.PathLike | None = None) -> str:
     try:
         proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=False)
     except OSError as e:
@@ -52,7 +52,7 @@ def merge_story(
     story_slug: str,
     run_id: str,
     *,
-    cwd: "str | os.PathLike | None" = None,
+    cwd: str | os.PathLike | None = None,
 ) -> dict:
     """Find the PR and squash-merge it with branch deletion. Returns `{"pr": dict}`.
     Raises MergeError if no open PR is found or the merge itself fails (conflict or
@@ -74,7 +74,7 @@ def merge_story(
 # --- CLI ---------------------------------------------------------------------
 
 
-def main(argv: "list[str] | None" = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--story-slug", required=True)
     p.add_argument("--run-id", required=True)

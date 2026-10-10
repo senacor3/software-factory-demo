@@ -44,14 +44,14 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-import state_io  # noqa: E402
-import checkout_branch  # noqa: E402
-import commit_push_implementation  # noqa: E402
-import run_checks  # noqa: E402
+import checkout_branch
+import commit_push_implementation
+import run_checks
+import state_io
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import implementation_graph  # noqa: E402
-import review_graph  # noqa: E402
+import implementation_graph
+import review_graph
 
 MAX_FIX_CYCLES = 2
 
@@ -70,8 +70,8 @@ def run_review_with_fix_loop(
     run_id: str,
     *,
     claude_bin: str = "claude",
-    state_base: "str | os.PathLike" = state_io.FACTORY_DIR,
-    cwd: "str | os.PathLike | None" = None,
+    state_base: str | os.PathLike = state_io.FACTORY_DIR,
+    cwd: str | os.PathLike | None = None,
 ) -> dict:
     """Review -> bounded fix loop (cap 2 cycles, AD-11) -> final status stamp.
 
@@ -174,7 +174,7 @@ def build_graph():
 # --- CLI ---------------------------------------------------------------------------------
 
 
-def main(argv: "list[str] | None" = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--story-slug", required=True)
     p.add_argument("--run-id", required=True)

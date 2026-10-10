@@ -18,7 +18,7 @@ from unittest.mock import patch
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import post_summary  # noqa: E402
+import post_summary
 
 
 def _ok(stdout=""):

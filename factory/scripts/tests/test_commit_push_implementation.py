@@ -18,7 +18,7 @@ from unittest.mock import patch
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import commit_push_implementation  # noqa: E402
+import commit_push_implementation
 
 
 def _ok(stdout=""):

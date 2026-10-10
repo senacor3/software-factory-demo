@@ -26,7 +26,7 @@ class PostCommentError(RuntimeError):
     """A `gh` subprocess call failed while posting the gate-summary PR comment."""
 
 
-def _run(cmd: "list[str]", *, cwd: "str | os.PathLike | None" = None) -> str:
+def _run(cmd: list[str], *, cwd: str | os.PathLike | None = None) -> str:
     try:
         proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=False)
     except OSError as e:
@@ -39,7 +39,7 @@ def _run(cmd: "list[str]", *, cwd: "str | os.PathLike | None" = None) -> str:
     return proc.stdout.strip()
 
 
-def post_comment(pr_number: int, body: str, *, cwd: "str | os.PathLike | None" = None) -> None:
+def post_comment(pr_number: int, body: str, *, cwd: str | os.PathLike | None = None) -> None:
     """Post `body` as a comment on `pr_number`. Raises PostCommentError on any `gh`
     subprocess failure."""
     _run(["gh", "pr", "comment", str(pr_number), "--body", body], cwd=cwd)

@@ -38,9 +38,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-import state_io  # noqa: E402
-import checkout_branch  # noqa: E402
-import commit_push_implementation  # noqa: E402
+import checkout_branch
+import commit_push_implementation
+import state_io
 
 # AD-5's second enforcement layer: even though the implementation agent's branch
 # checkout holds plan.md/decisions.md/review.md alongside the files it may edit, it
@@ -72,8 +72,8 @@ def _build_command(
     plan_path: str,
     decisions_path: str,
     claude_bin: str,
-    review_path: "str | None" = None,
-) -> "list[str]":
+    review_path: str | None = None,
+) -> list[str]:
     prompt = f"/light-factory-implementation {plan_path} {decisions_path}"
     if review_path:
         prompt += f" {review_path}"
@@ -95,8 +95,8 @@ def invoke_skill(
     decisions_path: str,
     *,
     claude_bin: str = "claude",
-    cwd: "str | os.PathLike | None" = None,
-    review_path: "str | None" = None,
+    cwd: str | os.PathLike | None = None,
+    review_path: str | None = None,
 ) -> str:
     """Shell out to the `claude` CLI with the implementation skill and return its raw
     stdout text. No JSON schema -- there is no judgment verdict to parse here, unlike
@@ -123,9 +123,9 @@ def run_implementation(
     run_id: str,
     *,
     claude_bin: str = "claude",
-    state_base: "str | os.PathLike" = state_io.FACTORY_DIR,
-    cwd: "str | os.PathLike | None" = None,
-    review_path: "str | None" = None,
+    state_base: str | os.PathLike = state_io.FACTORY_DIR,
+    cwd: str | os.PathLike | None = None,
+    review_path: str | None = None,
 ) -> dict:
     """Sequence checkout -> agent invocation -> commit/push.
 
@@ -193,7 +193,7 @@ def build_graph():
 # --- CLI ---------------------------------------------------------------------------------
 
 
-def main(argv: "list[str] | None" = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--story-slug", required=True)
     p.add_argument("--run-id", required=True)

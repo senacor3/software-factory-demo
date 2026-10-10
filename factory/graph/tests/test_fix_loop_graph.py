@@ -27,7 +27,6 @@ run_test are mocked directly to avoid actually invoking compileall/pytest.
 """
 
 import json
-import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -36,14 +35,14 @@ from unittest.mock import patch
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import fix_loop_graph  # noqa: E402
-import implementation_graph  # noqa: E402
-import review_graph  # noqa: E402
+import fix_loop_graph
+import implementation_graph
+import review_graph
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
-import state_io  # noqa: E402
-import checkout_branch  # noqa: E402
-import commit_push_implementation  # noqa: E402
+import checkout_branch
+import commit_push_implementation
+import state_io
 
 FAKE_BRANCH = "light-factory/foo/run-1"
 

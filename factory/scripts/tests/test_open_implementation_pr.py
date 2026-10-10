@@ -20,8 +20,8 @@ from unittest.mock import patch
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import open_implementation_pr  # noqa: E402
-import state_io  # noqa: E402
+import open_implementation_pr
+import state_io
 
 
 def _ok(stdout=""):
