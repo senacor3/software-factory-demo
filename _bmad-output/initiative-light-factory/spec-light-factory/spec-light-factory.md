@@ -20,7 +20,7 @@ AI coding agents now generate more code than a developer can responsibly review 
 
 - **CAP-2**
   - **intent:** An agent can analyze the story, propose a solution, derive subtasks and tests, run a clarification loop on open questions, and document decisions as they resolve.
-  - **success:** `plan.md` and `decisions.md` exist with no unresolved open question before the `plan-approval` gate is reached. For v1, intake makes exactly one analysis pass; if it produces any open question, intake halts immediately and surfaces the question(s) directly to the developer instead of looping — a bounded multi-round retry or live human-reply exchange is deferred post-v1 (see deferred-work.md).
+  - **success:** `plan.md` and `decisions.md` exist with no unresolved open question before the `plan-approval` gate is reached. Each analysis pass that returns an open question halts that run (no live mid-job wait) and surfaces the question(s) on the PR comment; the developer answers by editing the story file and re-triggering. Capped at 2 consecutive clarification rounds per story-slug, counted from the existing supersession-PR chain (AD-15) — on the 2nd unresolved pass, the run halts with a distinct "clarification cap reached" signal instead of repeating the same halt, flagging that the story likely needs rescoping rather than another answer attempt (decided 2026-10-10, `epic-pipeline-open-issues`/2.1).
 
 - **CAP-3**
   - **intent:** The requesting developer can review and confirm the proposed plan before any code is written.
