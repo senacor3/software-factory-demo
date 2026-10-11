@@ -10,10 +10,12 @@ assignee: ""
 risk: medium
 estimate: ""
 estimate_basis: ""
-status: in-progress
+status: done
 ---
 
 # light-factory
+
+> **Status:** done (2026-10-11). Three epics, 24 tickets; ten stories dispatched live, five merged through the pipeline. Not reached live: either loop's cap. `security` is a skipped placeholder by decision. Three low findings stay open in `deferred-work.md` — see the closure note at the end of Notes.
 
 ## Description
 
@@ -54,3 +56,11 @@ The pipeline itself — not any application it is later used to build (that live
 - Decision (2026-10-11): the demo app is built inside this repo under `freight-tenders/`, still as its own initiative (user's call). Boundaries are unchanged: the pipeline's tickets stay here, the app's stay in `initiative-demo-app`.
 - Decision (2026-10-11): the fix loop's first live engagement — the open half of Done-when 3, CAP-7 — moved out of `epic-pipeline-hardening` to `initiative-demo-app`'s `epic-demo-app`, entry 10 (user's call), after two pipeline stories gave 0 fix cycles. That entry also strengthens the review agent's instructions. No epic in this initiative covers CAP-7's live proof now; Done-when 3 closes when that demo entry does.
 - Done-when 3 met for both loops (2026-10-11): the fix loop engaged live for the first time on run `38150142797` (`stories/one-input-path-per-story-slug.md`, PR #12, merged as `c60279b`) — one finding, one fix cycle, resolved within the cap of 2 — on an unticketed run during `epic-pipeline-hardening`. The clarification loop was shown on the same story (one round, then resolved). Neither cap has been reached live. `epic-demo-app` entry 10 no longer carries this proof; it is narrowed to extending the review agent's instructions.
+- Closure (2026-10-11, user's call), checked against Done when:
+  1. **Met** — real stories ran end to end to merge with both gates approved by a person: run `38076319765` (PR #3) on the three-job pipeline, then PRs #8, #9, #10, and #12 on the six-job pipeline.
+  2. **Met as reworded** — build/test/lint run as direct pipeline steps from `.github/post-implementation-checks.yml` with zero agent turns; `security` reports `"skipped"` here by decision.
+  3. **Met, caps not reached** — the clarification loop spent one round of two and then resolved (runs `38140686643`/`38140757607`, and `38149509051`/`38150142797`); the fix loop ran one cycle of two and resolved (run `38150142797`). No run has hit either cap, so `clarification-cap-reached` and `unresolved-after-cap` are unit-tested only.
+  4. **Met on the developer's word** — every `evidence-approval` decision was taken by the developer with the gate summary posted. It is not recorded whether the diff was opened; for PRs #9, #10, and #12 the assisting session also read the diff and reported on it before the decision, so those three were not decided from the summary alone.
+  5. **Met for a rejected story; a capped-out one not exercised** — supersession and reject-closing were shown live in `epic-pipeline-open-issues` ticket 7 (PRs #5–#7). No story has capped out, so no re-trigger of one has run.
+  - **Left open, all low and unowned, in `deferred-work.md`** — the PR a run can leave open when `analysis` fails after opening it; two holes in the checks guard; two spellings of one story file in two concurrency groups. Update-propagation is re-parked until a second repository adopts the pipeline.
+  - **Carried by `initiative-demo-app`** — extending the review agent's instructions (`epic-demo-app` entry 10), and the first run of the pipeline against a project other than itself.
