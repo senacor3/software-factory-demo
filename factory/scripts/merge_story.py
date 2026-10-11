@@ -2,7 +2,7 @@
 # /// script
 # requires-python = ">=3.13"
 # ///
-"""merge_story -- Job 3's merge step (CAP-9, AD-14): a deterministic pipeline script,
+"""merge_story -- the merge job's merge step (CAP-9, AD-14): a deterministic pipeline script,
 never an agent action.
 
 Triggered automatically once the `evidence-approval` gate is approved. Finds the PR via

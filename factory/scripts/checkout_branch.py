@@ -2,27 +2,36 @@
 # /// script
 # requires-python = ">=3.13"
 # ///
-"""checkout_branch -- Job 2's deterministic branch-checkout step.
+"""checkout_branch -- the implementation/checks/review jobs' deterministic
+branch-checkout step.
 
-Checks out the exact branch Job 1's `open_implementation_pr.py` already opened
-(AD-12) -- never creates one. Branch name formula matches AD-8/AD-12/AD-15 exactly:
-`light-factory/<story-slug>/<run-id>`.
+Checks out the exact branch the `analysis` job's `open_implementation_pr.py` already
+opened (AD-12) -- never creates one. Branch name formula matches AD-8/AD-12/AD-15
+exactly: `light-factory/<story-slug>/<run-id>`.
 
 Defensive, not expected to fail in the normal path (entry 3 already opened the branch
-before Job 2 ever runs) -- but raises a distinct `CheckoutError` if it does, so a
-missing/unreachable branch is never silently conflated with a `claude` CLI tooling
-failure or a commit/push failure (see story-implementation-agent-plan.md's I/O &
-Edge-Case Matrix).
+before the implementation job ever runs) -- but raises a distinct `CheckoutError` if
+it does, so a missing/unreachable branch is never silently conflated with a `claude`
+CLI tooling failure or a commit/push failure (see story-implementation-agent-plan.md's
+I/O & Edge-Case Matrix).
 
 `_run` is a standalone helper, deliberately duplicated from `open_implementation_pr.py`'s
 rather than imported -- established convention in this codebase (each deterministic
 script owns its own subprocess-wrapping, per its own exception type).
+
+Also a thin CLI (`--story-slug`/`--run-id`): the `checks`/`review` jobs run on fresh
+runners and have no in-process call into `checkout_branch()` the way
+`implementation_graph.py` does, so they invoke this module directly as a workflow
+step instead.
 """
 
 from __future__ import annotations
 
+import argparse
+import json
 import os
 import subprocess
+import sys
 
 
 class CheckoutError(RuntimeError):
@@ -56,3 +65,26 @@ def checkout_branch(
     _run(["git", "fetch", "origin", branch], cwd=cwd)
     _run(["git", "checkout", branch], cwd=cwd)
     return branch
+
+
+# --- CLI ---------------------------------------------------------------------
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--story-slug", required=True)
+    p.add_argument("--run-id", required=True)
+    args = p.parse_args(argv)
+
+    try:
+        branch = checkout_branch(args.story_slug, args.run_id)
+    except CheckoutError as e:
+        print(f"branch checkout failed: {e}", file=sys.stderr)
+        return 1
+
+    print(json.dumps({"ok": True, "branch": branch}))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

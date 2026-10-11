@@ -120,3 +120,100 @@ def test_subprocess_oserror_raises_commit_push_error():
     with patch("commit_push_implementation.subprocess.run", side_effect=OSError("git not found")):
         with pytest.raises(commit_push_implementation.CommitPushError, match="git not found"):
             commit_push_implementation.commit_and_push("light-factory/foo/run-1", "foo", "run-1")
+
+
+# --- label kwarg -----------------------------------------------------------------------
+
+
+def test_default_label_is_implementation():
+    calls = []
+
+    def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
+        calls.append(cmd)
+        if cmd[:2] == ["git", "status"]:
+            return _ok(stdout=" M some_file.py\n")
+        return _ok()
+
+    with patch("commit_push_implementation.subprocess.run", side_effect=fake_run):
+        commit_push_implementation.commit_and_push("light-factory/foo/run-1", "foo", "run-1")
+
+    commit_calls = [c for c in calls if "commit" in c]
+    assert commit_calls[0][-1] == "Implementation: foo (run-1)"
+
+
+def test_custom_label_is_used_in_commit_message():
+    calls = []
+
+    def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
+        calls.append(cmd)
+        if cmd[:2] == ["git", "status"]:
+            return _ok(stdout=" M some_file.py\n")
+        return _ok()
+
+    with patch("commit_push_implementation.subprocess.run", side_effect=fake_run):
+        commit_push_implementation.commit_and_push(
+            "light-factory/foo/run-1", "foo", "run-1", label="Checks"
+        )
+
+    commit_calls = [c for c in calls if "commit" in c]
+    assert commit_calls[0][-1] == "Checks: foo (run-1)"
+
+
+# --- CLI -------------------------------------------------------------------------------
+
+
+def test_cli_commits_and_pushes_with_default_label():
+    calls = []
+
+    def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
+        calls.append(cmd)
+        if cmd[:2] == ["git", "status"]:
+            return _ok(stdout=" M some_file.py\n")
+        return _ok()
+
+    with patch("commit_push_implementation.subprocess.run", side_effect=fake_run):
+        rc = commit_push_implementation.main(["--story-slug", "foo", "--run-id", "run-1"])
+
+    assert rc == 0
+    push_calls = [c for c in calls if c[:2] == ["git", "push"]]
+    assert push_calls == [["git", "push", "origin", "light-factory/foo/run-1"]]
+    commit_calls = [c for c in calls if "commit" in c]
+    assert commit_calls[0][-1] == "Implementation: foo (run-1)"
+
+
+def test_cli_passes_through_custom_label():
+    calls = []
+
+    def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
+        calls.append(cmd)
+        if cmd[:2] == ["git", "status"]:
+            return _ok(stdout=" M some_file.py\n")
+        return _ok()
+
+    with patch("commit_push_implementation.subprocess.run", side_effect=fake_run):
+        rc = commit_push_implementation.main(
+            ["--story-slug", "foo", "--run-id", "run-1", "--label", "Review"]
+        )
+
+    assert rc == 0
+    commit_calls = [c for c in calls if "commit" in c]
+    assert commit_calls[0][-1] == "Review: foo (run-1)"
+
+
+def test_cli_no_op_when_clean_exits_zero():
+    with patch("commit_push_implementation.subprocess.run", return_value=_ok(stdout="")):
+        rc = commit_push_implementation.main(["--story-slug", "foo", "--run-id", "run-1"])
+
+    assert rc == 0
+
+
+def test_cli_exits_nonzero_on_commit_push_error():
+    with patch("commit_push_implementation.subprocess.run", return_value=_fail()):
+        rc = commit_push_implementation.main(["--story-slug", "foo", "--run-id", "run-1"])
+
+    assert rc == 1
+
+
+def test_cli_requires_story_slug_and_run_id():
+    with pytest.raises(SystemExit):
+        commit_push_implementation.main(["--story-slug", "foo"])

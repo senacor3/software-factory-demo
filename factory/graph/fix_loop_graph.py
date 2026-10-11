@@ -3,7 +3,7 @@
 # requires-python = ">=3.13,<3.14"
 # dependencies = ["langgraph>=1.2.12,<2"]
 # ///
-"""fix_loop_graph -- Job 2's bounded fix loop (CAP-7, AD-11).
+"""fix_loop_graph -- the review job's bounded fix loop (CAP-7, AD-11).
 
 Orchestrates: review (ticket 9's `review_graph.run_review`, unchanged) -> while
 findings remain and the cycle count is under 2 -> re-engage the *same*

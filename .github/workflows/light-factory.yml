@@ -27,7 +27,7 @@ concurrency:
 
 jobs:
   analysis:
-    name: "Job 1: Analysis"
+    name: "Analysis"
     runs-on: ubuntu-latest
     # AD-5/AD-12: contents:write + pull-requests:write scope the new deterministic
     # open_implementation_pr.py script's git push + gh pr create, nothing else -- the
@@ -80,19 +80,18 @@ jobs:
             --run-id "${{ steps.derive.outputs.run-id }}"
 
   implementation:
-    name: "Job 2: Implementation"
+    name: "Implementation"
     needs: analysis
     environment: plan-approval
     runs-on: ubuntu-latest
     # AD-5/AD-6: contents:write scopes checkout_branch.py's git fetch/checkout and
     # commit_push_implementation.py's git add/commit/push, nothing else -- the
     # implementation agent's own tool-allowlist stays Read/Write/Edit/Grep/Glob
-    # regardless (no Bash/git/gh tool ever reaches it). pull-requests:write scopes
-    # the new post_evidence_summary.py step's `gh pr comment` call (AD-4/CAP-8) --
-    # no PR is opened or closed here (entry 3 already opened it).
+    # regardless (no Bash/git/gh tool ever reaches it). No PR is opened or closed
+    # here (the analysis job already opened it) and no PR comment is posted here
+    # either (that moved to the `review` job) -- so no pull-requests scope is needed.
     permissions:
       contents: write
-      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -140,14 +139,39 @@ jobs:
       # Runs the implementation skill via implementation_graph.py (CAP-4 scoped
       # implementation) -- see story-implementation-agent-plan.md. CLAUDE_CODE_OAUTH_TOKEN
       # is read automatically by the `claude` CLI from the environment (AD-9). GH_TOKEN is
-      # not needed here -- unlike Job 1, no `gh` call happens in this job (no PR is
-      # opened/closed, only checkout_branch.py/commit_push_implementation.py's plain `git`
-      # calls, authenticated via the checkout action's own token).
+      # not needed here -- unlike the analysis job, no `gh` call happens in this job (no
+      # PR is opened/closed, only checkout_branch.py/commit_push_implementation.py's plain
+      # `git` calls, authenticated via the checkout action's own token).
       - name: Run implementation
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
           uv run factory/graph/implementation_graph.py \
+            --story-slug "${{ needs.analysis.outputs.story-slug }}" \
+            --run-id "${{ needs.analysis.outputs.run-id }}"
+
+  checks:
+    name: "Checks"
+    needs: [analysis, implementation]
+    runs-on: ubuntu-latest
+    # AD-5/AD-6: contents:write scopes checkout_branch.py's git fetch/checkout and
+    # commit_push_implementation.py's git add/commit/push, nothing else -- this job
+    # runs no agent and opens/closes no PR.
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+
+      # This job starts on a fresh runner -- `actions/checkout@v7` above checks out
+      # the default ref, not the story's branch -- so it must explicitly check out
+      # the same branch the implementation job already committed to (AD-8/AD-12).
+      - name: Checkout implementation branch
+        run: |
+          uv run factory/scripts/checkout_branch.py \
             --story-slug "${{ needs.analysis.outputs.story-slug }}" \
             --run-id "${{ needs.analysis.outputs.run-id }}"
 
@@ -180,6 +204,49 @@ jobs:
             --story-slug "${{ needs.analysis.outputs.story-slug }}" \
             --run-id "${{ needs.analysis.outputs.run-id }}"
 
+      # Always commits this job's evidence (AD-10), extending the existing
+      # git-based state mechanism rather than adding a second one (e.g. workflow
+      # artifacts) -- so the `review` job's checkout always has it, regardless of
+      # whether a fix cycle later also commits.
+      - name: Commit checks evidence
+        run: |
+          uv run factory/scripts/commit_push_implementation.py \
+            --story-slug "${{ needs.analysis.outputs.story-slug }}" \
+            --run-id "${{ needs.analysis.outputs.run-id }}" \
+            --label Checks
+
+  review:
+    name: "Review & fix loop"
+    needs: [analysis, implementation, checks]
+    runs-on: ubuntu-latest
+    # AD-5: contents:write scopes checkout_branch.py/commit_push_implementation.py's
+    # git calls (including fix_loop_graph.py's own fix-cycle commits);
+    # pull-requests:write scopes the evidence-approval summary's `gh pr comment` call
+    # (AD-4/CAP-8).
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+
+      - name: Checkout implementation branch
+        run: |
+          uv run factory/scripts/checkout_branch.py \
+            --story-slug "${{ needs.analysis.outputs.story-slug }}" \
+            --run-id "${{ needs.analysis.outputs.run-id }}"
+
+      - name: Install Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code@latest
+
       # CAP-6 independent review (AD-5/AD-8/AD-10) + CAP-7 bounded fix loop (AD-11):
       # fix_loop_graph.py runs review_graph.py's review, and -- while findings remain
       # and the cycle count is under 2 -- re-engages the implementation skill with the
@@ -198,6 +265,17 @@ jobs:
             --story-slug "${{ needs.analysis.outputs.story-slug }}" \
             --run-id "${{ needs.analysis.outputs.run-id }}"
 
+      # Always commits this job's evidence (AD-10), same rationale as the `checks`
+      # job's own commit step -- `fix_loop_graph.py`'s own fix-cycle commits are
+      # conditional on a cycle running; this step is what guarantees review.md and
+      # evidence/review/ are persisted even on a clean first pass.
+      - name: Commit review evidence
+        run: |
+          uv run factory/scripts/commit_push_implementation.py \
+            --story-slug "${{ needs.analysis.outputs.story-slug }}" \
+            --run-id "${{ needs.analysis.outputs.run-id }}" \
+            --label Review
+
       # CAP-8 evidence-approval gate summary (AD-4): reads evidence/checks/*.json
       # (ticket 8) and review.md's status/fix_cycle + evidence/review/findings.json
       # (tickets 9/10), posts a concise summary as a PR comment via the shared
@@ -213,8 +291,8 @@ jobs:
             --run-id "${{ needs.analysis.outputs.run-id }}"
 
   merge:
-    name: "Job 3: Merge"
-    needs: [analysis, implementation]
+    name: "Merge"
+    needs: [analysis, implementation, review]
     environment: evidence-approval
     runs-on: ubuntu-latest
     # AD-5/AD-14: contents:write + pull-requests:write scope merge_story.py's `gh pr
@@ -271,11 +349,11 @@ jobs:
         uses: astral-sh/setup-uv@v10.2.0
 
       # The gate checked is the one guarding the job that failed: plan-approval for
-      # Job 2, evidence-approval for Job 3 (Job 3 is `skipped`, never `failure`, when
-      # Job 2 failed, so the two cases cannot overlap). --github-run-id is the numeric
-      # id the review-history API wants; the run-id output is `run-<id>` and names the
-      # branch. An ordinary failure exits 0 with "not a reject" and leaves the PR open;
-      # only a `gh`/API failure fails this step.
+      # `implementation`, evidence-approval for `merge` (`merge` is `skipped`, never
+      # `failure`, when `implementation` failed, so the two cases cannot overlap).
+      # --github-run-id is the numeric id the review-history API wants; the run-id
+      # output is `run-<id>` and names the branch. An ordinary failure exits 0 with
+      # "not a reject" and leaves the PR open; only a `gh`/API failure fails this step.
       - name: Close PR if the gate was rejected
         env:
           GH_TOKEN: ${{ github.token }}

@@ -5,9 +5,9 @@
 """run_checks -- CAP-5's deterministic mechanical-checks script (AD-6).
 
 Four checks, one function each, every one a plain subprocess call from this single
-script -- never a LangGraph node or agent tool call (AD-6). Wired into Job 2's
-workflow as 4 direct steps, each invoking one subcommand here right after "Run
-implementation".
+script -- never a LangGraph node or agent tool call (AD-6). Wired into the `checks`
+job's workflow as 4 direct steps, each invoking one subcommand here right after
+"Checkout implementation branch".
 
 `build` (`python -m compileall factory -q` -- this repo has no packaging/build step,
 so syntax/import sanity is the closest real equivalent) and `test` (the existing

@@ -3,13 +3,13 @@
 # requires-python = ">=3.13,<3.14"
 # dependencies = ["langgraph>=1.2.12,<2"]
 # ///
-"""implementation_graph -- Job 2's implementation stage (CAP-4 scoped implementation).
+"""implementation_graph -- the implementation job's stage (CAP-4 scoped implementation).
 
 Sequences three steps around the agent invocation (see
 story-implementation-agent-plan.md's I/O & Edge-Case Matrix):
 
-  1. `factory/scripts/checkout_branch.py` checks out the exact branch Job 1's
-     `open_implementation_pr.py` already opened (AD-12) -- never creates one.
+  1. `factory/scripts/checkout_branch.py` checks out the exact branch the analysis
+     job's `open_implementation_pr.py` already opened (AD-12) -- never creates one.
   2. The read/write-scoped `.claude/skills/light-factory-implementation/` skill
      implements `plan.md`'s subtasks against that checkout, via `--allowedTools`
      (Read Write Edit Grep Glob -- no Bash/git/gh/merge tool) plus a `--settings`

@@ -106,3 +106,30 @@ def test_subprocess_oserror_raises_checkout_error():
     with patch("checkout_branch.subprocess.run", side_effect=OSError("git not found")):
         with pytest.raises(checkout_branch.CheckoutError, match="git not found"):
             checkout_branch.checkout_branch("foo", "run-1")
+
+
+# --- CLI -------------------------------------------------------------------------------
+
+
+def test_cli_checks_out_the_expected_branch_and_exits_zero():
+    with patch("checkout_branch.subprocess.run", return_value=_ok()) as mock_run:
+        rc = checkout_branch.main(["--story-slug", "foo", "--run-id", "run-1"])
+
+    assert rc == 0
+    calls = [c.args[0] for c in mock_run.call_args_list]
+    assert calls == [
+        ["git", "fetch", "origin", "light-factory/foo/run-1"],
+        ["git", "checkout", "light-factory/foo/run-1"],
+    ]
+
+
+def test_cli_exits_nonzero_on_checkout_failure():
+    with patch("checkout_branch.subprocess.run", return_value=_fail()):
+        rc = checkout_branch.main(["--story-slug", "foo", "--run-id", "run-1"])
+
+    assert rc == 1
+
+
+def test_cli_requires_story_slug_and_run_id():
+    with pytest.raises(SystemExit):
+        checkout_branch.main(["--story-slug", "foo"])

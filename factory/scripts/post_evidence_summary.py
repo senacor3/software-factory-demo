@@ -2,7 +2,7 @@
 # /// script
 # requires-python = ">=3.13"
 # ///
-"""post_evidence_summary -- Job 2's final step: CAP-8's evidence-approval gate summary (AD-4).
+"""post_evidence_summary -- the review job's final step: CAP-8's evidence-approval gate summary (AD-4).
 
 Reads the 4 `evidence/checks/<name>.json` files (ticket 8), `review.md`'s frontmatter
 (`status`/`fix_cycle`, tickets 9/10), and `evidence/review/findings.json`, renders a

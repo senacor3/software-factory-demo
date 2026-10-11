@@ -4,7 +4,7 @@
 # ///
 """open_implementation_pr -- AD-12's deterministic branch+PR-open step.
 
-Once Job 1's `run_analysis` (factory/graph/analysis_graph.py) decides to proceed (a
+Once the analysis job's `run_analysis` (factory/graph/analysis_graph.py) decides to proceed (a
 non-halted result), this script -- not the agent -- creates the isolated branch
 (`light-factory/<story-slug>/<run-id>`), commits the analysis stage's own just-written
 `plan.md`/`decisions.md` as the branch's first real commit, and opens a PR against the

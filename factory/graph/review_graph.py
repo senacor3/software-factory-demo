@@ -3,7 +3,7 @@
 # requires-python = ">=3.13,<3.14"
 # dependencies = ["langgraph>=1.2.12,<2"]
 # ///
-"""review_graph -- Job 2's independent review stage (CAP-6 independent agent review).
+"""review_graph -- the review job's independent review stage (CAP-6 independent agent review).
 
 Invokes the read-only `.claude/skills/light-factory-review/` skill via the `claude`
 CLI, parses its schema-validated structured output, and writes the one outcome the

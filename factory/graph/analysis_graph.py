@@ -3,7 +3,7 @@
 # requires-python = ">=3.13,<3.14"
 # dependencies = ["langgraph>=1.2.12,<2"]
 # ///
-"""analysis_graph -- Job 1's analysis stage (CAP-1 intake judgment, CAP-2 solution proposal).
+"""analysis_graph -- the analysis job's stage (CAP-1 intake judgment, CAP-2 solution proposal).
 
 Invokes the read-only `.claude/skills/light-factory-analysis/` skill via the `claude` CLI,
 parses its schema-validated structured output, and routes to one of three outcomes (see
