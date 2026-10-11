@@ -7,7 +7,7 @@
 Posts a concise, human-readable summary as a PR comment at each stage ending in a human
 gate. Named by the architecture's Structural Seed as the shared file for both
 `plan-approval` (this ticket's caller, `factory/graph/analysis_graph.py`) and
-`evidence-approval` (entry 11's caller, `implementation_graph.py`) -- deliberately kept
+`evidence-approval` (its caller is `post_evidence_summary.py`) -- deliberately kept
 separate from `open_implementation_pr.py`, which is about branch/PR lifecycle (open,
 close), not formatting stage-specific summaries.
 

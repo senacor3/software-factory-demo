@@ -1,12 +1,15 @@
 name: light-factory
 
-# Pipeline skeleton & gates (ticket 1).
+# The light-factory pipeline: one workflow, one triggered run, six jobs chained
+# by needs: (AD-2).
 #
-# Job-level FSM skeleton only: analysis -> implementation (gated by the
-# plan-approval Environment) -> merge (gated by the evidence-approval
-# Environment). Stub steps only -- no real agent, state-file, PR, or merge
-# logic. See _bmad-output/initiative-light-factory/epic-light-factory-pipeline/
-# story-pipeline-skeleton-gates-plan.md for the plan this implements.
+#   analysis -> implementation (gated by the plan-approval Environment) ->
+#   checks -> review -> merge (gated by the evidence-approval Environment),
+#   plus a trailing close-rejected-pr job that runs only when a gated job
+#   failed (AD-16).
+#
+# See _bmad-output/initiative-light-factory/architecture-light-factory/
+# architecture-light-factory.md for the decisions (AD-n) the comments below cite.
 
 on:
   workflow_dispatch:
@@ -176,9 +179,9 @@ jobs:
             --run-id "${{ needs.analysis.outputs.run-id }}"
 
       # CAP-5 mechanical checks (AD-6): 4 direct pipeline steps, never a graph node or
-      # agent tool call. build/test are real checks -- a failing step exits non-zero and
-      # stops the job; lint/security have no tool wired for v1 and always record
-      # status: skipped (never pass), so they always exit 0. See
+      # agent tool call. build/test/lint are real checks -- a failing step exits
+      # non-zero and stops the job; security has no tool wired yet and always records
+      # status: skipped (never pass), so it always exits 0. See
       # factory/scripts/run_checks.py and story-mechanical-checks-plan.md.
       - name: Build check
         run: |
@@ -192,7 +195,7 @@ jobs:
             --story-slug "${{ needs.analysis.outputs.story-slug }}" \
             --run-id "${{ needs.analysis.outputs.run-id }}"
 
-      - name: Lint check (placeholder)
+      - name: Lint check
         run: |
           uv run factory/scripts/run_checks.py lint \
             --story-slug "${{ needs.analysis.outputs.story-slug }}" \

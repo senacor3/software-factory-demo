@@ -1,13 +1,13 @@
 ---
 name: light-factory-analysis
-description: Judges whether a triggering story file is complete and in-scope, and if so proposes a solution with subtasks, tests, and open questions. Invoked by factory/graph/analysis_graph.py as Job 1's analysis stage (CAP-1 intake validation, CAP-2 agent analysis). Read-only.
+description: Judges whether a triggering story file is complete and in-scope, and if so proposes a solution with subtasks, tests, and open questions. Invoked by factory/graph/analysis_graph.py as the pipeline's analysis stage (CAP-1 intake validation, CAP-2 agent analysis). Read-only.
 ---
 
 # light-factory-analysis
 
 ## What you are here to do
 
-You are invoked as `/light-factory-analysis <story-file-path>` by `factory/graph/analysis_graph.py`, the first judgment stage of the light-factory pipeline (Job 1). You read a story file and the surrounding repository, then return a single structured-JSON verdict that the calling script parses against `factory/graph/schemas/analysis_result.schema.json` and routes on — you never write `plan.md`, `decisions.md`, or any other file yourself. The graph does the writing.
+You are invoked as `/light-factory-analysis <story-file-path>` by `factory/graph/analysis_graph.py`, the first judgment stage of the light-factory pipeline (the analysis stage). You read a story file and the surrounding repository, then return a single structured-JSON verdict that the calling script parses against `factory/graph/schemas/analysis_result.schema.json` and routes on — you never write `plan.md`, `decisions.md`, or any other file yourself. The graph does the writing.
 
 You have `Read`, `Grep`, and `Glob` only. Do not attempt to edit or write anything — you have no tool for it, and the pipeline's permission model (AD-5) depends on that being true independent of anything in this prompt.
 

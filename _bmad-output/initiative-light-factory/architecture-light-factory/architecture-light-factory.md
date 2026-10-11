@@ -7,7 +7,7 @@ paradigm: 'hybrid state machine — job-level FSM (GitHub Actions) composing nes
 scope: 'light-factory itself (the gated AI-agent delivery pipeline) — not any app it is later used to build'
 status: final
 created: '2026-10-01'
-updated: '2026-10-02'
+updated: '2026-10-11'
 binds: []
 sources: ['_bmad-output/initiative-light-factory/brief-light-factory/brief-light-factory.md']
 companions: []
@@ -17,7 +17,7 @@ companions: []
 
 ## Design Paradigm
 
-The pipeline is a job-level finite state machine owned by GitHub Actions: jobs are states, and GitHub Actions Environment + required-reviewers protection rules are the guarded transitions at the two human-wait gates. All stages are jobs within **one workflow file, one triggered run** — never separate workflow files — connected by `needs:`, so GitHub's native job-output passing threads shared identifiers (starting with the story-slug) between stages without any stage re-deriving them independently. Each job internally runs a LangGraph orchestration graph (intake/analysis/clarification; implement/check/review/fix-loop) that lives and dies within that job's own runner process and never needs to survive a job boundary.
+The pipeline is a job-level finite state machine owned by GitHub Actions: jobs are states, and GitHub Actions Environment + required-reviewers protection rules are the guarded transitions at the two human-wait gates. All stages are jobs within **one workflow file, one triggered run** — never separate workflow files — connected by `needs:`, so GitHub's native job-output passing threads shared identifiers (starting with the story-slug) between stages without any stage re-deriving them independently. The judgment jobs (`analysis`, `implementation`, `review`) each run a LangGraph orchestration graph (intake/analysis; implementation; review/fix-loop) that lives and dies within that job's own runner process — graph state never needs to survive a job boundary. What does cross a job boundary is durable state only: the files under `.factory/`, committed to the run's branch (AD-10).
 
 Namespace mapping:
 - `.github/workflows/` — the job-level FSM and its gates (GitHub-Actions-specific wiring).
@@ -66,7 +66,7 @@ Dependency arrows only point from GitHub-Actions-specific wiring inward. `factor
 
 - **Binds:** all agent invocations
 - **Prevents:** relying on a single permission layer that a misbehaving or prompt-injected agent could bypass
-- **Rule:** least privilege is enforced at two independent layers, neither sufficient alone: (1) a Claude Code tool-allowlist per invocation — e.g. the review agent has no write/edit tool at all; the implementation agent's edit tools are scoped both to its isolated branch (git-ref boundary) **and** to the state-file paths AD-10 assigns to its own stage, explicitly excluding `plan.md`, `decisions.md`, and `review.md` (owned by other stages) even though those files live on the same branch; no invocation has merge/admin tools. (2) platform-level GitHub token/branch-protection scoping — each job's token permissions match only that stage's needs, and branch protection blocks direct push to main and requires PR + checks to merge, independent of what any agent attempts. Job 1's token permissions now include `contents: write` and `pull-requests: write` (previously none, since Job 1 made no git writes) to run AD-12's branch/PR-open script — scoped to that script alone, never to the analysis agent's own tool-allowlist, which stays read-only. The trailing reject-cleanup job (AD-16) holds `actions: read` (the run's review history), `pull-requests: write` (find and close the PR, with its comment), and `contents: read` (checkout) — no `contents: write`, so it can neither push nor delete a branch — and invokes no agent at all.
+- **Rule:** least privilege is enforced at two independent layers, neither sufficient alone: (1) a Claude Code tool-allowlist per invocation — e.g. the review agent has no write/edit tool at all; the implementation agent's edit tools are scoped both to its isolated branch (git-ref boundary) **and** to the state-file paths AD-10 assigns to its own stage, explicitly excluding `plan.md`, `decisions.md`, and `review.md` (owned by other stages) even though those files live on the same branch; no invocation has merge/admin tools. (2) platform-level GitHub token/branch-protection scoping — each job's token permissions match only that stage's needs, and branch protection blocks direct push to main and requires PR + checks to merge, independent of what any agent attempts. The `analysis` job's token permissions include `contents: write` and `pull-requests: write` to run AD-12's branch/PR-open script — scoped to that script alone, never to the analysis agent's own tool-allowlist, which stays read-only. The `implementation` and `checks` jobs hold `contents: write` only (branch checkout, commit, push); `review` adds `pull-requests: write` for the `evidence-approval` summary comment; `merge` holds both for the squash-merge. The trailing reject-cleanup job (AD-16) holds `actions: read` (the run's review history), `pull-requests: write` (find and close the PR, with its comment), and `contents: read` (checkout) — no `contents: write`, so it can neither push nor delete a branch — and invokes no agent at all.
 
 ### AD-6 — Orchestration language: Python / LangGraph native SDK; scope is judgment work only
 
@@ -96,43 +96,43 @@ Dependency arrows only point from GitHub-Actions-specific wiring inward. `factor
 
 - **Binds:** all pipeline stage state files under `.factory/<story-slug>/`
 - **Prevents:** one stage overwriting or corrupting another stage's record, which would break the audit trail; divergence between human-readable and machine-readable state
-- **Rule:** each stage writes only its own state file (e.g. the analysis stage writes `plan.md` and `decisions.md`; the review stage writes `review.md`) and never mutates a prior stage's file. Every state file's YAML frontmatter uses exactly these shared field names — no stage invents its own naming for the same concept: `schema_version` (int), `story_slug` (string, matches the directory name from AD-8), `stage` (`analysis` \| `implementation` \| `review`), `status` (stage-specific enum below), `updated` (ISO 8601). Canonical `status` values: `plan.md`/`decisions.md` — `drafted`, `awaiting-clarification`, `clarification-cap-reached`, `ready-for-review`; `review.md` — `in-review`, `findings-open`, `fix-in-progress`, `resolved`, `unresolved-after-cap`. No other status strings are valid. Both the human reviewer and the orchestration script read this frontmatter as the single source of truth.
+- **Rule:** each stage writes only its own state file (e.g. the analysis stage writes `plan.md` and `decisions.md`; the review stage writes `review.md`) and never mutates a prior stage's file. Every state file's YAML frontmatter uses exactly these shared field names — no stage invents its own naming for the same concept: `schema_version` (int), `story_slug` (string, matches the directory name from AD-8), `stage` (`analysis` \| `implementation` \| `review`), `status` (stage-specific enum below), `updated` (ISO 8601). Canonical `status` values: `plan.md`/`decisions.md` — `drafted`, `awaiting-clarification`, `clarification-cap-reached`, `ready-for-review`; `review.md` — `in-review`, `findings-open`, `fix-in-progress`, `resolved`, `unresolved-after-cap`. No other status strings are valid. Both the human reviewer and the orchestration script read this frontmatter as the single source of truth. **Addendum 2026-10-11** (entry 8 of `epic-pipeline-open-issues`, which moved the mechanical checks and the review into their own jobs): state crosses job boundaries only through git. The `checks` and `review` jobs each start by checking out the run's branch (`checkout_branch.py`) and end by committing and pushing whatever they wrote under `.factory/` (`commit_push_implementation.py --label Checks` / `--label Review`) — unconditionally, so `evidence/checks/` and `review.md`/`evidence/review/` reach the next job even when no fix cycle committed anything. There is no second persistence mechanism (e.g. workflow artifacts).
 
 ### AD-11 — Bounded fix loop, hard cap at 2 cycles
 
-- **Binds:** Job 2's review → fix → re-check loop
+- **Binds:** the `review` job's review → fix → re-check loop
 - **Prevents:** open-ended agent spend on a story the automated review keeps rejecting; silently burning AI budget instead of surfacing the problem to a human
 - **Rule:** `review.md`'s frontmatter tracks a fix-cycle counter, incremented only by the orchestration graph's own loop-control node — never by the review agent's or the fix agent's output. Agents report findings and fixes; only the graph mutates the counter. The graph enforces a hard cap of 2 fix cycles: on the second unresolved review, it must not loop again — it routes directly to the `evidence-approval` gate with `status: unresolved-after-cap`, carrying the outstanding findings for the human to triage, rather than continuing to spend agent turns. Each cycle re-runs only the checks relevant to the finding(s) being fixed, not the full check suite.
 
 ### AD-12 — PR opened by a deterministic pipeline step, once intake decides to proceed
 
-- **Binds:** Job 1 (Analysis), post-CAP-1 sequencing; Job 2 (Implementation) branch reuse; ties to AD-4, AD-5, AD-8, and AD-13
-- **Prevents:** ambiguity about when/how the PR backing the rest of the run comes into existence; an analysis or implementation agent holding an unscoped git-push/PR-create capability AD-5's tool-allowlist model never named; a dangling open PR surviving a clarification cap-out or plan-approval reject with no closing action (see AD-2, AD-13, AD-15)
-- **Rule:** once Job 1's CAP-1 intake judgment decides to proceed (not on a halt), a deterministic pipeline script — not the agent — creates the isolated branch named from AD-8's story-slug and AD-15's run-id (`light-factory/<story-slug>/<run-id>`), commits the analysis stage's own first write of `plan.md`/`decisions.md` as the branch's first real commit (no placeholder commit needed — this is genuine content, not a GitHub-API workaround), and opens the PR against the target branch. This PR is the single artifact for the rest of the run: `plan.md`/`decisions.md` updates across clarification rounds (AD-13), the `plan-approval` gate summary (AD-4), all of Job 2's automated-check output, review findings, and fix-loop commits, and the `evidence-approval` gate summary all land on it. Job 2 reuses this same branch — it checks it out via the propagated branch name (AD-8/AD-15 outputs), it does not create a new one. Because this is a script step under AD-5's per-job token scoping (not the agent's own tool-allowlist), neither the analysis agent nor the implementation agent ever receives a branch-create or PR-create tool. A run that halts at CAP-1 (incomplete/out-of-scope) never reaches this script — no branch or PR exists for it. The same script closes any prior open PR for this story-slug it supersedes (AD-15) — branches and state directories are never deleted, only the superseded PR closes.
+- **Binds:** the `analysis` job, post-CAP-1 sequencing; branch reuse by the `implementation`, `checks` and `review` jobs; ties to AD-4, AD-5, AD-8, and AD-13
+- **Prevents:** ambiguity about when/how the PR backing the rest of the run comes into existence; an analysis or implementation agent holding an unscoped git-push/PR-create capability AD-5's tool-allowlist model never named; a dangling open PR surviving a below-cap clarification halt or a gate reject with no closing action (see AD-2, AD-13, AD-15)
+- **Rule:** once the `analysis` job's CAP-1 intake judgment decides to proceed (not on a halt), a deterministic pipeline script — not the agent — creates the isolated branch named from AD-8's story-slug and AD-15's run-id (`light-factory/<story-slug>/<run-id>`), commits the analysis stage's own first write of `plan.md`/`decisions.md` as the branch's first real commit (no placeholder commit needed — this is genuine content, not a GitHub-API workaround), and opens the PR against the target branch. This PR is the single artifact for the rest of the run: `plan.md`/`decisions.md` updates across clarification rounds (AD-13), the `plan-approval` gate summary (AD-4), all automated-check output, review findings, and fix-loop commits, and the `evidence-approval` gate summary all land on it. The `implementation`, `checks` and `review` jobs reuse this same branch — each checks it out via the propagated branch name (AD-8/AD-15 outputs), none creates a new one. Because this is a script step under AD-5's per-job token scoping (not the agent's own tool-allowlist), neither the analysis agent nor the implementation agent ever receives a branch-create or PR-create tool. A run that halts at CAP-1 (incomplete/out-of-scope) never reaches this script — no branch or PR exists for it. The same script closes any prior open PR for this story-slug it supersedes (AD-15) — branches and state directories are never deleted, only the superseded PR closes.
 
 ### AD-13 — Clarification: bounded rounds via re-trigger, no live mid-job wait (cap 2, counted from the PR chain)
 
-- **Binds:** Job 1's LangGraph graph (intake, analysis)
+- **Binds:** the `analysis` job's LangGraph graph (intake, analysis)
 - **Prevents:** ambiguity about what happens when analysis can't fully resolve the story alone — without this, intake would either guess (undermining CAP-1/CAP-2) or silently stall; unbounded repetition of the same halt-and-re-trigger cycle with no signal that the story itself, not just a missing answer, may be the problem
-- **Rule:** Job 1 makes one analysis invocation per run (entry 3). If it returns any `open_questions`, the graph halts intake for that run — writes `plan.md`/`decisions.md` with `status: awaiting-clarification` (below cap) or `status: clarification-cap-reached` (at cap, AD-10's enum, new value), posts the open question(s) (or the cap-reached notice) as a comment on the PR AD-12 opened at intake, and closes that PR per AD-15, tagged with a `clarification-round` label so this round counts toward the cap (this path ends the run without reaching a gate, so AD-4's Rule doesn't itself cover the comment step — the convention is shared, the authority is this AD). Before closing, a deterministic step (never the agent) counts this story-slug's prior PRs in **any state** (open or closed) (same branch-name prefix `light-factory/<story-slug>/*` AD-15 uses to find the currently-open PR, but querying all states here — a distinct query AD-15 itself never performs, since an at-cap PR is deliberately left open yet must still count toward a later re-trigger's total, or the cap would silently reset) carrying the `clarification-round` label — a completed clarification round only (closed below cap, left open at cap), distinct from a reject-closed or ordinary-supersession-closed PR. If that prior count is already at or above the hard cap of 2 (matching AD-11's), this round's status and comment are `clarification-cap-reached` regardless of which attempt number it technically is: the developer is told the budget is spent and the story likely needs rescoping or splitting, not another answer attempt — the run still ends without a gate, same as any halt. This keeps the capped state stable on a 3rd or later re-trigger, rather than leaving that case undefined. Below the cap, behavior is unchanged from today: the developer answers by editing the story file itself (the only input `run_analysis` ever reads — this AD now names that explicitly, since nothing else carries an answer across a re-trigger) and re-triggers the pipeline as a new run, consistent with AD-2's reject-is-terminal/re-trigger pattern and v1's manual-trigger-only model. No live mid-job wait is introduced — AD-2's two-gate model (`plan-approval`, `evidence-approval`) is unchanged by this AD. **Decided 2026-10-10** (see `change-clarification-loop-bounded-rounds/change-clarification-loop-bounded-rounds.md`); this supersedes the v1 single-pass-halt simplification of 2026-10-02.
+- **Rule:** The `analysis` job makes one analysis invocation per run. If it returns any `open_questions`, the graph halts intake for that run — writes `plan.md`/`decisions.md` with `status: awaiting-clarification` (below cap) or `status: clarification-cap-reached` (at cap, AD-10's enum, new value), tags the PR AD-12 opened at intake with a `clarification-round` label so this round counts toward the cap, posts the open question(s) (or the cap-reached notice) as a comment on it, and — below the cap only — closes it per AD-15; at the cap the PR is left open for the developer to decide how to proceed (this path ends the run without reaching a gate, so AD-4's Rule doesn't itself cover the comment step — the convention is shared, the authority is this AD). Before the state files are written, a deterministic step (never the agent) counts this story-slug's prior PRs in **any state** (open or closed) (same branch-name prefix `light-factory/<story-slug>/*` AD-15 uses to find the currently-open PR, but querying all states here — a distinct query AD-15 itself never performs, since an at-cap PR is deliberately left open yet must still count toward a later re-trigger's total, or the cap would silently reset) carrying the `clarification-round` label — a completed clarification round only (closed below cap, left open at cap), distinct from a reject-closed or ordinary-supersession-closed PR. If that prior count is already at or above the hard cap of 2 (matching AD-11's), this round's status and comment are `clarification-cap-reached` regardless of which attempt number it technically is: the developer is told the budget is spent and the story likely needs rescoping or splitting, not another answer attempt — the run still ends without a gate, same as any halt. This keeps the capped state stable on a 3rd or later re-trigger, rather than leaving that case undefined. Below the cap, behavior is unchanged from today: the developer answers by editing the story file itself (the only input `run_analysis` ever reads — this AD now names that explicitly, since nothing else carries an answer across a re-trigger) and re-triggers the pipeline as a new run, consistent with AD-2's reject-is-terminal/re-trigger pattern and v1's manual-trigger-only model. No live mid-job wait is introduced — AD-2's two-gate model (`plan-approval`, `evidence-approval`) is unchanged by this AD. **Decided 2026-10-10** (see `change-clarification-loop-bounded-rounds/change-clarification-loop-bounded-rounds.md`); this supersedes the v1 single-pass-halt simplification of 2026-10-02.
 
 ### AD-14 — Merge is a deterministic pipeline step, never an agent action
 
-- **Binds:** Job 3 (Merge)
-- **Prevents:** Job 3 existing with no Rule behind it at all — AD-5 already rules out an agent performing the merge, but nothing previously said what does
-- **Rule:** Job 3 executes the merge as a direct pipeline step, triggered automatically on `evidence-approval`'s approval — consistent with AD-5's "no agent invocation ever holds merge/admin tools" and the v1 goal of a green, trusted pipeline that completes without a manual UI click. Merge strategy (squash/merge-commit/rebase), source-branch deletion, and merge-conflict handling are not decided here — see Deferred.
+- **Binds:** the `merge` job
+- **Prevents:** the `merge` job existing with no Rule behind it at all — AD-5 already rules out an agent performing the merge, but nothing previously said what does
+- **Rule:** the `merge` job executes the merge as a direct pipeline step, triggered automatically on `evidence-approval`'s approval — consistent with AD-5's "no agent invocation ever holds merge/admin tools" and the v1 goal of a green, trusted pipeline that completes without a manual UI click. Merge strategy (squash/merge-commit/rebase), source-branch deletion, and merge-conflict handling are not decided here — see Deferred.
 
 ### AD-15 — Run-level isolation on re-trigger: concurrency-guarded, versioned by run-id, superseded PRs linked and closed
 
 - **Binds:** AD-8's state-directory layout, AD-12's branch/PR naming, the workflow's own `concurrency:` declaration; the re-trigger path from AD-2's reject-is-terminal pattern and AD-13's cap-out
-- **Prevents:** a re-triggered run colliding with its terminal predecessor's branch/PR/state-directory (all previously keyed only by story-slug, which doesn't distinguish attempts); a prior attempt's analysis/review/evidence being silently overwritten or orphaned; two runs for the same story racing concurrently, where a reviewer could approve a gate on a run a later re-trigger has already superseded — a "zombie" approval reaching Job 3 against an already-closed PR
-- **Rule:** the workflow declares `concurrency: {group: light-factory-<story-slug>, cancel-in-progress: true}` — a second manual trigger for a story-slug that still has a run in flight, including one paused at a gate, cancels that run outright rather than racing it; a re-trigger is always treated as explicit intent to supersede, never queued behind a pending gate. Every run also computes a `run-id` (`run-<github.run_id>` — GitHub's own globally-unique run identifier; zero extra bookkeeping) in the same first job that derives the story-slug (AD-8), threaded the same way via `needs:` outputs. AD-8's state directory and AD-12's branch/PR both nest under it: `.factory/<story-slug>/<run-id>/` and branch `light-factory/<story-slug>/<run-id>`. When AD-12's pipeline script opens a new run's PR, it searches for any other open PR for the same story-slug (by branch-name prefix `light-factory/<story-slug>/`) — this also catches a predecessor the concurrency guard cancelled before it could close its own superseded PR, so cascading cancellations resolve without special-casing — closes each with a comment linking to the new PR ("superseded by #N"), and the new PR's own opening comment links back ("retry of #M"). Superseded branches and state directories are left in place, not deleted — only the PR closes — consistent with the audit-trail-over-cleanup posture AD-10 and AD-12 already set. AD-2's reject at either gate (`plan-approval` or `evidence-approval`, detected and closed per AD-16) and AD-13's clarification halt (below cap or at it) each close their own run's PR at that moment too — with a comment stating why — not only when a later retrigger supersedes it. AD-13's own counting mechanism (how many prior rounds a story-slug has spent) is a separate query over PRs in **any state** (open or closed) by the same branch-name prefix, filtered to the `clarification-round` label — distinct from this Rule's open-PR search, which only ever finds the single currently-open PR to supersede. An open PR therefore almost always means "still awaiting a decision, never already resolved one way or the other" — except the one deliberate carve-out AD-13 creates: an at-cap PR stays open (so the developer can still act on it) but is itself a resolved, terminal state for that run, not an in-flight decision. There is no separate "current run" pointer file: the concurrency guard keeps at most one run in flight, and supersession-closing keeps at most one PR open per story-slug, so "which run is current" is always answered directly by GitHub — the one open PR matching the branch prefix (or, in the brief pre-PR Job-1 window, whichever run is actually in flight).
+- **Prevents:** a re-triggered run colliding with its terminal predecessor's branch/PR/state-directory (all previously keyed only by story-slug, which doesn't distinguish attempts); a prior attempt's analysis/review/evidence being silently overwritten or orphaned; two runs for the same story racing concurrently, where a reviewer could approve a gate on a run a later re-trigger has already superseded — a "zombie" approval reaching the `merge` job against an already-closed PR
+- **Rule:** the workflow declares `concurrency: {group: light-factory-<story-slug>, cancel-in-progress: true}` — a second manual trigger for a story-slug that still has a run in flight, including one paused at a gate, cancels that run outright rather than racing it; a re-trigger is always treated as explicit intent to supersede, never queued behind a pending gate. Every run also computes a `run-id` (`run-<github.run_id>` — GitHub's own globally-unique run identifier; zero extra bookkeeping) in the same first job that derives the story-slug (AD-8), threaded the same way via `needs:` outputs. AD-8's state directory and AD-12's branch/PR both nest under it: `.factory/<story-slug>/<run-id>/` and branch `light-factory/<story-slug>/<run-id>`. When AD-12's pipeline script opens a new run's PR, it searches for any other open PR for the same story-slug (by branch-name prefix `light-factory/<story-slug>/`) — this also catches a predecessor the concurrency guard cancelled before it could close its own superseded PR, so cascading cancellations resolve without special-casing — closes each with a comment linking to the new PR ("superseded by #N"), and the new PR's own opening comment links back ("retry of #M"). Superseded branches and state directories are left in place, not deleted — only the PR closes — consistent with the audit-trail-over-cleanup posture AD-10 and AD-12 already set. AD-2's reject at either gate (`plan-approval` or `evidence-approval`, detected and closed per AD-16) and AD-13's below-cap clarification halt each close their own run's PR at that moment too — with a comment stating why — not only when a later retrigger supersedes it. AD-13's own counting mechanism (how many prior rounds a story-slug has spent) is a separate query over PRs in **any state** (open or closed) by the same branch-name prefix, filtered to the `clarification-round` label — distinct from this Rule's open-PR search, which only ever finds the single currently-open PR to supersede. An open PR therefore almost always means "still awaiting a decision, never already resolved one way or the other" — except the one deliberate carve-out AD-13 creates: an at-cap PR stays open (so the developer can still act on it) but is itself a resolved, terminal state for that run, not an in-flight decision. There is no separate "current run" pointer file: the concurrency guard keeps at most one run in flight, and supersession-closing keeps at most one PR open per story-slug, so "which run is current" is always answered directly by GitHub — the one open PR matching the branch prefix (or, in the brief pre-PR window of the `analysis` job, whichever run is actually in flight).
 
 ### AD-16 — Reject detection from the run's review history, PR closed by a trailing job
 
-- **Binds:** the workflow's job graph (a fourth, trailing job after Job 3); AD-2's reject-is-terminal rule; AD-15's "a reject closes its own run's PR at that moment"; AD-5's per-job token scopes
+- **Binds:** the workflow's job graph (a trailing job after `merge`); AD-2's reject-is-terminal rule; AD-15's "a reject closes its own run's PR at that moment"; AD-5's per-job token scopes
 - **Prevents:** a rejected run's PR staying open until someone closes it by hand; treating an ordinary job failure (a crash, a failing check, a merge conflict) as a reject and closing a PR that is still awaiting a fix — a rejected gated job runs no step and its `needs.<job>.result` reads `failure`, exactly like a crash, so the result alone cannot tell the two apart and the gated job cannot report its own reject
-- **Rule:** the workflow ends with a reject-cleanup job that `needs:` all three pipeline jobs and runs only when the run was not cancelled and Job 2 or Job 3 has result `failure` — never on a successful run, and never on a concurrency-cancelled one (AD-15's supersession closes that PR). It runs one deterministic script (`close_rejected_pr.py`), never an agent (AD-5). A reject is decided only from this run's own review history — `GET /repos/{owner}/{repo}/actions/runs/{run_id}/approvals`, an entry with `state: "rejected"` naming the Environment of the gate guarding the job that failed (`plan-approval` for Job 2, `evidence-approval` for Job 3) — never inferred from `needs.<job>.result` alone; a `rejected` entry for the other gate does not count. On a reject the script closes this run's own PR (branch `light-factory/<story-slug>/<run-id>`, both threaded via `needs:` outputs, AD-8/AD-15) with a comment naming the gate, the rejecting reviewer, their review comment when they left one, and that a re-trigger starts a new run. Only the PR closes: the branch and state directory stay (AD-10/AD-12/AD-15), no label is applied (`clarification-round` is AD-13's alone), no state file is written, and nothing is re-triggered. When the gate was not rejected, or the PR is already closed, the step succeeds without touching anything; only a failing or malformed API/`gh` call fails it. A same-run-id "re-run failed jobs" keeps earlier review-history entries, so a later attempt can still see an old `rejected` entry — harmless, since the first attempt already closed the PR and there is nothing left to close; no attempt-number filtering is needed.
+- **Rule:** the workflow ends with a reject-cleanup job that `needs:` `analysis`, `implementation` and `merge` and runs only when the run was not cancelled and one of the two gated jobs — `implementation` or `merge` — has result `failure`. It never runs on a successful run, on a concurrency-cancelled one (AD-15's supersession closes that PR), or after a `checks` or `review` failure, which leaves `merge` `skipped` rather than `failure`. It runs one deterministic script (`close_rejected_pr.py`), never an agent (AD-5). A reject is decided only from this run's own review history — `GET /repos/{owner}/{repo}/actions/runs/{run_id}/approvals`, an entry with `state: "rejected"` naming the Environment of the gate guarding the job that failed (`plan-approval` for `implementation`, `evidence-approval` for `merge`) — never inferred from `needs.<job>.result` alone; a `rejected` entry for the other gate does not count. On a reject the script closes this run's own PR (branch `light-factory/<story-slug>/<run-id>`, both threaded via `needs:` outputs, AD-8/AD-15) with a comment naming the gate, the rejecting reviewer, their review comment when they left one, and that a re-trigger starts a new run. Only the PR closes: the branch and state directory stay (AD-10/AD-12/AD-15), no label is applied (`clarification-round` is AD-13's alone), no state file is written, and nothing is re-triggered. When the gate was not rejected, or the PR is already closed, the step succeeds without touching anything; only a failing or malformed API/`gh` call fails it. A same-run-id "re-run failed jobs" keeps earlier review-history entries, so a later attempt can still see an old `rejected` entry — harmless, since the first attempt already closed the PR and there is nothing left to close; no attempt-number filtering is needed.
 
 ## Consistency Conventions
 
@@ -145,9 +145,9 @@ Dependency arrows only point from GitHub-Actions-specific wiring inward. `factor
 | Data & formats (state-file frontmatter) | Shared field names across every state file: `schema_version`, `story_slug`, `stage`, `status`, `updated` — see AD-10 for the canonical `status` enum per file |
 | State & cross-cutting (mutation, permissions) | Each stage owns and writes only its own state file (append-only across stages, AD-10); agent permissions are enforced both via Claude Code tool-allowlists scoped to specific state-file paths (not just the branch) and via GitHub token/branch-protection scoping — never one alone (AD-5) |
 | State & cross-cutting (identifiers) | `story-slug` is computed once, in the workflow's first job, and threaded to every other job via `needs:` outputs — never independently re-derived (AD-8) |
-| State & cross-cutting (bounded loops) | Fix loop (Job 2): hard-capped at 2 cycles, counted by a counter owned solely by the orchestration graph's loop-control node, never by the agent; `status: unresolved-after-cap` on cap-out (AD-11). Clarification (Job 1): hard-capped at 2 rounds, counted from AD-15's existing PR-chain `clarification-round` labels (no new state, no live mid-job wait) — `status: awaiting-clarification` below the cap, `status: clarification-cap-reached` at it (AD-13) |
-| Naming (PR/comment target) | The PR exists from the moment Job 1's CAP-1 judgment decides to proceed (AD-12) — both `plan-approval` and `evidence-approval` summaries post as PR comments on it (AD-4). A clarification cap-out or a reject at either gate (`plan-approval` or `evidence-approval`, AD-16) closes that PR with a comment (AD-15); a re-trigger's new PR closes and links to any PR it supersedes (AD-15) |
-| Naming (clarification rounds) | Each PR closed for an unresolved open question is tagged `clarification-round` — AD-13 counts these (via AD-15's branch-prefix search) to enforce the 2-round cap; no separate counter file |
+| State & cross-cutting (bounded loops) | Fix loop (`review` job): hard-capped at 2 cycles, counted by a counter owned solely by the orchestration graph's loop-control node, never by the agent; `status: unresolved-after-cap` on cap-out (AD-11). Clarification (`analysis` job): hard-capped at 2 rounds, counted from AD-15's existing PR-chain `clarification-round` labels (no new state, no live mid-job wait) — `status: awaiting-clarification` below the cap, `status: clarification-cap-reached` at it (AD-13) |
+| Naming (PR/comment target) | The PR exists from the moment the `analysis` job's CAP-1 judgment decides to proceed (AD-12) — both `plan-approval` and `evidence-approval` summaries post as PR comments on it (AD-4). A below-cap clarification halt or a reject at either gate (`plan-approval` or `evidence-approval`, AD-16) closes that PR with a comment (AD-15); an at-cap clarification PR gets its comment but stays open (AD-13); a re-trigger's new PR closes and links to any PR it supersedes (AD-15) |
+| Naming (clarification rounds) | Each PR that ends a run on an unresolved open question — closed below the cap, left open at it — is tagged `clarification-round` — AD-13 counts these (by AD-15's branch prefix, across all PR states) to enforce the 2-round cap; no separate counter file |
 
 ## Stack
 
@@ -163,9 +163,9 @@ Dependency arrows only point from GitHub-Actions-specific wiring inward. `factor
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Job1_Analysis
+    [*] --> AnalysisJob
 
-    note left of Job1_Analysis
+    note left of AnalysisJob
         All jobs below run in ONE workflow
         file, ONE triggered run, chained by
         needs: (not separate workflow files).
@@ -179,7 +179,7 @@ stateDiagram-v2
         re-trigger always supersedes, never races.
     end note
 
-    state "Job 1: Analysis (GitHub Actions)" as Job1_Analysis {
+    state "analysis job (GitHub Actions)" as AnalysisJob {
         state "LangGraph: intake -> analysis (CAP-1/CAP-2), one pass per run, bounded via re-trigger (AD-13)" as LG1a
         state "Pipeline script: create branch, commit plan.md/decisions.md, open PR\n(AD-12, deterministic -- not an agent action)" as OpenPR1
         [*] --> LG1a
@@ -187,70 +187,92 @@ stateDiagram-v2
         LG1a --> OpenPR1: proceed (CAP-1 passed)
         OpenPR1 --> WritePlan: resolved, writes plan.md, decisions.md (status: ready-for-review)
         OpenPR1 --> NeedsClarification: open_questions AND prior rounds < cap, writes status: awaiting-clarification, closes PR tagged clarification-round (AD-13/AD-15)
-        OpenPR1 --> ClarificationCapped: open_questions AND prior rounds >= cap (2), writes status: clarification-cap-reached, closes PR tagged clarification-round (AD-13)
+        OpenPR1 --> ClarificationCapped: open_questions AND prior rounds >= cap (2), writes status: clarification-cap-reached, tags PR clarification-round, leaves it open (AD-13)
         WritePlan --> PostSummary1: PR comment summary (AD-4)
         NeedsClarification --> PostSummaryCapA: PR comment, open question(s) surfaced, PR closed
-        ClarificationCapped --> PostSummaryCapB: PR comment, cap-reached notice, PR closed
+        ClarificationCapped --> PostSummaryCapB: PR comment, cap-reached notice, PR left open
         PostSummary1 --> [*]
         PostSummaryCapA --> [*]: run ends here, no GateA (see RunEndsClarify below)
         PostSummaryCapB --> [*]: run ends here, no GateA -- story likely needs rescoping, not another answer
         Halted --> [*]: run ends here, no branch/PR ever existed
     }
 
-    Job1_Analysis --> GateA: normal path, Environment pause (same run)
-    Job1_Analysis --> RunEndsClarify: open question, prior rounds < cap (AD-13)
-    Job1_Analysis --> RunEndsClarifyCap: open question, prior rounds >= cap (2) (AD-13)
+    AnalysisJob --> GateA: normal path, Environment pause (same run)
+    AnalysisJob --> RunEndsClarify: open question, prior rounds < cap (AD-13)
+    AnalysisJob --> RunEndsClarifyCap: open question, prior rounds >= cap (2) (AD-13)
 
-    state "Run ends, no plan-approval attempt.\nHuman answers by editing the story file,\nre-triggers Job 1 as a NEW run (new run-id,\nAD-15) -- up to 2 consecutive rounds." as RunEndsClarify
+    state "Run ends, no plan-approval attempt.\nHuman answers by editing the story file,\nre-triggers the pipeline as a NEW run (new run-id,\nAD-15) -- up to 2 consecutive rounds." as RunEndsClarify
     RunEndsClarify --> [*]
 
     state "Run ends, clarification cap (2) reached.\nStory likely needs rescoping/splitting,\nnot another answer attempt (AD-13)." as RunEndsClarifyCap
     RunEndsClarifyCap --> [*]
 
     state "Gate: plan-approval (GitHub Environment, required reviewers)" as GateA
-    GateA --> Job2_Implementation: approve
+    GateA --> ImplementationJob: approve
     GateA --> RunEndsA: reject (terminal -- see AD-2)
 
-    state "Run ends, no merge. This run's PR\nis closed at reject (AD-16).\nHuman re-triggers Job 1 as a NEW\nrun (new run-id, new PR, AD-15)." as RunEndsA
+    state "Run ends, no merge. This run's PR\nis closed at reject (AD-16).\nHuman re-triggers the pipeline as a NEW\nrun (new run-id, new PR, AD-15)." as RunEndsA
     RunEndsA --> [*]
 
-    state "Job 2: Implementation & Review (GitHub Actions)" as Job2_Implementation {
-        state "Pipeline script: checkout existing branch\n(opened by Job 1, AD-12 -- not created here)" as CheckoutBranch
-        state "LangGraph: implement -> route" as LG2a
-        state "direct pipeline steps: build/test/lint/security" as Checks
-        state "LangGraph: independent review agent" as LG2b
-        state "LangGraph: bounded fix loop (cap 2 cycles, AD-11)" as FixLoop
+    state "implementation job (GitHub Actions)" as ImplementationJob {
+        state "Pipeline script: checkout existing branch\n(opened by the analysis job, AD-12 -- not created here)" as CheckoutBranch
+        state "LangGraph: implementation agent" as LG2a
+        state "Pipeline script: commit + push the agent's edits" as CommitImpl
         [*] --> CheckoutBranch
         CheckoutBranch --> LG2a: implementation agent invoked
-        LG2a --> Checks
-        Checks --> LG2b
+        LG2a --> CommitImpl
+        CommitImpl --> [*]
+    }
+
+    ImplementationJob --> ChecksJob: needs: (no gate)
+
+    state "checks job (GitHub Actions)" as ChecksJob {
+        state "Pipeline script: checkout the same branch" as CheckoutChecks
+        state "direct pipeline steps: build/test/lint/security (AD-6)" as RunChecks
+        state "Pipeline script: commit checks evidence (AD-10)" as CommitChecks
+        [*] --> CheckoutChecks
+        CheckoutChecks --> RunChecks
+        RunChecks --> CommitChecks
+        CommitChecks --> [*]
+    }
+
+    ChecksJob --> ReviewJob: needs: (no gate)
+
+    state "review job (GitHub Actions)" as ReviewJob {
+        state "Pipeline script: checkout the same branch" as CheckoutReview
+        state "LangGraph: independent review agent" as LG2b
+        state "LangGraph: bounded fix loop (cap 2 cycles, AD-11)" as FixLoop
+        state "Pipeline script: commit review evidence (AD-10)" as CommitReview
+        [*] --> CheckoutReview
+        CheckoutReview --> LG2b
         LG2b --> FixLoop: findings (graph increments counter)
-        FixLoop --> Checks: re-run affected checks
+        FixLoop --> LG2b: fix committed, build/test re-run
         LG2b --> WriteReview: pass, or cap hit (unresolved-after-cap)
-        WriteReview --> PostSummary2: PR comment summary
+        WriteReview --> CommitReview
+        CommitReview --> PostSummary2: PR comment summary (AD-4)
         PostSummary2 --> [*]
     }
 
-    Job2_Implementation --> GateB: Environment pause (same run)
+    ReviewJob --> GateB: Environment pause (same run)
 
     state "Gate: evidence-approval (GitHub Environment, required reviewers)" as GateB
-    GateB --> Job3_Merge: approve
+    GateB --> MergeJob: approve
     GateB --> RunEndsB: reject (terminal -- see AD-2)
 
     state "Run ends, no merge. This run's PR\nis closed at reject (AD-16).\nHuman re-triggers pipeline as a NEW\nrun (new run-id, new PR, AD-15)." as RunEndsB
     RunEndsB --> [*]
 
-    state "Job 3: Merge (GitHub Actions)\ndeterministic pipeline step, never an agent (AD-14)" as Job3_Merge
-    Job3_Merge --> [*]
+    state "merge job (GitHub Actions)\ndeterministic pipeline step, never an agent (AD-14)" as MergeJob
+    MergeJob --> [*]
 ```
 
 ```text
 <target-repo>/
   .github/
     workflows/
-      light-factory.yml                 # ONE workflow, ONE run: jobs intake -> analysis -> [plan-approval] ->
-                                         # implementation -> checks -> review -> fix-loop -> [evidence-approval] -> merge,
-                                         # chained via needs:; story-slug computed in the intake job, threaded as a needs: output
+      light-factory.yml                 # ONE workflow, ONE run: jobs analysis -> [plan-approval] -> implementation ->
+                                         # checks -> review -> [evidence-approval] -> merge, plus a trailing close-rejected-pr,
+                                         # chained via needs:; story-slug computed in the analysis job, threaded as a needs: output
   factory/
     graph/
       analysis_graph.py                 # LangGraph: intake, analysis, bounded clarification rounds via re-trigger (AD-13)
@@ -258,10 +280,10 @@ stateDiagram-v2
       review_graph.py                   # LangGraph: independent read-only review agent (CAP-6, AD-5)
       fix_loop_graph.py                 # bounded fix loop: review -> fix -> recheck, counter owned here, hard cap 2 cycles (AD-11)
     scripts/
-      checkout_branch.py                # deterministic: checks out the branch entry 3 already opened, never creates one (AD-12)
-      commit_push_implementation.py     # deterministic: commits/pushes the implementation agent's edits, no-op if none
-      run_checks.py                     # deterministic: build/test (real) + lint/security (v1 placeholders) checks (AD-6, CAP-5)
-      open_implementation_pr.py         # deterministic: creates isolated branch, commits plan.md/decisions.md as the real first commit, opens PR, closes/links any superseded PR -- invoked from Job 1 once CAP-1 passes; Job 2 checks out the same branch rather than creating one (AD-12, AD-15)
+      checkout_branch.py                # deterministic: checks out the branch the analysis job already opened, never creates one -- run by implementation, checks and review (AD-12)
+      commit_push_implementation.py     # deterministic: commits/pushes the implementation agent's edits and each later job's evidence (--label), no-op if none (AD-10)
+      run_checks.py                     # deterministic: build/test/lint (real) + security (placeholder) checks (AD-6, CAP-5)
+      open_implementation_pr.py         # deterministic: creates isolated branch, commits plan.md/decisions.md as the real first commit, opens PR, closes/links any superseded PR -- invoked from the analysis job once CAP-1 passes; later jobs check out the same branch rather than creating one (AD-12, AD-15)
       post_summary.py                   # posts a stage-gate summary as a PR comment (AD-4) -- shared by both gates; reused directly by analysis_graph.py (plan-approval) and by post_evidence_summary.py (evidence-approval)
       post_evidence_summary.py          # evidence-approval's own evidence-gathering + rendering, posts via post_summary.py (AD-4, CAP-8)
       merge_story.py                    # deterministic: squash-merges and deletes the branch on evidence-approval, never an agent (AD-5, AD-14, CAP-9)
@@ -289,15 +311,15 @@ stateDiagram-v2
 
 | Capability | Lives in | Governed by |
 | --- | --- | --- |
-| CAP-1 Intake validation | Job 1, analysis-stage skill prompt | Not architecturally decided — left to `.claude/skills/light-factory-analysis/` content, not an AD |
-| CAP-2 Agent analysis and plan proposal | Job 1 (`analysis_graph.py`) | AD-2, AD-10, AD-13 |
+| CAP-1 Intake validation | `analysis` job, analysis-stage skill prompt | Not architecturally decided — left to `.claude/skills/light-factory-analysis/` content, not an AD |
+| CAP-2 Agent analysis and plan proposal | `analysis` job (`analysis_graph.py`) | AD-2, AD-10, AD-13 |
 | CAP-3 Plan-approval human gate | `plan-approval` GitHub Environment | AD-2, AD-4 |
-| CAP-4 Scoped implementation | Job 1 opens the isolated branch + PR once CAP-1 proceeds; Job 2 reuses it for code | AD-5, AD-8, AD-12, AD-15 |
-| CAP-5 Automated mechanical checks | Job 2, `.github/workflows/` steps | AD-6 |
-| CAP-6 Independent agent review | Job 2 (`review_graph.py`) | AD-5, AD-8, AD-10 |
-| CAP-7 Bounded fix loop | Job 2 (`fix_loop_graph.py`) | AD-11 |
+| CAP-4 Scoped implementation | `analysis` job opens the isolated branch + PR once CAP-1 proceeds; `implementation` job reuses it for code | AD-5, AD-8, AD-12, AD-15 |
+| CAP-5 Automated mechanical checks | `checks` job, `.github/workflows/` steps | AD-6 |
+| CAP-6 Independent agent review | `review` job (`review_graph.py`) | AD-5, AD-8, AD-10 |
+| CAP-7 Bounded fix loop | `review` job (`fix_loop_graph.py`) | AD-11 |
 | CAP-8 Evidence-approval human gate | `evidence-approval` GitHub Environment | AD-2, AD-4 |
-| CAP-9 Approval and merge | Job 3 | AD-14 |
+| CAP-9 Approval and merge | `merge` job (`merge_story.py`) | AD-14 |
 
 ## Deferred
 
@@ -310,4 +332,4 @@ stateDiagram-v2
 - **Migration to a dedicated orchestrating repo** — v1 ships as a per-project blueprint/template; factory logic is kept isolated from GitHub-Actions-specific wiring specifically so this migration is possible later without a rewrite (AD-1).
 - **Temporal/Camunda as a future orchestration upgrade** — deferred as the natural evolution if/when light-factory becomes a dedicated repo orchestrating many target projects at scale (AD-3).
 - **Non-gate failure/retry semantics** (a LangGraph node throwing, a runner crash, a transient GitHub API failure — distinct from a human-gate reject) and **runner type** (GitHub-hosted vs. self-hosted) — undecided; sufficient as an explicit v1 cut for a PoC, revisit if real runs surface reliability gaps.
-- **Merge mechanics beyond the actor** — strategy (squash/merge-commit/rebase), source-branch deletion, and merge-conflict handling for Job 3 (AD-14 fixes only that the merge is a deterministic step, not an agent).
+- **Merge mechanics beyond the actor** — strategy (squash/merge-commit/rebase), source-branch deletion, and merge-conflict handling for the `merge` job (AD-14 fixes only that the merge is a deterministic step, not an agent).

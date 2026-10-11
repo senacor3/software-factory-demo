@@ -93,7 +93,7 @@ class AnalysisPROpenError(RuntimeError):
     commenting) leaves plan.md/decisions.md already written."""
 
 
-# --- the single invocation (isolated so entry 4 can re-call it from its own loop) -------
+# --- the single invocation (one per run; clarification rounds are re-triggers, AD-13) ---
 
 
 def _build_command(story_file: str, schema_text: str, claude_bin: str) -> list[str]:

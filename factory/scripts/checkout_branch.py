@@ -9,9 +9,9 @@ Checks out the exact branch the `analysis` job's `open_implementation_pr.py` alr
 opened (AD-12) -- never creates one. Branch name formula matches AD-8/AD-12/AD-15
 exactly: `light-factory/<story-slug>/<run-id>`.
 
-Defensive, not expected to fail in the normal path (entry 3 already opened the branch
-before the implementation job ever runs) -- but raises a distinct `CheckoutError` if
-it does, so a missing/unreachable branch is never silently conflated with a `claude`
+Defensive, not expected to fail in the normal path (the analysis stage already opened
+the branch before the implementation job ever runs) -- but raises a distinct
+`CheckoutError` if it does, so a missing/unreachable branch is never silently conflated with a `claude`
 CLI tooling failure or a commit/push failure (see story-implementation-agent-plan.md's
 I/O & Edge-Case Matrix).
 
@@ -57,7 +57,7 @@ def checkout_branch(
     *,
     cwd: str | os.PathLike | None = None,
 ) -> str:
-    """Fetch and check out the branch entry 3 already opened. Never creates a branch.
+    """Fetch and check out the branch the analysis stage already opened. Never creates a branch.
 
     Returns the branch name. Raises CheckoutError on any git failure.
     """

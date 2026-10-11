@@ -11,8 +11,8 @@ non-halted result), this script -- not the agent -- creates the isolated branch
 target branch. Mirrors `state_io.py`'s "script writes, not agent" precedent (AD-5).
 
 Idempotent: if an open PR already exists for this exact branch name, its info is
-returned instead of recreating anything -- entry 4's clarification rounds re-call
-`run_analysis` and must not fail or duplicate work against an already-open PR.
+returned instead of recreating anything -- a same-run-id job re-run calls
+`run_analysis` again and must not fail or duplicate work against an already-open PR.
 
 Supersession (AD-15): once this run's PR exists, every *other* open PR whose head branch
 starts with `light-factory/<story-slug>/` is closed with a "Superseded by #N" comment and

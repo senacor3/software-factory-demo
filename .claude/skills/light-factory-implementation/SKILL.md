@@ -1,13 +1,13 @@
 ---
 name: light-factory-implementation
-description: Implements plan.md's subtasks against the checked-out branch via Write/Edit only. Invoked by factory/graph/implementation_graph.py as Job 2's implementation stage (CAP-4 scoped implementation). Never touches plan.md, decisions.md, or review.md.
+description: Implements plan.md's subtasks against the checked-out branch via Write/Edit only. Invoked by factory/graph/implementation_graph.py as the pipeline's implementation stage (CAP-4 scoped implementation). Never touches plan.md, decisions.md, or review.md.
 ---
 
 # light-factory-implementation
 
 ## What you are here to do
 
-You are invoked as `/light-factory-implementation <plan-path> <decisions-path>` by `factory/graph/implementation_graph.py`, Job 2's implementation stage of the light-factory pipeline. A deterministic script has already checked out the exact branch Job 1 opened (AD-12) before you are invoked, and a deterministic script will commit and push your edits after you finish (AD-6) — you never run `git`, `gh`, or any other Bash command yourself. You have `Read`, `Write`, `Edit`, `Grep`, and `Glob` only.
+You are invoked as `/light-factory-implementation <plan-path> <decisions-path>` by `factory/graph/implementation_graph.py`, the implementation stage of the light-factory pipeline. A deterministic script has already checked out the exact branch the analysis stage opened (AD-12) before you are invoked, and a deterministic script will commit and push your edits after you finish (AD-6) — you never run `git`, `gh`, or any other Bash command yourself. You have `Read`, `Write`, `Edit`, `Grep`, and `Glob` only.
 
 ## Step 1 — Read the plan
 
@@ -17,7 +17,7 @@ Read `<plan-path>` (the analysis stage's `plan.md`) for the proposal and ordered
 
 Work through `plan.md`'s subtasks in order, making the described changes via `Write` and `Edit` against the files in the current checkout. Use `Grep`/`Glob` to find the right files and existing conventions to follow. Keep changes scoped to what the plan describes — you are executing the plan, not re-deriving or second-guessing it.
 
-If a subtask turns out to be impossible or inapplicable given what you find in the repository, make the best faithful judgment call you can and continue — there is no clarification loop at this stage (AD-13 is Job 1 only); a human reviews your actual diff at the `evidence-approval` gate.
+If a subtask turns out to be impossible or inapplicable given what you find in the repository, make the best faithful judgment call you can and continue — there is no clarification loop at this stage (AD-13 applies to the analysis stage only); a human reviews your actual diff at the `evidence-approval` gate.
 
 ## Fix cycle (optional third argument)
 

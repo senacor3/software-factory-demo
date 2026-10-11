@@ -8,9 +8,9 @@
 Orchestrates: review (ticket 9's `review_graph.run_review`, unchanged) -> while
 findings remain and the cycle count is under 2 -> re-engage the *same*
 `light-factory-implementation` skill (via its optional `review_path` argument, ticket
-7) with the review findings as added context, re-run only `build`/`test` (the two
-checks with real pass/fail signal -- `lint`/`security` are inert placeholders, ticket
-8's Design Notes), then review again.
+7) with the review findings as added context, re-run only `build`/`test` (`lint` is
+not re-run inside a fix cycle and `security` is still a placeholder), then review
+again.
 
 A hard cap of 2 fix cycles (AD-11): if still unresolved after the second cycle's
 review, stop -- no third fix cycle -- and stamp `review.md`'s status
