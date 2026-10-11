@@ -35,6 +35,7 @@ light-factory has been exercised against a realistic codebase, not just its own 
 2. A tender can be created, listed in the open/closed overview, viewed, and gets remarks and offers added while open; adding either to a closed tender is rejected — exercised by both a real test suite and the Angular UI.
 3. The pipeline's build, test, and lint checks run the demo app's own commands (via the checks config), and it has run at least one real story against the app end to end, both gates exercised.
 4. The repo and that completed story are presentable as a demo without extra prep.
+5. A live run against the app shows the pipeline's fix loop engaging at least once and finishing within its cap of 2 (taken over from `initiative-light-factory`, CAP-7 — see Notes).
 
 ## Boundaries
 
@@ -57,3 +58,5 @@ The app's own code under `freight-tenders/`, its CI, and the checks config that 
 - Decision (2026-10-11): `security` stays a `"skipped"` placeholder in the pipeline (user's call) — three former gaps are closed, not four. Entry 9's walkthrough must not present a security check as real.
 - Decision (2026-10-11): lint added to entry 1, so Done when 1's "test/lint suite" has an owner; the lint tools are chosen when entry 1 is built.
 - Decision (2026-10-11): entries 7 and 9, the two hitl entries, were pulled into story files so their acceptance criteria are written before the build. Both are drafts (`refined` not set) until reviewed with the user.
+- Decision (2026-10-11): entry 10, "Fix loop engaged on a live run", moved here from `initiative-light-factory`'s `epic-pipeline-hardening` (its entry 4) with its plan, placed after entry 7 and before the sweep (user's call). Two small pipeline stories there produced no review finding; the app's larger, cross-layer stories are a better chance. Done when 5 is added for it; it cites no D-requirement, so `covers = []`, and it closes the open half of `initiative-light-factory`'s Done-when 3.
+- Decision (2026-10-11): entry 10 also gives the review agent more instructions (user's call). That edits `.claude/skills/light-factory-review/SKILL.md`, which is pipeline logic — a deliberate, single exception to this epic's Boundaries.

@@ -1,5 +1,6 @@
 # tickets.toml — epic-demo-app's agreed children, in build order.
 # Tracer bullet: entry 1. Refactor sweep: entry 8. Closing end-to-end suite: entry 9.
+# Entry 10 ("Fix loop engaged on a live run") added 2026-10-11, moved from initiative-light-factory's epic-pipeline-hardening; placed before entry 8.
 
 [[entry]]
 id = 1
@@ -80,13 +81,26 @@ risk = "medium"
 unknown = "Waits on initiative-light-factory's epic-pipeline-hardening entry 1 (the per-repo checks config) -- a cross-initiative dependency no `after` can express; the config's shape, and whether factory/'s own checks still run on a demo-app story, come from there."
 
 [[entry]]
+id = 10
+type = "story"
+title = "Fix loop engaged on a live run"
+description = "Gives the review agent more instructions (`.claude/skills/light-factory-review/SKILL.md`), so its review goes beyond reading the implementation against the plan's subtasks, then runs real freight-tenders stories through the pipeline until one run's review raises a finding and the bounded fix loop engages -- moved from initiative-light-factory's epic-pipeline-hardening entry 4 after two pipeline stories gave 0 fix cycles."
+verify = "The review skill's added instructions are merged, and a live run's review.md shows at least one fix cycle and no more than 2 before the run reaches evidence-approval; no story tells an agent to leave something out."
+covers = []
+after = [7]
+hitl = true
+risk = "medium"
+unknown = "Which instructions to add to the review agent is not settled -- candidates are judging behavior and edge cases beyond the plan's subtasks, the adequacy of the tests, and leftover or unremovable files (the implementation agent cannot delete a file); decide with the user at refine time. Editing the review skill is pipeline logic, which this epic's Boundaries otherwise exclude (see the epic's Notes)."
+references = [".claude/skills/light-factory-review/SKILL.md", "../../initiative-light-factory/architecture-light-factory/architecture-light-factory.md#ad-11", "story-fix-loop-engaged-on-a-live-run-plan.md"]
+
+[[entry]]
 id = 8
 type = "story"
 title = "Refactor sweep"
-description = "Closes out scope deferred during entries 1-7 and findings surfaced along the way; no new behavior."
-verify = "The full test suite (backend + frontend) passes, and every finding deferred across entries 1-7 is resolved or re-parked in Notes with a reason."
+description = "Closes out scope deferred during entries 1-7 and 10 and findings surfaced along the way; no new behavior."
+verify = "The full test suite (backend + frontend) passes, and every finding deferred across entries 1-7 and 10 is resolved or re-parked in Notes with a reason."
 covers = []
-after = [1, 2, 3, 4, 5, 6, 7]
+after = [1, 2, 3, 4, 5, 6, 7, 10]
 hitl = false
 risk = "low"
 

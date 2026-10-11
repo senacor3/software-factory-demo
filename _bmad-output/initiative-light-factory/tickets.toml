@@ -20,5 +20,5 @@ after = [{ epic = 1, needs = "the built, live-proven pipeline" }]
 id = 3
 slug = "epic-pipeline-hardening"
 title = "Configurable checks and the pipeline's remaining gaps"
-covers = ["CAP-1", "CAP-2", "CAP-3", "CAP-5", "CAP-7"]
+covers = ["CAP-1", "CAP-2", "CAP-3", "CAP-5"]
 after = [{ epic = 2, needs = "the six-job pipeline with the clarification loop, supersession, and reject-closing built" }]

@@ -15,7 +15,7 @@ status: done
 
 # Closing the pipeline's open issues
 
-> **Status:** done (2026-10-11). Shown live: the clarification loop, supersession, and a reject closing its PR at both gates. Not shown: the fix loop engaging, the clarification cap being reached, and a merge through the six-job pipeline — `epic-pipeline-hardening` owns the first and the last.
+> **Status:** done (2026-10-11). Shown live: the clarification loop, supersession, and a reject closing its PR at both gates. Not shown: the fix loop engaging, the clarification cap being reached, and a merge through the six-job pipeline — The merge was shown by `epic-pipeline-hardening` ticket 3; the fix loop is now `epic-demo-app` entry 10.
 
 ## Description
 
@@ -30,7 +30,7 @@ status: done
 Each line gives the capability, then the gap as it stood at inception (2026-10-10), then the ticket that closed it.
 
 - CAP-2 (reused): An agent can analyze the story, propose a solution, run a clarification loop on open questions, and document decisions. — v1 shipped as single-pass-halt-immediately (no real bounded loop); the real mechanism is deferred and conflicts with AD-2's two-gate model as written. Closed by tickets 2.1 and 2.2.
-- CAP-7 (reused): Review findings route back to the implementation agent for a bounded number of fix cycles. — mechanically capped at 2, but never demonstrated engaging even once on a live run (0 of 2 used). Not closed here: moved to `epic-pipeline-hardening` entry 4 (2026-10-11).
+- CAP-7 (reused): Review findings route back to the implementation agent for a bounded number of fix cycles. — mechanically capped at 2, but never demonstrated engaging even once on a live run (0 of 2 used). Not closed here: moved to `epic-pipeline-hardening` entry 4 (2026-10-11), and from there to `epic-demo-app` entry 10 the same day.
 - CAP-3 (reused): The requesting developer can review and confirm the proposed plan before any code is written; a reject is terminal. — reject does not yet close the `plan-approval` PR; was deferred twice (protection was inactive, and the deployment-review-API query was unbuilt). Protection is now active. Closed by ticket 2.5.
 - CAP-8 (reused): The requesting developer approves `evidence-approval` from a concise summary; a change-request decision is terminal. — same reject-closes-PR gap as CAP-3, for `evidence-approval`. Closed by ticket 2.5.
 - CAP-1 / initiative Done-when 5 (reused): a re-triggered run of a rejected or capped-out story supersedes its predecessor's PR cleanly. — AD-15's supersession-closing is unbuilt; two abandoned PRs from ticket 1.13's failed live attempts had to be closed by hand. Closed by ticket 2.4.

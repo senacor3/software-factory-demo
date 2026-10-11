@@ -1,5 +1,6 @@
 # tickets.toml — epic-pipeline-hardening's agreed children, in build order.
-# Tracer bullet: entry 1. Refactor sweep: entry 6. No closing end-to-end suite (entries 3 and 4 are live runs; see the epic's Notes).
+# Tracer bullet: entry 1. Refactor sweep: entry 6. No closing end-to-end suite (entry 3 is a live run; see the epic's Notes).
+# Entry 4 ("Fix loop engaged on a live run") moved 2026-10-11 to initiative-demo-app's epic-demo-app as its entry 10; its id is not reused.
 
 [[entry]]
 id = 1
@@ -39,19 +40,6 @@ risk = "medium"
 references = ["architecture-light-factory/architecture-light-factory.md#ad-8", "architecture-light-factory/architecture-light-factory.md#ad-15", "stories/validate-story-file-location.md", "deferred-work.md"]
 
 [[entry]]
-id = 4
-type = "story"
-title = "Fix loop engaged on a live run"
-description = "Runs a real story on which the review agent raises at least one finding, so the bounded fix loop engages live for the first time."
-verify = "A live run's `review.md` shows at least one fix cycle used and no more than 2, and the run then reaches `evidence-approval`."
-covers = ["CAP-7"]
-after = [3]
-hitl = true
-risk = "medium"
-unknown = "How to make a review finding appear reliably without faking it -- which story, and whether its acceptance criteria can be written so a first implementation plausibly misses one; settle at refine time."
-references = ["architecture-light-factory/architecture-light-factory.md#ad-11"]
-
-[[entry]]
 id = 5
 type = "spike"
 title = "Blueprint update-propagation: decide"
@@ -67,9 +55,9 @@ references = ["architecture-light-factory/architecture-light-factory.md#ad-1", "
 id = 6
 type = "story"
 title = "Refactor sweep"
-description = "Closes out doc drift and findings deferred across entries 1-5, including AD-15's concurrency-key wording once entry 3 has merged; no new behavior."
-verify = "The checks suite passes, and every finding deferred across entries 1-5 is resolved or re-parked in Notes with a reason."
+description = "Closes out doc drift and findings deferred across entries 1, 2, 3, and 5, including AD-15's concurrency-key wording once entry 3 has merged; no new behavior."
+verify = "The checks suite passes, and every finding deferred across entries 1, 2, 3, and 5 is resolved or re-parked in Notes with a reason."
 covers = []
-after = [1, 2, 3, 4, 5]
+after = [1, 2, 3, 5]
 hitl = false
 risk = "low"
