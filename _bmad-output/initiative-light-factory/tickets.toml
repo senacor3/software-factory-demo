@@ -1,6 +1,7 @@
 # tickets.toml — initiative-light-factory's agreed children.
 # Epic 1 built CAP-1..CAP-9 as one tightly coupled loop, one owner (see initiative Notes).
 # Epic 2 closes the gaps epic 1's 2026-10-10 live run surfaced against those same capabilities.
+# Epic 3 makes the checks configurable per repo and owns what epics 1 and 2 left open.
 
 [[epic]]
 id = 1
@@ -12,5 +13,12 @@ covers = ["CAP-1", "CAP-2", "CAP-3", "CAP-4", "CAP-5", "CAP-6", "CAP-7", "CAP-8"
 id = 2
 slug = "epic-pipeline-open-issues"
 title = "Closing the pipeline's open issues"
-covers = ["CAP-1", "CAP-2", "CAP-3", "CAP-7", "CAP-8"]
+covers = ["CAP-1", "CAP-2", "CAP-3", "CAP-8"]
 after = [{ epic = 1, needs = "the built, live-proven pipeline" }]
+
+[[epic]]
+id = 3
+slug = "epic-pipeline-hardening"
+title = "Configurable checks and the pipeline's remaining gaps"
+covers = ["CAP-1", "CAP-2", "CAP-3", "CAP-5", "CAP-7"]
+after = [{ epic = 2, needs = "the six-job pipeline with the clarification loop, supersession, and reject-closing built" }]

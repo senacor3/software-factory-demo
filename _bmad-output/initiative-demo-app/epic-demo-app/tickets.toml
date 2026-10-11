@@ -5,8 +5,8 @@
 id = 1
 type = "story"
 title = "Project scaffold & CI"
-description = "Scaffolds the Spring Boot backend and Angular frontend as separate buildable projects in this repo, with CI running each project's build+test, and a trivial end-to-end path (a health-check endpoint rendered on one Angular page, its label in German) proving the two connect."
-verify = "CI goes green on a fresh clone; the Angular page shows a live value from the Spring Boot health endpoint behind a German-language label."
+description = "Scaffolds the Spring Boot backend and Angular frontend as separate buildable projects under `freight-tenders/` in this repo, with CI running each project's build, test, and lint, and a trivial end-to-end path (a health-check endpoint rendered on one Angular page, its label in German) proving the two connect."
+verify = "CI goes green on a fresh clone, running build, test, and lint for both projects; the Angular page shows a live value from the Spring Boot health endpoint behind a German-language label."
 covers = ["D1"]
 after = []
 hitl = false
@@ -70,14 +70,14 @@ risk = "medium"
 [[entry]]
 id = 7
 type = "story"
-title = "Wire light-factory onto this repo"
-description = "Copies light-factory's workflow blueprint (.github/workflows/light-factory.yml, factory/, .claude/skills/) onto this repo and sets up its required GitHub Environments/secrets -- only needs entry 1's repo/CI to exist, not the domain, and touches none of entries 2-6's src/ files, so it can build alongside them."
-verify = "A trivial dispatch against this repo reaches and pauses at plan-approval, proving the gates are live here, same as the original repo."
+title = "Point light-factory at the demo app"
+description = "Adds the demo app's build, test, and lint commands to the repo's checks config (and any runner toolchain setup they need), so a pipeline run on a story touching `freight-tenders/` checks the app itself -- the pipeline, its Environments, and its secrets already exist in this repo, so nothing is copied; needs only entry 1's scaffold and touches none of entries 2-6's src/ files, so it can build alongside them."
+verify = "A trivial story touching `freight-tenders/` pauses at plan-approval, and after approval its evidence/checks/ records show the app's backend and frontend build, test, and lint commands ran and passed."
 covers = ["D3"]
 after = [1]
 hitl = true
 risk = "medium"
-unknown = "Depends on initiative-light-factory's epic-pipeline-open-issues being built first, so this repo starts from the fixed blueprint -- a cross-initiative dependency no `after` can express; confirm timing with the user when this entry starts."
+unknown = "Waits on initiative-light-factory's epic-pipeline-hardening entry 1 (the per-repo checks config) -- a cross-initiative dependency no `after` can express; the config's shape, and whether factory/'s own checks still run on a demo-app story, come from there."
 
 [[entry]]
 id = 8
@@ -94,7 +94,7 @@ risk = "low"
 id = 9
 type = "story"
 title = "Closing end-to-end suite"
-description = "Dispatches a real, non-trivial story through light-factory against this repo end to end (both gates exercised), and polishes the README/walkthrough (in English, like the rest of the docs -- the German UI is the app's, not the repo's documentation) so the repo and that run are presentable as a demo."
+description = "Dispatches a real, non-trivial story through light-factory against this repo end to end (both gates exercised), and polishes `freight-tenders/`'s README and walkthrough (in English, like the rest of the docs -- the German UI is the app's, not the repo's documentation) so the repo and that run are presentable as a demo."
 verify = "A real story run completes to merge through this repo's light-factory pipeline, and the README gives a semi-technical reader everything needed to follow it without extra prep."
 covers = ["D3", "D4"]
 after = [8]

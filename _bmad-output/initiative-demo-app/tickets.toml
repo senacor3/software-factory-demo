@@ -3,5 +3,5 @@
 [[epic]]
 id = 1
 slug = "epic-demo-app"
-title = "Build and wire the demo app"
+title = "Build and wire the freight tender demo app"
 covers = ["D1", "D2", "D3", "D4"]

@@ -1,0 +1,75 @@
+# tickets.toml — epic-pipeline-hardening's agreed children, in build order.
+# Tracer bullet: entry 1. Refactor sweep: entry 6. No closing end-to-end suite (entries 3 and 4 are live runs; see the epic's Notes).
+
+[[entry]]
+id = 1
+type = "story"
+title = "Configurable mechanical checks"
+description = "Moves the build/test/lint/security commands out of `factory/scripts/run_checks.py` into a per-repo checks config the script reads, with this repo's config reproducing today's commands and a check with no command reporting `skipped`."
+verify = "With this repo's config the checks record the same pass/fail results as before; pointing the config at a different command changes what runs with no code edit; a check with no command records `status: skipped`."
+covers = ["CAP-5"]
+after = []
+hitl = false
+risk = "medium"
+unknown = "Config format and location, how one repo holding both `factory/` and `freight-tenders/` scopes its commands, and whether toolchain setup (JDK, Node) on the runner is part of the config -- settle at refine time and record an AD-6 addendum."
+references = ["architecture-light-factory/architecture-light-factory.md#ad-6", "architecture-light-factory/architecture-light-factory.md#ad-10", "factory/scripts/run_checks.py"]
+
+[[entry]]
+id = 2
+type = "story"
+title = "Clarification halt skips plan-approval"
+description = "Exposes the analysis status as a job output and conditions the `implementation` job on it, so a run that halted for clarification (below the cap or at it) ends without opening the `plan-approval` gate, as AD-13 says."
+verify = "A story seeded with an open question ends after `analysis` with no pending `plan-approval` review, and a story with no open questions still pauses at the gate; `checks`, `review`, `merge`, and `close-rejected-pr` are skipped cleanly on the halted run."
+covers = ["CAP-2", "CAP-3"]
+after = [1]
+hitl = false
+risk = "medium"
+references = ["architecture-light-factory/architecture-light-factory.md#ad-13", "architecture-light-factory/architecture-light-factory.md#ad-2", "deferred-work.md"]
+
+[[entry]]
+id = 3
+type = "story"
+title = "Merge the story-file-location story through the pipeline"
+description = "Dispatches `stories/validate-story-file-location.md` and takes it to merge, so `derive_story_slug` rejects story files outside `stories/` on `main` -- closing the concurrency-key item in deferred-work.md and giving the six-job pipeline its first live merge."
+verify = "The run merges to `main` with both gates approved by a person; afterwards a dispatch for `other/foo.md` is rejected with a message naming the path."
+covers = ["CAP-1"]
+after = [2]
+hitl = true
+risk = "medium"
+references = ["architecture-light-factory/architecture-light-factory.md#ad-8", "architecture-light-factory/architecture-light-factory.md#ad-15", "stories/validate-story-file-location.md", "deferred-work.md"]
+
+[[entry]]
+id = 4
+type = "story"
+title = "Fix loop engaged on a live run"
+description = "Runs a real story on which the review agent raises at least one finding, so the bounded fix loop engages live for the first time."
+verify = "A live run's `review.md` shows at least one fix cycle used and no more than 2, and the run then reaches `evidence-approval`."
+covers = ["CAP-7"]
+after = [3]
+hitl = true
+risk = "medium"
+unknown = "How to make a review finding appear reliably without faking it -- which story, and whether its acceptance criteria can be written so a first implementation plausibly misses one; settle at refine time."
+references = ["architecture-light-factory/architecture-light-factory.md#ad-11"]
+
+[[entry]]
+id = 5
+type = "spike"
+title = "Blueprint update-propagation: decide"
+description = "Decides whether a mechanism for carrying blueprint fixes into repos that copied it is worth building, now that the demo app lives in this repo and no second copy exists."
+verify = "A dated decision is recorded in the epic's Notes and the deferred-work.md entry is resolved or re-parked with its reason."
+covers = []
+after = []
+hitl = true
+risk = "low"
+references = ["architecture-light-factory/architecture-light-factory.md#ad-1", "deferred-work.md"]
+
+[[entry]]
+id = 6
+type = "story"
+title = "Refactor sweep"
+description = "Closes out doc drift and findings deferred across entries 1-5, including AD-15's concurrency-key wording once entry 3 has merged; no new behavior."
+verify = "The checks suite passes, and every finding deferred across entries 1-5 is resolved or re-parked in Notes with a reason."
+covers = []
+after = [1, 2, 3, 4, 5]
+hitl = false
+risk = "low"
