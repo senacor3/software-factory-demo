@@ -14,40 +14,43 @@ supersession works on the `light-factory/<story-slug>/` branch prefix).
 
 ## What to build
 
-Make one story-slug reachable through exactly one accepted input path, so the
-concurrency group and the slug always correspond.
+Make `derive_story_slug` accept a story file only when it is `stories/<slug>.md`
+relative to the repository root, whatever spelling the path was given in.
 
-- `stories/foo.md` — relative to the repository root, no leading `./`, no doubled
-  separators, no other directory in front — keeps working and gives `foo`.
-- `docs/stories/foo.md` and any other path with a directory in front of `stories/`
-  is rejected with a `ValueError` naming the path.
+- Resolve the given path against the working directory (the repository root when
+  the pipeline runs), then express it relative to that directory. The result must
+  be exactly `stories/<name>.md`.
+- `stories/foo.md`, `./stories/foo.md`, `stories//foo.md` and an absolute path to
+  that same file all give `foo`.
+- `docs/stories/foo.md`, `stories/billing/foo.md`, `other/foo.md`, a bare `foo.md`,
+  and a path that resolves outside the repository are rejected with a `ValueError`
+  naming the path as given.
 - The existing checks (`.md` extension, kebab-case name) stay as they are and keep
   their messages.
 - Add tests to `factory/scripts/tests/test_state_io.py` in the style already used
-  there. Existing tests must keep passing; adjust only those that pass a path the
-  new rule rejects.
+  there, covering each spelling above. Existing tests must keep passing; adjust
+  only those that pass a path the new rule rejects.
 - Update AD-15 in
   `_bmad-output/initiative-light-factory/architecture-light-factory/architecture-light-factory.md`:
-  its Rule currently says the guard holds per input path, not per slug, and points
-  at `deferred-work.md`. Once this is built, it holds per slug.
+  its Rule currently lists `docs/stories/foo.md` among the paths that still derive
+  one slug. After this change only different spellings of the one accepted file do,
+  each still in its own concurrency group (see the decision below).
 - Do not edit `.github/workflows/light-factory.yml` — a commit touching that
   directory cannot be pushed by the pipeline's token.
 
-## Not decided
+## Other spellings of the right file (decided 2026-10-11)
 
-What should happen to a path that names the right file with a different spelling —
-`./stories/foo.md`, `stories//foo.md`, or an absolute path such as
-`/repo/stories/foo.md`?
+A path that names the right file with a different spelling — `./stories/foo.md`,
+`stories//foo.md`, or an absolute path to it — is **normalised and accepted**, not
+rejected. This keeps the earlier decision in
+`stories/validate-story-file-location.md`, which accepted `./stories/foo.md` and
+an absolute path; nothing there is superseded or needs annotating.
 
-- **Reject it**, with a message that shows the accepted spelling. Simple, and the
-  concurrency group can never differ from the slug. It reverses an earlier
-  decision: `stories/validate-story-file-location.md` (2026-10-11) explicitly
-  accepted `./stories/foo.md` and `/repo/stories/foo.md`.
-- **Normalise it** to `stories/foo.md` and accept it. Friendlier, but the workflow's
-  concurrency group is taken from the raw input before any code runs, so two
-  spellings would still land in two groups — the collision would remain.
-
-This story does not choose. Do not pick one on the developer's behalf.
+Known and accepted: the workflow's concurrency group is taken from the raw input
+before any code runs, so two spellings of one file are still two groups, and two
+such runs in flight together can still close each other's PRs. This story removes
+the other half of the finding — a different file under another `stories/`
+directory sharing the slug — and leaves that one.
 
 ## Why
 
