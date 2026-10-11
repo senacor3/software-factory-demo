@@ -23,13 +23,14 @@ path, when the story file is not under a `stories/` directory. The existing chec
 - Do not edit `.github/workflows/light-factory.yml` — a commit touching that
   directory cannot be pushed by the pipeline's token.
 
-## Not decided yet
+## Sub-folders (decided 2026-10-11)
 
-Whether a story file in a **sub-folder** of `stories/` — for example
-`stories/billing/foo.md` — is accepted or rejected has not been decided. Accepting
-it brings the same-base-name collision back (`stories/a/foo.md` and
-`stories/b/foo.md`); rejecting it forbids grouping stories in folders. Do not pick
-one yourself: ask.
+A story file in a sub-folder of `stories/` — for example `stories/billing/foo.md` —
+is **rejected**. Only a file whose immediate parent directory is named `stories`
+is accepted (`stories/foo.md`, also when given with a leading path such as
+`./stories/foo.md` or `/repo/stories/foo.md`). Rejecting sub-folders is what keeps
+one story file mapped to one slug; grouping stories in folders is given up for that.
+Cover the sub-folder case with a test.
 
 ## Why
 
