@@ -10,6 +10,7 @@ assignee: ""
 risk: medium
 estimate: ""
 estimate_basis: ""
+status: done
 ---
 
 # The gated delivery pipeline
