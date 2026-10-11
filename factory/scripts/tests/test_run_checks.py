@@ -29,6 +29,9 @@ import state_io
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
+# The autouse fixture below replaces `run_checks._read_target_config`; keep the real one.
+_real_read_target_config = run_checks._read_target_config
+
 CONFIG = """\
 checks:
   build:
@@ -54,6 +57,13 @@ def _write_config(repo: Path, text: str = CONFIG) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text)
     return path
+
+
+@pytest.fixture(autouse=True)
+def no_target_config():
+    """Default every test to the working-tree config; target-branch tests re-patch."""
+    with patch("run_checks._read_target_config", return_value=None) as mock:
+        yield mock
 
 
 @pytest.fixture
@@ -271,6 +281,81 @@ def test_repo_config_holds_the_commands_the_script_used_to_hard_code():
     ]
     assert run_checks.load_commands("lint", cwd=REPO_ROOT) == [["uv", "run", "--with", "ruff", "ruff", "check", "factory/"]]
     assert run_checks.load_commands("security", cwd=REPO_ROOT) == []
+
+
+# --- config read from the target branch -------------------------------------------------
+
+
+TARGET_CONFIG = """\
+checks:
+  lint:
+    - ["target-lint"]
+"""
+
+
+def test_target_config_is_used_and_working_tree_ignored(repo, no_target_config):
+    no_target_config.return_value = TARGET_CONFIG
+    with patch("run_checks.subprocess.run", return_value=_ok()) as mock_run:
+        result = _run("lint", repo)
+
+    assert mock_run.call_args.args[0] == ["target-lint"]
+    assert result["status"] == "pass"
+    assert result["config_source"] == "origin/main"
+    assert _evidence(repo, "lint")["config_source"] == "origin/main"
+
+
+def test_working_tree_is_used_when_target_config_unreadable(repo):
+    with patch("run_checks.subprocess.run", return_value=_ok()):
+        result = _run("lint", repo)
+
+    assert result["config_source"] == "working-tree"
+    assert _evidence(repo, "lint")["config_source"] == "working-tree"
+
+
+def test_missing_config_everywhere_fails_with_null_source(tmp_path):
+    result = _run("lint", tmp_path)
+
+    assert result["status"] == "fail"
+    assert result["config_source"] is None
+    assert _evidence(tmp_path, "lint")["config_source"] is None
+
+
+def test_target_config_disabling_a_check_skips_it_despite_working_tree(repo, no_target_config):
+    no_target_config.return_value = "checks:\n  test: []\n"
+    with patch("run_checks.subprocess.run") as mock_run:
+        result = _run("test", repo)
+
+    mock_run.assert_not_called()
+    assert result["status"] == "skipped"
+    assert result["config_source"] == "origin/main"
+
+
+def test_malformed_target_config_is_a_fail_with_target_source(repo, no_target_config):
+    no_target_config.return_value = "checks: [unclosed"
+    result = _run("lint", repo)
+
+    assert result["status"] == "fail"
+    assert "not valid YAML" in result["detail"]
+    assert result["config_source"] == "origin/main"
+
+
+def test_read_target_config_returns_stdout_and_runs_git_show(tmp_path):
+    with patch("run_checks.subprocess.run", return_value=_ok("checks: {}\n")) as mock_run:
+        text = _real_read_target_config(tmp_path)
+
+    assert text == "checks: {}\n"
+    assert mock_run.call_args.args[0] == ["git", "show", "origin/main:.github/post-implementation-checks.yml"]
+    assert mock_run.call_args.kwargs["cwd"] == tmp_path
+
+
+def test_read_target_config_returns_none_on_nonzero_exit(tmp_path):
+    with patch("run_checks.subprocess.run", return_value=_fail(returncode=128)):
+        assert _real_read_target_config(tmp_path) is None
+
+
+def test_read_target_config_returns_none_on_oserror(tmp_path):
+    with patch("run_checks.subprocess.run", side_effect=FileNotFoundError("git")):
+        assert _real_read_target_config(tmp_path) is None
 
 
 # --- CLI: exit codes ---------------------------------------------------------------

@@ -114,6 +114,66 @@ def test_missing_check_file_reported_as_not_run(tmp_path):
     assert "security: not-run" in body
 
 
+# --- config source ----------------------------------------------------------------------
+
+
+def _write_sources(state_directory, sources):
+    for name, source in sources.items():
+        path = state_directory / "evidence" / "checks" / f"{name}.json"
+        data = {"status": "pass"}
+        if source != "<absent>":
+            data["config_source"] = source
+        state_io.write_atomic(path, json.dumps(data) + "\n")
+
+
+def _summary_body(tmp_path, sources):
+    state_directory = state_io.ensure_layout("foo-bar", "run-1", base=tmp_path)
+    _write_sources(state_directory, sources)
+    _write_review(state_directory, "resolved", fix_cycle=0)
+    _write_findings(state_directory, [])
+    with patch("post_evidence_summary.open_implementation_pr.find_open_pr", return_value=_open_pr()), \
+         patch("post_evidence_summary.post_summary.post_comment") as post_comment:
+        post_evidence_summary.post_evidence_summary("foo-bar", "run-1", state_base=tmp_path)
+    return post_comment.call_args.args[1]
+
+
+def _all(source):
+    return {name: source for name in post_evidence_summary.CHECK_NAMES}
+
+
+def test_config_line_shows_shared_source(tmp_path):
+    body = _summary_body(tmp_path, _all("origin/main"))
+    assert "- config: origin/main" in body
+    assert body.index("- security:") < body.index("- config:") < body.index("### Review")
+
+
+def test_config_line_unknown_when_sources_disagree(tmp_path):
+    sources = _all("origin/main")
+    sources["lint"] = "working-tree"
+    assert "- config: unknown" in _summary_body(tmp_path, sources)
+
+
+def test_config_line_unknown_when_key_missing(tmp_path):
+    sources = _all("origin/main")
+    sources["build"] = "<absent>"
+    assert "- config: unknown" in _summary_body(tmp_path, sources)
+
+
+def test_config_line_unknown_when_null(tmp_path):
+    assert "- config: unknown" in _summary_body(tmp_path, _all(None))
+
+
+def test_config_line_unknown_when_a_check_was_not_run(tmp_path):
+    state_directory = state_io.ensure_layout("foo-bar", "run-1", base=tmp_path)
+    _write_sources(state_directory, {"build": "origin/main", "test": "origin/main"})
+    _write_review(state_directory, "resolved", fix_cycle=0)
+    _write_findings(state_directory, [])
+    with patch("post_evidence_summary.open_implementation_pr.find_open_pr", return_value=_open_pr()), \
+         patch("post_evidence_summary.post_summary.post_comment") as post_comment:
+        post_evidence_summary.post_evidence_summary("foo-bar", "run-1", state_base=tmp_path)
+    assert "- config: unknown" in post_comment.call_args.args[1]
+
+
 # --- posting fails --------------------------------------------------------------------
 
 
