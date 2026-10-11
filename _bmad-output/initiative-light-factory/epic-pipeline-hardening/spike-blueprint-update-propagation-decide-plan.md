@@ -3,7 +3,7 @@ title: 'Blueprint update-propagation: decide'
 type: 'chore'
 ticket: '5'
 created: '2026-10-11'
-status: 'built'
+status: done
 baseline_revision: '84bebaf73ee8f3182362c04c7164438033cecb95'
 route: 'oneshot'
 route_source: 'auto'
