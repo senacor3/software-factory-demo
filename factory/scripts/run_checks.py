@@ -12,7 +12,10 @@ right after "Checkout implementation branch".
 
 The commands are not written here: they come from the repo's own
 `.github/post-implementation-checks.yml` (AD-6 addendum), so the same script checks
-whatever project the repo holds. Each check holds a list of commands; all of them
+whatever project the repo holds. The config is read from `origin/main`, not from the
+story branch's working tree, so a story cannot weaken its own checks; only when
+`origin/main` cannot be read does it fall back to the working tree. Where it came from
+is recorded as `config_source` in every evidence file. Each check holds a list of commands; all of them
 run, in order, and the check stops at the first failure. A check with no commands
 records `status: "skipped"`, never `"pass"` -- in this repo that is `security`, by
 decision (user's call, 2026-10-11). A missing or malformed config is a `"fail"` that
@@ -49,31 +52,90 @@ PYTHON_TOKEN = "{python}"
 NOT_CONFIGURED_DETAIL = f"no command configured for this check in {CONFIG_RELPATH}"
 
 
+TARGET_BRANCH = "main"
+
+SOURCE_TARGET = f"origin/{TARGET_BRANCH}"
+SOURCE_WORKING_TREE = "working-tree"
+
+
 class ChecksConfigError(Exception):
-    """The checks config is missing, unreadable, or not in the expected shape."""
+    """The checks config is missing, unreadable, or not in the expected shape.
+
+    `source` says where the config came from (`origin/main`, `working-tree`), or is
+    None when it could not be read at all.
+    """
+
+    def __init__(self, message: str, source: str | None = None):
+        super().__init__(message)
+        self.source = source
+
+
+def _read_target_config(cwd: str | os.PathLike | None = None) -> str | None:
+    """Return the checks config as it is on `origin/<TARGET_BRANCH>`, or None.
+
+    None covers every way the read can fail -- a missing ref, a non-git directory, a
+    missing git binary -- so the caller can fall back to the working tree.
+    """
+    try:
+        proc = subprocess.run(
+            ["git", "show", f"{SOURCE_TARGET}:{CONFIG_RELPATH.as_posix()}"],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return None
+    if proc.returncode != 0:
+        return None
+    return proc.stdout
 
 
 def load_commands(name: str, *, cwd: str | os.PathLike | None = None) -> list[list[str]]:
     """Return the commands configured for check `name`; an empty list means none.
 
-    The config is resolved against `cwd` when one is given (the fix loop passes the
-    checkout it works in), else the working directory. Raises `ChecksConfigError`
-    for a missing file, invalid YAML, a check name outside `CHECK_NAMES`, or a
-    command that is not a non-empty list of strings.
+    See `_load_config` for where the config is read from and what raises.
+    """
+    return _load_config(name, cwd)[0]
+
+
+def _load_config(name: str, cwd: str | os.PathLike | None = None) -> tuple[list[list[str]], str | None]:
+    """Return `(commands, source)` for check `name`; no commands means none configured.
+
+    The config is read from `origin/<TARGET_BRANCH>` so a story cannot weaken its own
+    checks; only when that cannot be read does it fall back to the working tree under
+    `cwd` (the fix loop passes the checkout it works in), else the working directory.
+    Raises `ChecksConfigError` (carrying `source`) for a missing file, invalid YAML, a
+    check name outside `CHECK_NAMES`, or a command that is not a non-empty list of
+    strings.
     """
     # Imported here, not at module top, so importing this module (fix_loop_graph.py
     # does) needs no third-party package until a config is actually read -- mirrors
     # the graphs' own deferred `langgraph` import.
     import yaml
 
-    path = Path(cwd or ".") / CONFIG_RELPATH
-    try:
-        text = path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        raise ChecksConfigError(f"checks config not found: {path}") from None
-    except (OSError, UnicodeDecodeError) as e:
-        raise ChecksConfigError(f"cannot read checks config {path}: {e}") from e
+    text = _read_target_config(cwd)
+    if text is not None:
+        source = SOURCE_TARGET
+        path = f"{SOURCE_TARGET}:{CONFIG_RELPATH.as_posix()}"
+    else:
+        path = Path(cwd or ".") / CONFIG_RELPATH
+        try:
+            text = path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            raise ChecksConfigError(f"checks config not found: {path}") from None
+        except (OSError, UnicodeDecodeError) as e:
+            raise ChecksConfigError(f"cannot read checks config {path}: {e}") from e
+        source = SOURCE_WORKING_TREE
 
+    try:
+        return _parse_commands(name, text, path, yaml), source
+    except ChecksConfigError as e:
+        e.source = source
+        raise
+
+
+def _parse_commands(name: str, text: str, path: object, yaml) -> list[list[str]]:
     try:
         data = yaml.safe_load(text)
     except yaml.YAMLError as e:
@@ -163,9 +225,10 @@ def run_check(
     all pass, and `commands` lists every command that ran.
     """
     try:
-        commands = load_commands(name, cwd=cwd)
+        commands, source = _load_config(name, cwd)
     except ChecksConfigError as e:
         result = {"status": "fail", "command": None, "returncode": None, "detail": str(e), "commands": []}
+        source = e.source
     else:
         if not commands:
             result = {"status": "skipped", "command": None, "returncode": None, "detail": NOT_CONFIGURED_DETAIL, "commands": []}
@@ -177,6 +240,7 @@ def run_check(
                 if result["status"] == "fail":
                     break
             result["commands"] = ran
+    result["config_source"] = source
 
     _write_evidence(name, story_slug, run_id, result, state_base=state_base)
     return result

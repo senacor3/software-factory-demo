@@ -56,10 +56,21 @@ def _read_findings(state_directory: Path) -> list:
     return data.get("findings") or []
 
 
+def _config_source(checks: dict) -> str:
+    """The one `config_source` all checks agree on, else `unknown`."""
+    sources = {checks[name].get("config_source") for name in CHECK_NAMES}
+    if len(sources) == 1:
+        (source,) = sources
+        if source:
+            return str(source)
+    return "unknown"
+
+
 def _render_summary(checks: dict, review_meta: dict, findings: list) -> str:
     lines = ["## Evidence summary", "", "### Checks", ""]
     for name in CHECK_NAMES:
         lines.append(f"- {name}: {checks[name].get('status', 'unknown')}")
+    lines.append(f"- config: {_config_source(checks)}")
 
     lines += ["", "### Review", ""]
     lines.append(f"- status: {review_meta.get('status', 'unknown')}")

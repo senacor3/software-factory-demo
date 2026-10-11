@@ -6,6 +6,9 @@
 # The check names are fixed: build, test, lint, security. A check with no commands
 # records `status: skipped`, never `pass` -- that is `security` in this repo.
 # `{python}` is replaced with the interpreter running run_checks.py.
+#
+# run_checks.py reads this file from origin/main, not from the story branch, so a
+# change here applies to runs started after it is merged.
 checks:
   build:
     - ["{python}", "-m", "compileall", "factory", "-q"]
