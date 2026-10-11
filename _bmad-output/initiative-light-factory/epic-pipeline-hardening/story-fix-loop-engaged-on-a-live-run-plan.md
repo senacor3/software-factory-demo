@@ -32,6 +32,11 @@ Design choice in the first story, made while drafting and put to the human with 
 
 Risk to this ticket's goal: if the implementation breaks a test, `Checks` fails and the run stops before review, so the loop cannot engage on that run.
 
+Attempts, on `senacor3/software-factory-demo`, 2026-10-11. Every gate decision was the human's own action.
+
+- **Attempt 1 -- run `38147061301`, `stories/read-checks-config-from-target-branch.md`: 0 fix cycles.** Analysis resolved with no question (PR #9); after `plan-approval`, `Implementation`, `Checks`, and `Review & fix loop` succeeded; review `resolved`, 0 findings, `fix_cycle: 0`. The implementer missed nothing across two scripts, two test files, and three documents, so breadth alone did not produce a finding. The human approved `evidence-approval`; merged as `d28e700`. The feature works on the runner: the evidence summary shows `config: origin/main`. This resolves the checks-weakening entry in `deferred-work.md`. Local `main` after the pull: 266 tests pass, lint clean.
+- **Attempt 2 -- `stories/distinct-exit-code-for-status-output-failure.md`** (user's choice, 2026-10-11): the low finding rejected in ticket 3.2's review. Small, with a requirement that is easy to half-do (a distinct exit code, no stdout line on that path, and the docstring's case list gaining exit codes it does not carry today).
+
 ## Plan Change Log
 
 ## Review Triage Log
