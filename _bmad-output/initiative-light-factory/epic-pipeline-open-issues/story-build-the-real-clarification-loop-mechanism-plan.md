@@ -3,7 +3,7 @@ title: 'Build the real clarification-loop mechanism'
 type: 'feature'
 ticket: '2'
 created: '2026-10-11'
-status: 'built'
+status: done
 baseline_revision: 'de99b97f8c59b09b7dde278df54c587e6091c439'
 route: 'full'
 route_source: 'auto'

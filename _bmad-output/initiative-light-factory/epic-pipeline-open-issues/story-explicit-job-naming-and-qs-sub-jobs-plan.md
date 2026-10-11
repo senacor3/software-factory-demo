@@ -3,7 +3,7 @@ title: 'Explicit job naming and QS sub-jobs'
 type: 'refactor'
 ticket: 8
 created: '2026-10-11'
-status: 'built'
+status: done
 route: 'full'
 route_source: 'auto'
 review: 'quick'

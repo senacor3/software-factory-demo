@@ -3,7 +3,7 @@ title: 'Mechanical checks'
 type: 'feature'
 ticket: '8'
 created: '2026-10-02'
-status: 'built'
+status: done
 baseline_revision: '1b4ecd54b31a46c96e4090c4d957fb7200c0faa0'
 route: 'full'
 route_source: 'auto'

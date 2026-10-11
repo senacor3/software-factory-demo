@@ -3,7 +3,7 @@ title: 'Shared state library'
 type: 'feature'
 ticket: '2'
 created: '2026-10-01'
-status: 'built'
+status: done
 baseline_revision: '2de7b5941e7c987224b876f9fd2e3d13879b7e34'
 route: 'full'
 route_source: 'auto'

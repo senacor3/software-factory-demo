@@ -3,7 +3,7 @@ title: 'evidence-approval gate + merge'
 type: 'feature'
 ticket: '11'
 created: '2026-10-02'
-status: 'built'
+status: done
 baseline_revision: '8d785d5126895e68092aeed284de8e1d1d3e948c'
 route: 'full'
 route_source: 'auto'

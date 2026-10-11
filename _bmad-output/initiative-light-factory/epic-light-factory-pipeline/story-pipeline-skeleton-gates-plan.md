@@ -3,7 +3,7 @@ title: 'Pipeline skeleton & gates'
 type: 'feature'
 ticket: '1'
 created: '2026-10-01'
-status: 'built'
+status: done
 baseline_revision: '4e0d106b5d01c6d8e7bacca82a21cdae8169d4a5'
 route: 'full'
 route_source: 'auto'

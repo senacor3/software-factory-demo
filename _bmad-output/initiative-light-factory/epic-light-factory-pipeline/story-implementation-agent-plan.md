@@ -3,7 +3,7 @@ title: 'Implementation agent'
 type: 'feature'
 ticket: '7'
 created: '2026-10-02'
-status: 'built'
+status: done
 baseline_revision: 'ef2fcfe0fb68bea8b8ee2bd536722d8041555c6a'
 route: 'full'
 route_source: 'auto'

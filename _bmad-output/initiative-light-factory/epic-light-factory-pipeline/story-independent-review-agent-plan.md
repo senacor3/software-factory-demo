@@ -3,7 +3,7 @@ title: 'Independent review agent'
 type: 'feature'
 ticket: '9'
 created: '2026-10-02'
-status: 'built'
+status: done
 baseline_revision: 'f376699203f1359bb445b55f8db61e7a2ec2514e'
 route: 'full'
 route_source: 'auto'

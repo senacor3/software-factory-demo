@@ -3,7 +3,7 @@ title: 'Job 1: intake + analysis'
 type: 'feature'
 ticket: '3'
 created: '2026-10-01'
-status: 'built'
+status: done
 baseline_revision: '2bc22eea6018d19b8b6cee8c1bd98494147bd4a6'
 route: 'full'
 route_source: 'auto'

@@ -3,7 +3,7 @@ title: 'plan-approval gate wiring'
 type: 'feature'
 ticket: '5'
 created: '2026-10-02'
-status: 'built'
+status: done
 baseline_revision: '594a75f86dce3b98f25bdcd530fd647f4ecc879b'
 route: 'full'
 route_source: 'auto'

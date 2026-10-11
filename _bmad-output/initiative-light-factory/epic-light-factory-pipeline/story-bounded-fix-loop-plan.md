@@ -3,7 +3,7 @@ title: 'Bounded fix loop'
 type: 'feature'
 ticket: '10'
 created: '2026-10-02'
-status: 'built'
+status: done
 baseline_revision: 'bc0ea4f0c4a1c65d3e037519561263c68bdee77b'
 route: 'full'
 route_source: 'auto'

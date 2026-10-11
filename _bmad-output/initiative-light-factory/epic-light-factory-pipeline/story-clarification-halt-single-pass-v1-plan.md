@@ -3,7 +3,7 @@ title: 'Clarification halt (single-pass, v1)'
 type: 'feature'
 ticket: '4'
 created: '2026-10-02'
-status: 'built'
+status: done
 baseline_revision: 'a578a558a9f9cc4c9a542e7c58bd4d0d21a206ea'
 route: 'full'
 route_source: 'auto'

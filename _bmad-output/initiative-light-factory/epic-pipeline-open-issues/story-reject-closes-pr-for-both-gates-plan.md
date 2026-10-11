@@ -3,7 +3,7 @@ title: 'Reject-closes-PR for both gates'
 type: 'feature'
 ticket: '5'
 created: '2026-10-11'
-status: 'built'
+status: done
 baseline_revision: '4b093fa9120d2f29e0c7ecc133e6d58ec8f8f221'
 route: 'full'
 route_source: 'auto'

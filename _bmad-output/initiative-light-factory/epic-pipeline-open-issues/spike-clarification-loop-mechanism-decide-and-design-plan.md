@@ -3,7 +3,7 @@ title: 'Clarification-loop mechanism: decide and design'
 type: 'chore'
 ticket: '1'
 created: '2026-10-10'
-status: 'built'
+status: done
 baseline_revision: '0fb562c837a1e6448c9dca43bb93af8a7c8559d7'
 route: 'oneshot'
 route_source: 'auto'
