@@ -241,3 +241,47 @@ jobs:
           uv run factory/scripts/merge_story.py \
             --story-slug "${{ needs.analysis.outputs.story-slug }}" \
             --run-id "${{ needs.analysis.outputs.run-id }}"
+
+  close-rejected-pr:
+    name: "Close PR on gate reject"
+    needs: [analysis, implementation, merge]
+    # AD-2/AD-16: a reviewer rejecting a gate leaves the gated job with result
+    # `failure` and zero steps run -- indistinguishable from an ordinary crash by
+    # `needs.<job>.result` alone -- and skips every job after it. So this job runs
+    # whenever a gated job failed, and close_rejected_pr.py decides from the run's
+    # own review history whether that was a reject. `!cancelled()` keeps it off a
+    # concurrency-cancelled (superseded, AD-15) run, whose PR the superseding run
+    # closes itself; a successful run has no `failure` result and never gets here.
+    if: ${{ !cancelled() && (needs.implementation.result == 'failure' || needs.merge.result == 'failure') }}
+    runs-on: ubuntu-latest
+    # AD-5: actions:read scopes the review-history call (`gh api
+    # .../actions/runs/<id>/approvals`), pull-requests:write the `gh pr list` + `gh pr
+    # close --comment` calls, contents:read the checkout -- no push, no merge, no
+    # branch deletion. A deterministic script, never an agent (no `claude` CLI
+    # invocation anywhere in this job).
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+
+      # The gate checked is the one guarding the job that failed: plan-approval for
+      # Job 2, evidence-approval for Job 3 (Job 3 is `skipped`, never `failure`, when
+      # Job 2 failed, so the two cases cannot overlap). --github-run-id is the numeric
+      # id the review-history API wants; the run-id output is `run-<id>` and names the
+      # branch. An ordinary failure exits 0 with "not a reject" and leaves the PR open;
+      # only a `gh`/API failure fails this step.
+      - name: Close PR if the gate was rejected
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          uv run factory/scripts/close_rejected_pr.py \
+            --story-slug "${{ needs.analysis.outputs.story-slug }}" \
+            --run-id "${{ needs.analysis.outputs.run-id }}" \
+            --github-run-id "${{ github.run_id }}" \
+            --gate "${{ needs.implementation.result == 'failure' && 'plan-approval' || 'evidence-approval' }}"
