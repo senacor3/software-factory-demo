@@ -15,7 +15,12 @@ returned instead of recreating anything -- entry 4's clarification rounds re-cal
 `run_analysis` and must not fail or duplicate work against an already-open PR.
 
 Does NOT implement AD-15 supersession-closing (searching other branches for this
-story-slug) -- out of scope for this ticket, see deferred-work.md.
+story-slug) -- out of scope for this ticket, see deferred-work.md. Relatedly: leaving an
+at-cap PR open (see `post_clarification_cap_notice` below) means a developer who ignores
+it and re-triggers anyway accumulates a second, also-capped, also-unclosed open PR for the
+same story-slug on every further ignored re-trigger -- an accepted, documented limitation
+until AD-15 supersession-closing ships (epic-pipeline-open-issues/4), not a defect fixed
+here.
 
 All `git`/`gh` subprocess failures raise a single `PROpenError`, carrying the failing
 command and its output, so callers can distinguish this failure mode from a CAP-1
@@ -35,6 +40,13 @@ import state_io
 
 class PROpenError(RuntimeError):
     """A `git` or `gh` subprocess call failed while opening the implementation PR."""
+
+
+# AD-13's bounded-rounds cap (ticket 2.1, Option C) and the PR label that makes each
+# clarification round countable via AD-15's branch-prefix search. Matches AD-11's
+# fix-loop cap (MAX_FIX_CYCLES = 2) by design choice, not by shared code.
+CLARIFICATION_CAP = 2
+CLARIFICATION_LABEL = "clarification-round"
 
 
 def _run(cmd: list[str], *, cwd: str | os.PathLike | None = None) -> str:
@@ -62,6 +74,67 @@ def find_open_pr(branch: str, *, cwd: str | os.PathLike | None = None) -> dict |
         return None
     pr = prs[0]
     return {"branch": branch, "pr_number": pr["number"], "pr_url": pr["url"]}
+
+
+def count_clarification_rounds(
+    story_slug: str, run_id: str, *, cwd: str | os.PathLike | None = None
+) -> int:
+    """Count this story-slug's prior PRs labeled `clarification-round`, in **any** state
+    (open or closed) -- AD-13's cap must stay correct even when an at-cap PR is left open,
+    so counting only closed PRs would let the cap silently reset.
+
+    Excludes `run_id`'s own branch (`light-factory/<story_slug>/<run_id>`): this is called
+    before this run's own PR exists, but a same-run-id retry after a partial failure (e.g.
+    `label_clarification_round` already labeled this run's own PR, then a later step
+    failed) must not double-count that already-labeled PR as a *prior* round.
+
+    `gh pr list --head` only matches one exact branch name (no prefix/glob mode), so this
+    can't reuse `find_open_pr`'s query shape. Instead, lists PRs by `--label` repo-wide
+    (`--state all`, `--limit 100`) and filters client-side on the branch-prefix
+    `light-factory/<story_slug>/*` -- never another story-slug's PRs (a decoy PR for a
+    different slug is excluded by this prefix check). Known PoC-scope limitation,
+    consistent with AD-15's own unpaginated search: a repo with more than 100
+    `clarification-round`-labeled PRs across *all* story-slugs could undercount a given
+    slug's rounds -- not worth solving now, no existing query in this codebase paginates.
+    """
+    out = _run(
+        [
+            "gh",
+            "pr",
+            "list",
+            "--label",
+            CLARIFICATION_LABEL,
+            "--state",
+            "all",
+            "--limit",
+            "100",
+            "--json",
+            "headRefName",
+        ],
+        cwd=cwd,
+    )
+    import json
+
+    prs = json.loads(out) if out else []
+    prefix = f"light-factory/{story_slug}/"
+    own_branch = f"light-factory/{story_slug}/{run_id}"
+    return sum(
+        1
+        for pr in prs
+        if pr.get("headRefName", "").startswith(prefix) and pr.get("headRefName") != own_branch
+    )
+
+
+def clarification_status(
+    story_slug: str, run_id: str, *, cwd: str | os.PathLike | None = None
+) -> str:
+    """Decide `awaiting-clarification` vs `clarification-cap-reached` (AD-13's cap, 2) from
+    this story-slug's prior `clarification-round` round count, excluding `run_id`'s own
+    branch (see `count_clarification_rounds`). Deterministic -- never the agent -- and must
+    run before `plan.md`/`decisions.md` are written so their `status` field reflects the
+    decision. Raises PROpenError on any subprocess failure."""
+    count = count_clarification_rounds(story_slug, run_id, cwd=cwd)
+    return "clarification-cap-reached" if count >= CLARIFICATION_CAP else "awaiting-clarification"
 
 
 def open_pr_for_story(
@@ -137,3 +210,46 @@ def close_for_clarification(
     cleanup posture. Raises PROpenError on any subprocess failure."""
     comment = "Open questions from analysis:\n\n" + "\n".join(f"- {q}" for q in open_questions)
     _run(["gh", "pr", "close", str(pr_number), "--comment", comment], cwd=cwd)
+
+
+def label_clarification_round(pr_number: int, *, cwd: str | os.PathLike | None = None) -> None:
+    """Ensure the `clarification-round` label exists (`gh label create ... --force` is
+    idempotent -- creates or updates, so a fresh target repo needs no manual one-time
+    label setup, unlike the Environments that did need manual creation in epic 1), then
+    apply it to `pr_number`. Used by both the below-cap path (alongside
+    `close_for_clarification`, which stays unchanged) and `post_clarification_cap_notice`
+    (the at-cap path). Raises PROpenError on any subprocess failure."""
+    _run(
+        [
+            "gh",
+            "label",
+            "create",
+            CLARIFICATION_LABEL,
+            "--description",
+            "AD-13: a clarification round was closed or cap-noticed for this story-slug",
+            "--force",
+        ],
+        cwd=cwd,
+    )
+    _run(["gh", "pr", "edit", str(pr_number), "--add-label", CLARIFICATION_LABEL], cwd=cwd)
+
+
+def post_clarification_cap_notice(
+    pr_number: int,
+    open_questions: list[str],
+    *,
+    cwd: str | os.PathLike | None = None,
+) -> None:
+    """The at-cap path (AD-13, user's call 2026-10-11): label `pr_number` and post a
+    comment that the clarification budget is spent and it's up to the developer to decide
+    how to proceed -- does **not** close the PR (unlike `close_for_clarification`'s
+    below-cap path). Raises PROpenError on any subprocess failure."""
+    label_clarification_round(pr_number, cwd=cwd)
+    comment = (
+        f"Clarification budget spent ({CLARIFICATION_CAP}-round cap reached) for this "
+        "story-slug. It's up to the developer to decide how to proceed (e.g. rescope or "
+        "split the story) -- this PR is left open, not closed automatically.\n\n"
+        "Open questions from the latest analysis pass:\n\n"
+        + "\n".join(f"- {q}" for q in open_questions)
+    )
+    _run(["gh", "pr", "comment", str(pr_number), "--body", comment], cwd=cwd)

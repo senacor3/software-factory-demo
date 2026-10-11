@@ -96,8 +96,14 @@ def test_complete_with_open_questions_writes_awaiting_clarification(tmp_path):
     result = _result(open_questions=["what about X?"])
     fake_pr = {"branch": "light-factory/foo/run-1", "pr_number": 2, "pr_url": "https://example/2"}
     with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))), \
+         patch(
+             "analysis_graph.open_implementation_pr.clarification_status",
+             return_value="awaiting-clarification",
+         ) as mock_status, \
          patch("analysis_graph.open_implementation_pr.open_pr_for_story", return_value=fake_pr) as mock_open_pr, \
+         patch("analysis_graph.open_implementation_pr.label_clarification_round") as mock_label, \
          patch("analysis_graph.open_implementation_pr.close_for_clarification") as mock_close, \
+         patch("analysis_graph.open_implementation_pr.post_clarification_cap_notice") as mock_cap_notice, \
          patch("analysis_graph.post_summary.post_comment") as mock_post_summary:
         outcome = analysis_graph.run_analysis(
             "stories/foo.md", "foo", "run-1", state_base=tmp_path
@@ -111,9 +117,67 @@ def test_complete_with_open_questions_writes_awaiting_clarification(tmp_path):
     assert "what about X?" in dbody
 
     assert outcome["pr"] == fake_pr
+    mock_status.assert_called_once_with("foo", "run-1", cwd=None)
     mock_open_pr.assert_called_once_with("foo", "run-1", state_base=tmp_path, cwd=None)
+    mock_label.assert_called_once_with(2, cwd=None)
     mock_close.assert_called_once_with(2, ["what about X?"], cwd=None)
+    mock_cap_notice.assert_not_called()
     mock_post_summary.assert_not_called()
+
+
+# --- cap-reached path (AD-13's bounded-rounds mechanism, ticket 2.2) ----------------------
+
+
+def test_complete_with_open_questions_at_cap_writes_clarification_cap_reached(tmp_path):
+    result = _result(open_questions=["what about X?"])
+    fake_pr = {"branch": "light-factory/foo/run-1", "pr_number": 3, "pr_url": "https://example/3"}
+    with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))), \
+         patch(
+             "analysis_graph.open_implementation_pr.clarification_status",
+             return_value="clarification-cap-reached",
+         ) as mock_status, \
+         patch("analysis_graph.open_implementation_pr.open_pr_for_story", return_value=fake_pr) as mock_open_pr, \
+         patch("analysis_graph.open_implementation_pr.label_clarification_round") as mock_label, \
+         patch("analysis_graph.open_implementation_pr.close_for_clarification") as mock_close, \
+         patch("analysis_graph.open_implementation_pr.post_clarification_cap_notice") as mock_cap_notice, \
+         patch("analysis_graph.post_summary.post_comment") as mock_post_summary:
+        outcome = analysis_graph.run_analysis(
+            "stories/foo.md", "foo", "run-1", state_base=tmp_path
+        )
+
+    assert outcome["status"] == "clarification-cap-reached"
+    meta, _ = state_io.read_state(tmp_path / "foo" / "run-1" / "plan.md")
+    assert meta["status"] == "clarification-cap-reached"
+    dmeta, dbody = state_io.read_state(tmp_path / "foo" / "run-1" / "decisions.md")
+    assert dmeta["status"] == "clarification-cap-reached"
+    assert "what about X?" in dbody
+
+    assert outcome["pr"] == fake_pr
+    mock_status.assert_called_once_with("foo", "run-1", cwd=None)
+    mock_open_pr.assert_called_once_with("foo", "run-1", state_base=tmp_path, cwd=None)
+    mock_cap_notice.assert_called_once_with(3, ["what about X?"], cwd=None)
+    # at-cap never labels/closes/comments via the below-cap or ready-for-review paths --
+    # post_clarification_cap_notice (mocked above) owns its own labeling internally.
+    mock_label.assert_not_called()
+    mock_close.assert_not_called()
+    mock_post_summary.assert_not_called()
+
+
+def test_clarification_status_failure_raises_analysis_pr_open_error_with_no_state_files(tmp_path):
+    result = _result(open_questions=["what about X?"])
+    with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))), \
+         patch(
+             "analysis_graph.open_implementation_pr.clarification_status",
+             side_effect=open_implementation_pr.PROpenError("gh pr list failed: rate limited"),
+         ), \
+         patch("analysis_graph.open_implementation_pr.open_pr_for_story") as mock_open_pr:
+        with pytest.raises(analysis_graph.AnalysisPROpenError, match="rate limited"):
+            analysis_graph.run_analysis("stories/foo.md", "foo", "run-1", state_base=tmp_path)
+
+    # this is the new, earlier failure point: it runs before the state write, so -- unlike
+    # every other AnalysisPROpenError case -- no state files exist at all.
+    assert not (tmp_path / "foo").exists()
+    mock_open_pr.assert_not_called()
 
 
 # --- I/O Matrix row 3: incomplete or out-of-scope -----------------------------------------
@@ -235,7 +299,12 @@ def test_close_for_clarification_failure_raises_analysis_pr_open_error_but_state
     result = _result(open_questions=["what about X?"])
     fake_pr = {"branch": "light-factory/foo/run-1", "pr_number": 2, "pr_url": "https://example/2"}
     with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))), \
+         patch(
+             "analysis_graph.open_implementation_pr.clarification_status",
+             return_value="awaiting-clarification",
+         ), \
          patch("analysis_graph.open_implementation_pr.open_pr_for_story", return_value=fake_pr), \
+         patch("analysis_graph.open_implementation_pr.label_clarification_round"), \
          patch(
              "analysis_graph.open_implementation_pr.close_for_clarification",
              side_effect=open_implementation_pr.PROpenError("gh pr close failed: not found"),

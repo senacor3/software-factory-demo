@@ -64,7 +64,9 @@ SCHEMA_VERSION = 1
 # non-empty status is accepted for it (see module docstring / plan Design Notes).
 STAGES = ("analysis", "implementation", "review")
 STATUS_BY_STAGE = {
-    "analysis": frozenset({"drafted", "awaiting-clarification", "ready-for-review"}),
+    "analysis": frozenset(
+        {"drafted", "awaiting-clarification", "clarification-cap-reached", "ready-for-review"}
+    ),
     "review": frozenset(
         {"in-review", "findings-open", "fix-in-progress", "resolved", "unresolved-after-cap"}
     ),

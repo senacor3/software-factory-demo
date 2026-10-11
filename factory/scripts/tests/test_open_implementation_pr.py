@@ -36,6 +36,10 @@ def _pr_list_output(prs):
     return json.dumps(prs)
 
 
+def _labeled_pr_list_output(head_ref_names):
+    return json.dumps([{"headRefName": h} for h in head_ref_names])
+
+
 # --- fresh-create success path -----------------------------------------------------------
 
 
@@ -194,6 +198,165 @@ def test_close_for_clarification_subprocess_failure_raises_pr_open_error():
     with patch("open_implementation_pr.subprocess.run", side_effect=fake_run):
         with pytest.raises(open_implementation_pr.PROpenError, match="not found"):
             open_implementation_pr.close_for_clarification(42, ["what about X?"])
+
+
+# --- count_clarification_rounds -----------------------------------------------------------
+
+
+def test_count_clarification_rounds_zero_prior_returns_zero():
+    def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
+        assert cmd[:3] == ["gh", "pr", "list"]
+        assert "--label" in cmd and cmd[cmd.index("--label") + 1] == "clarification-round"
+        assert "--state" in cmd and cmd[cmd.index("--state") + 1] == "all"
+        return _ok(_labeled_pr_list_output([]))
+
+    with patch("open_implementation_pr.subprocess.run", side_effect=fake_run):
+        assert open_implementation_pr.count_clarification_rounds("foo", "run-2") == 0
+
+
+def test_count_clarification_rounds_counts_one_prior_open_pr():
+    def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
+        return _ok(_labeled_pr_list_output(["light-factory/foo/run-1"]))
+
+    with patch("open_implementation_pr.subprocess.run", side_effect=fake_run):
+        assert open_implementation_pr.count_clarification_rounds("foo", "run-2") == 1
+
+
+def test_count_clarification_rounds_counts_one_prior_closed_pr():
+    # --state all means a closed PR counts exactly the same as an open one.
+    def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
+        return _ok(_labeled_pr_list_output(["light-factory/foo/run-1"]))
+
+    with patch("open_implementation_pr.subprocess.run", side_effect=fake_run):
+        assert open_implementation_pr.count_clarification_rounds("foo", "run-2") == 1
+
+
+def test_count_clarification_rounds_excludes_decoy_pr_from_different_slug():
+    def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
+        return _ok(
+            _labeled_pr_list_output(
+                ["light-factory/foo/run-1", "light-factory/other-story/run-9"]
+            )
+        )
+
+    with patch("open_implementation_pr.subprocess.run", side_effect=fake_run):
+        assert open_implementation_pr.count_clarification_rounds("foo", "run-2") == 1
+
+
+def test_count_clarification_rounds_excludes_own_run_id_branch_on_same_run_retry():
+    # A same-run-id retry after a partial failure (e.g. label_clarification_round already
+    # succeeded, then a later step failed) must not count this run's own already-labeled
+    # PR as a *prior* round -- only genuinely earlier runs count.
+    def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
+        return _ok(
+            _labeled_pr_list_output(
+                ["light-factory/foo/run-1", "light-factory/foo/run-2"]
+            )
+        )
+
+    with patch("open_implementation_pr.subprocess.run", side_effect=fake_run):
+        assert open_implementation_pr.count_clarification_rounds("foo", "run-2") == 1
+
+
+def test_count_clarification_rounds_gh_failure_raises_pr_open_error():
+    def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
+        return _fail(stderr="gh: rate limited")
+
+    with patch("open_implementation_pr.subprocess.run", side_effect=fake_run):
+        with pytest.raises(open_implementation_pr.PROpenError, match="rate limited"):
+            open_implementation_pr.count_clarification_rounds("foo", "run-2")
+
+
+# --- clarification_status -------------------------------------------------------------------
+
+
+def test_clarification_status_below_cap_with_zero_prior():
+    with patch("open_implementation_pr.count_clarification_rounds", return_value=0):
+        assert open_implementation_pr.clarification_status("foo", "run-2") == "awaiting-clarification"
+
+
+def test_clarification_status_below_cap_with_one_prior():
+    with patch("open_implementation_pr.count_clarification_rounds", return_value=1):
+        assert open_implementation_pr.clarification_status("foo", "run-2") == "awaiting-clarification"
+
+
+def test_clarification_status_at_cap_with_two_prior():
+    with patch("open_implementation_pr.count_clarification_rounds", return_value=2):
+        assert open_implementation_pr.clarification_status("foo", "run-2") == "clarification-cap-reached"
+
+
+def test_clarification_status_at_cap_with_more_than_two_prior():
+    with patch("open_implementation_pr.count_clarification_rounds", return_value=5):
+        assert open_implementation_pr.clarification_status("foo", "run-2") == "clarification-cap-reached"
+
+
+# --- label_clarification_round ----------------------------------------------------------------
+
+
+def test_label_clarification_round_creates_label_then_adds_it():
+    calls = []
+
+    def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
+        calls.append(cmd)
+        return _ok()
+
+    with patch("open_implementation_pr.subprocess.run", side_effect=fake_run):
+        open_implementation_pr.label_clarification_round(42)
+
+    assert calls[0][:3] == ["gh", "label", "create"]
+    assert "clarification-round" in calls[0]
+    assert "--force" in calls[0]
+    assert calls[1] == ["gh", "pr", "edit", "42", "--add-label", "clarification-round"]
+
+
+def test_label_clarification_round_failure_raises_pr_open_error():
+    def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
+        return _fail(stderr="gh: label create failed")
+
+    with patch("open_implementation_pr.subprocess.run", side_effect=fake_run):
+        with pytest.raises(open_implementation_pr.PROpenError, match="label create failed"):
+            open_implementation_pr.label_clarification_round(42)
+
+
+# --- post_clarification_cap_notice ------------------------------------------------------------
+
+
+def test_post_clarification_cap_notice_labels_and_comments_but_never_closes():
+    calls = []
+
+    def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
+        calls.append(cmd)
+        return _ok()
+
+    with patch("open_implementation_pr.subprocess.run", side_effect=fake_run):
+        open_implementation_pr.post_clarification_cap_notice(42, ["what about X?", "and Y?"])
+
+    label_create_calls = [c for c in calls if c[:3] == ["gh", "label", "create"]]
+    assert len(label_create_calls) == 1
+
+    add_label_calls = [c for c in calls if c[:3] == ["gh", "pr", "edit"]]
+    assert add_label_calls == [["gh", "pr", "edit", "42", "--add-label", "clarification-round"]]
+
+    comment_calls = [c for c in calls if c[:3] == ["gh", "pr", "comment"]]
+    assert len(comment_calls) == 1
+    comment = comment_calls[0][comment_calls[0].index("--body") + 1]
+    assert "budget" in comment.lower()
+    assert "what about X?" in comment
+    assert "and Y?" in comment
+
+    close_calls = [c for c in calls if c[:3] == ["gh", "pr", "close"]]
+    assert close_calls == []
+
+
+def test_post_clarification_cap_notice_failure_raises_pr_open_error():
+    def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
+        if cmd[:3] == ["gh", "pr", "comment"]:
+            return _fail(stderr="gh: comment failed")
+        return _ok()
+
+    with patch("open_implementation_pr.subprocess.run", side_effect=fake_run):
+        with pytest.raises(open_implementation_pr.PROpenError, match="comment failed"):
+            open_implementation_pr.post_clarification_cap_notice(42, ["what about X?"])
 
 
 def test_state_base_override_is_used_for_git_add_paths(tmp_path):
