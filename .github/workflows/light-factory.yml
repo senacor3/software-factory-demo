@@ -41,6 +41,9 @@ jobs:
     outputs:
       story-slug: ${{ steps.derive.outputs.story-slug }}
       run-id: ${{ steps.derive.outputs.run-id }}
+      # The analysis status (AD-10's enum), written by analysis_graph.py; the
+      # `implementation` job's `if:` reads it (AD-13).
+      status: ${{ steps.analyze.outputs.status }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -73,6 +76,7 @@ jobs:
       # itself needs a token explicitly in its environment or every `gh pr list`/`gh pr
       # create` call fails auth, even though the permission is correctly present.
       - name: Run analysis
+        id: analyze
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           GH_TOKEN: ${{ github.token }}
@@ -85,6 +89,13 @@ jobs:
   implementation:
     name: "Implementation"
     needs: analysis
+    # AD-13: a run halted for clarification (`awaiting-clarification`, or
+    # `clarification-cap-reached`) ends here, without opening the gate. A job-level
+    # `if:` is evaluated before Environment protection, so a skipped job requests no
+    # review; `checks`, `review` and `merge` need this job and are skipped with it,
+    # and `close-rejected-pr` stays off because nothing failed. An allow-list on
+    # purpose: an empty or unknown status skips the gate rather than opening it.
+    if: ${{ needs.analysis.outputs.status == 'ready-for-review' }}
     environment: plan-approval
     runs-on: ubuntu-latest
     # AD-5/AD-6: contents:write scopes checkout_branch.py's git fetch/checkout and

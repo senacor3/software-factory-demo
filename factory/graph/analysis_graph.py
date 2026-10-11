@@ -309,6 +309,20 @@ def build_graph():
 # --- CLI ---------------------------------------------------------------------------------
 
 
+def _write_status_output(status: str) -> None:
+    """Expose the analysis status as the step output `status` (AD-13).
+
+    The workflow's `implementation` job runs only on `ready-for-review`, so a run
+    halted for clarification ends without opening the `plan-approval` gate. Outside
+    GitHub Actions `GITHUB_OUTPUT` is unset and nothing is written.
+    """
+    output_path = os.environ.get("GITHUB_OUTPUT")
+    if not output_path:
+        return
+    with open(output_path, "a", encoding="utf-8") as f:
+        f.write(f"status={status}\n")
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--story-file", required=True, help="path to the triggering story file")
@@ -329,6 +343,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"branch/PR-open step failed: {e}", file=sys.stderr)
         return 4
 
+    _write_status_output(outcome["status"])
     print(json.dumps({"ok": True, "status": outcome["status"]}))
     return 0
 

@@ -418,3 +418,57 @@ def test_cli_main_pr_open_error_exits_4(tmp_path, capsys, monkeypatch):
     captured = capsys.readouterr()
     assert rc == 4
     assert "auth error" in captured.err
+
+
+# --- CLI: status step output (AD-13) --------------------------------------------------------
+
+_MAIN_ARGS = ["--story-file", "stories/foo.md", "--story-slug", "foo", "--run-id", "run-1"]
+
+
+@pytest.fixture(autouse=True)
+def _no_inherited_github_output(monkeypatch):
+    """This suite is itself the pipeline's `test` check, so it runs inside GitHub
+    Actions: no test here may append to the runner's real step-output file."""
+    monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
+
+
+@pytest.mark.parametrize("status", ["ready-for-review", "awaiting-clarification", "clarification-cap-reached"])
+def test_cli_main_appends_status_to_github_output(tmp_path, monkeypatch, status):
+    output = tmp_path / "github_output"
+    output.write_text("story-slug=foo\n")
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+    with patch("analysis_graph.run_analysis", return_value={"status": status}):
+        rc = analysis_graph.main(_MAIN_ARGS)
+
+    assert rc == 0
+    assert output.read_text() == f"story-slug=foo\nstatus={status}\n"
+
+
+def test_cli_main_without_github_output_writes_no_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
+    with patch("analysis_graph.run_analysis", return_value={"status": "ready-for-review"}):
+        rc = analysis_graph.main(_MAIN_ARGS)
+
+    assert rc == 0
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    ("error", "exit_code"),
+    [
+        (analysis_graph.AnalysisHalted("incomplete story"), 1),
+        (analysis_graph.AnalysisInvocationError("tool broke"), 3),
+        (analysis_graph.AnalysisPROpenError("gh pr create failed"), 4),
+    ],
+    ids=["halted", "invocation error", "pr-open error"],
+)
+def test_cli_main_failure_writes_no_status_output(tmp_path, monkeypatch, error, exit_code):
+    output = tmp_path / "github_output"
+    output.write_text("")
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+    with patch("analysis_graph.run_analysis", side_effect=error):
+        rc = analysis_graph.main(_MAIN_ARGS)
+
+    assert rc == exit_code
+    assert output.read_text() == ""
