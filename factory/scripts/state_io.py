@@ -87,9 +87,12 @@ def now() -> str:
 def derive_story_slug(story_file: str | os.PathLike) -> str:
     """Derive the story-slug from the triggering story file's name (AD-8).
 
-    Expects `<anything>/<story-slug>.md` with the slug itself kebab-case. Raises
-    ValueError if the file has no `.md` extension or the slug isn't kebab-case --
-    AD-8 requires kebab-case on the input file, with no fallback normalization.
+    Expects `stories/<story-slug>.md` with the slug itself kebab-case; leading path
+    prefixes (`./stories/...`, `/repo/stories/...`) are fine, but the file's immediate
+    parent directory must be `stories` so sub-folders are rejected. Raises ValueError
+    if the file has no `.md` extension, the slug isn't kebab-case, or the file isn't
+    directly under `stories/` -- AD-8 requires kebab-case on the input file, with no
+    fallback normalization.
     """
     name = Path(story_file).name
     if not name.endswith(".md"):
@@ -99,6 +102,10 @@ def derive_story_slug(story_file: str | os.PathLike) -> str:
         raise ValueError(
             f"story file name {name!r} is not kebab-case "
             "(expected lowercase letters/digits/hyphens only, e.g. 'my-story-name.md')"
+        )
+    if Path(story_file).parent.name != "stories":
+        raise ValueError(
+            f"story file {str(story_file)!r} must be located at stories/<story-slug>.md"
         )
     return slug
 

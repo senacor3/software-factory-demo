@@ -57,6 +57,26 @@ def test_derive_story_slug_allows_digits():
     assert state_io.derive_story_slug("stories/story-v2.md") == "story-v2"
 
 
+def test_derive_story_slug_rejects_file_outside_stories_dir():
+    with pytest.raises(ValueError, match="other/foo.md"):
+        state_io.derive_story_slug("other/foo.md")
+
+
+def test_derive_story_slug_rejects_bare_filename():
+    with pytest.raises(ValueError):
+        state_io.derive_story_slug("foo.md")
+
+
+def test_derive_story_slug_rejects_stories_subfolder():
+    with pytest.raises(ValueError):
+        state_io.derive_story_slug("stories/billing/foo.md")
+
+
+def test_derive_story_slug_accepts_leading_path():
+    assert state_io.derive_story_slug("./stories/foo.md") == "foo"
+    assert state_io.derive_story_slug("/repo/stories/foo.md") == "foo"
+
+
 def test_derive_run_id_formats_run_dash_prefix():
     assert state_io.derive_run_id(12345) == "run-12345"
     assert state_io.derive_run_id("12345") == "run-12345"
@@ -277,6 +297,14 @@ def test_cli_derive_non_kebab_case_exits_2_and_prints_stderr(capsys):
     rc = state_io.main(
         ["derive", "--story-file", "stories/Not_Kebab.md", "--github-run-id", "999"]
     )
+    captured = capsys.readouterr()
+    assert rc == 2
+    assert captured.out == ""
+    assert "error" in captured.err
+
+
+def test_cli_derive_file_outside_stories_dir_exits_2_and_prints_stderr(capsys):
+    rc = state_io.main(["derive", "--story-file", "other/foo.md", "--github-run-id", "999"])
     captured = capsys.readouterr()
     assert rc == 2
     assert captured.out == ""
