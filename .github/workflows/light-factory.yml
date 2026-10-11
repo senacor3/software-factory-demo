@@ -23,7 +23,8 @@ on:
 # key is evaluated at trigger time from the workflow's own context, before
 # any job runs, so it cannot read a job output. A second dispatch for the
 # same story_file while a run is still in flight -- including one paused at
-# a gate -- cancels that run outright.
+# a gate -- cancels that run outright. The guard is per input path, not per
+# story-slug: several paths can still derive one slug (AD-15, deferred-work.md).
 concurrency:
   group: light-factory-${{ github.event.inputs.story_file }}
   cancel-in-progress: true
@@ -191,7 +192,9 @@ jobs:
 
       # CAP-5 mechanical checks (AD-6): 4 direct pipeline steps, never a graph node or
       # agent tool call. Each step runs the commands the repo configures for that
-      # check in .github/post-implementation-checks.yml -- a failing command exits
+      # check in .github/post-implementation-checks.yml, read as it is on origin/main
+      # so a story cannot change them by editing the config (run_checks.py itself
+      # still comes from the story branch) -- a failing command exits
       # non-zero and stops the job; a check with no command records status: skipped
       # (never pass) and exits 0, which is `security` in this repo. See
       # factory/scripts/run_checks.py and AD-6's addendum.

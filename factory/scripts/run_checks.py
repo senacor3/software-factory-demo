@@ -13,7 +13,8 @@ right after "Checkout implementation branch".
 The commands are not written here: they come from the repo's own
 `.github/post-implementation-checks.yml` (AD-6 addendum), so the same script checks
 whatever project the repo holds. The config is read from `origin/main`, not from the
-story branch's working tree, so a story cannot weaken its own checks; only when
+story branch's working tree, so a story cannot change the commands by editing the
+config (this script itself still runs from the story branch); only when
 `origin/main` cannot be read does it fall back to the working tree. Where it came from
 is recorded as `config_source` in every evidence file. Each check holds a list of commands; all of them
 run, in order, and the check stops at the first failure. A check with no commands
@@ -102,8 +103,8 @@ def load_commands(name: str, *, cwd: str | os.PathLike | None = None) -> list[li
 def _load_config(name: str, cwd: str | os.PathLike | None = None) -> tuple[list[list[str]], str | None]:
     """Return `(commands, source)` for check `name`; no commands means none configured.
 
-    The config is read from `origin/<TARGET_BRANCH>` so a story cannot weaken its own
-    checks; only when that cannot be read does it fall back to the working tree under
+    The config is read from `origin/<TARGET_BRANCH>` so a story cannot change the
+    commands by editing the config; only when that cannot be read does it fall back to the working tree under
     `cwd` (the fix loop passes the checkout it works in), else the working directory.
     Raises `ChecksConfigError` (carrying `source`) for a missing file, invalid YAML, a
     check name outside `CHECK_NAMES`, or a command that is not a non-empty list of
