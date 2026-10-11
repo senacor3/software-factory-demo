@@ -10,6 +10,7 @@ assignee: ""
 risk: medium
 estimate: ""
 estimate_basis: "envelope"
+status: done
 ---
 
 # Closing the pipeline's open issues
