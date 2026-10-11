@@ -73,6 +73,7 @@ Dependency arrows only point from GitHub-Actions-specific wiring inward. `factor
 - **Binds:** orchestration layer (`factory/graph/`); the boundary between the graph and direct pipeline steps
 - **Prevents:** splitting orchestration logic across languages or SDKs; wiring deterministic checks as LangGraph nodes or agent tool calls, which would silently move them from direct pipeline steps back into agent-delegated work
 - **Rule:** the orchestration graph is implemented in Python using LangGraph's native SDK, and its scope is judgment work only — analysis, implementation, review, and the fix loop. Deterministic checks (build, test, lint, security) are implemented as direct pipeline steps in `.github/workflows/`, never as graph nodes or agent tool calls.
+- **Addendum (2026-10-11, `epic-pipeline-hardening` ticket 1):** the commands those four steps run are not written in `run_checks.py`; they come from the repo's own `.github/post-implementation-checks.yml` (YAML, parsed with PyYAML), so one script checks whatever project the repo holds. The check names stay fixed (`build`, `test`, `lint`, `security`). Each check holds a list of commands, each a list of arguments with no shell; all of them run on every story, in order, with no path filtering, and the check stops at the first failure. A check with no command records `status: "skipped"`, never `"pass"` — in the light-factory repo that is `security`, permanently (user's call); a project that wants a real security check configures a command for it. A missing or malformed config is a `"fail"` naming the problem, never a silent skip. Runner toolchain setup (e.g. a JDK or Node) is not part of the config; it is a workflow step added with the project that needs it.
 
 ### AD-7 — External dependencies scoped to GitHub + Claude Code only
 
@@ -269,6 +270,7 @@ stateDiagram-v2
 ```text
 <target-repo>/
   .github/
+    post-implementation-checks.yml      # the repo's own commands for the build/test/lint/security checks (AD-6 addendum)
     workflows/
       light-factory.yml                 # ONE workflow, ONE run: jobs analysis -> [plan-approval] -> implementation ->
                                          # checks -> review -> [evidence-approval] -> merge, plus a trailing close-rejected-pr,
@@ -282,7 +284,7 @@ stateDiagram-v2
     scripts/
       checkout_branch.py                # deterministic: checks out the branch the analysis job already opened, never creates one -- run by implementation, checks and review (AD-12)
       commit_push_implementation.py     # deterministic: commits/pushes the implementation agent's edits and each later job's evidence (--label), no-op if none (AD-10)
-      run_checks.py                     # deterministic: build/test/lint (real) + security (placeholder) checks (AD-6, CAP-5)
+      run_checks.py                     # deterministic: runs the commands configured per check; a check with none is skipped (AD-6, CAP-5)
       open_implementation_pr.py         # deterministic: creates isolated branch, commits plan.md/decisions.md as the real first commit, opens PR, closes/links any superseded PR -- invoked from the analysis job once CAP-1 passes; later jobs check out the same branch rather than creating one (AD-12, AD-15)
       post_summary.py                   # posts a stage-gate summary as a PR comment (AD-4) -- shared by both gates; reused directly by analysis_graph.py (plan-approval) and by post_evidence_summary.py (evidence-approval)
       post_evidence_summary.py          # evidence-approval's own evidence-gathering + rendering, posts via post_summary.py (AD-4, CAP-8)

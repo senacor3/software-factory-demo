@@ -1,0 +1,15 @@
+# Commands for light-factory's mechanical checks (CAP-5, AD-6), read by
+# factory/scripts/run_checks.py. Each check holds a list of commands; every command
+# is a list of arguments (no shell). All of a check's commands run, in order, on
+# every story, and the check stops at the first one that fails.
+#
+# The check names are fixed: build, test, lint, security. A check with no commands
+# records `status: skipped`, never `pass` -- that is `security` in this repo.
+# `{python}` is replaced with the interpreter running run_checks.py.
+checks:
+  build:
+    - ["{python}", "-m", "compileall", "factory", "-q"]
+  test:
+    - ["uv", "run", "--with", "pytest", "--with", "pyyaml", "pytest", "factory/graph/tests/", "factory/scripts/tests/"]
+  lint:
+    - ["uv", "run", "--with", "ruff", "ruff", "check", "factory/"]

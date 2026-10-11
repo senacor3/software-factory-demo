@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.13,<3.14"
-# dependencies = ["langgraph>=1.2.12,<2"]
+# dependencies = ["langgraph>=1.2.12,<2", "pyyaml>=6,<7"]
 # ///
 """fix_loop_graph -- the review job's bounded fix loop (CAP-7, AD-11).
 

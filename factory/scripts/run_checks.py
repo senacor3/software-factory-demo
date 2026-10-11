@@ -1,34 +1,31 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.13"
+# dependencies = ["pyyaml>=6,<7"]
 # ///
 """run_checks -- CAP-5's deterministic mechanical-checks script (AD-6).
 
-Four checks, one function each, every one a plain subprocess call from this single
-script -- never a LangGraph node or agent tool call (AD-6). Wired into the `checks`
-job's workflow as 4 direct steps, each invoking one subcommand here right after
-"Checkout implementation branch".
+Four checks -- `build`, `test`, `lint`, `security` -- every one a plain subprocess
+call from this single script, never a LangGraph node or agent tool call (AD-6). Wired
+into the `checks` job's workflow as 4 direct steps, each invoking one subcommand here
+right after "Checkout implementation branch".
 
-`build` (`python -m compileall factory -q` -- this repo has no packaging/build step,
-so syntax/import sanity is the closest real equivalent) and `test` (the existing
-pytest suite) and `lint` (`ruff check` over `factory/`, configured by the root
-`ruff.toml`) are real checks that can genuinely pass or fail. `security` has no tool
-configured in this repo yet (no bandit config) -- user's call, 2026-10-02: it ships
-as an honest placeholder (`status: "skipped"`, never `"pass"`) rather than wiring
-real tooling now; see deferred-work.md.
+The commands are not written here: they come from the repo's own
+`.github/post-implementation-checks.yml` (AD-6 addendum), so the same script checks
+whatever project the repo holds. Each check holds a list of commands; all of them
+run, in order, and the check stops at the first failure. A check with no commands
+records `status: "skipped"`, never `"pass"` -- in this repo that is `security`, by
+decision (user's call, 2026-10-11). A missing or malformed config is a `"fail"` that
+names the problem, never a silent skip of every check.
 
 Evidence is written to `evidence/checks/<name>.json` via `state_io.write_atomic`
 *before* `main()` inspects the result's status to decide the exit code -- a failing
 check always leaves a record, never just a non-zero exit with nothing on disk.
 
-Commands (each `--story-slug S --run-id R`):
-  build     python -m compileall factory -q
-  test      uv run --with pytest pytest factory/graph/tests/ factory/scripts/tests/
-  lint      uv run --with ruff ruff check factory/
-  security  placeholder, always status: skipped
+Usage (each `--story-slug S --run-id R`): run_checks.py build | test | lint | security
 
-Exits 1 only when the written result's status is `"fail"` (build/test/lint); 0 for
-`"pass"` or `"skipped"`.
+Exits 1 only when the written result's status is `"fail"`; 0 for `"pass"` or
+`"skipped"`.
 """
 
 from __future__ import annotations
@@ -45,7 +42,64 @@ import state_io
 
 CHECK_NAMES = ("build", "test", "lint", "security")
 
-PLACEHOLDER_DETAIL = "no security tool wired for v1 -- see deferred-work.md"
+CONFIG_RELPATH = Path(".github") / "post-implementation-checks.yml"
+
+PYTHON_TOKEN = "{python}"
+
+NOT_CONFIGURED_DETAIL = f"no command configured for this check in {CONFIG_RELPATH}"
+
+
+class ChecksConfigError(Exception):
+    """The checks config is missing, unreadable, or not in the expected shape."""
+
+
+def load_commands(name: str, *, cwd: str | os.PathLike | None = None) -> list[list[str]]:
+    """Return the commands configured for check `name`; an empty list means none.
+
+    The config is resolved against `cwd` when one is given (the fix loop passes the
+    checkout it works in), else the working directory. Raises `ChecksConfigError`
+    for a missing file, invalid YAML, a check name outside `CHECK_NAMES`, or a
+    command that is not a non-empty list of strings.
+    """
+    # Imported here, not at module top, so importing this module (fix_loop_graph.py
+    # does) needs no third-party package until a config is actually read -- mirrors
+    # the graphs' own deferred `langgraph` import.
+    import yaml
+
+    path = Path(cwd or ".") / CONFIG_RELPATH
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        raise ChecksConfigError(f"checks config not found: {path}") from None
+    except (OSError, UnicodeDecodeError) as e:
+        raise ChecksConfigError(f"cannot read checks config {path}: {e}") from e
+
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError as e:
+        raise ChecksConfigError(f"{path} is not valid YAML: {e}") from e
+
+    checks = data.get("checks") if isinstance(data, dict) else None
+    if not isinstance(checks, dict):
+        raise ChecksConfigError(f"{path} must hold a top-level `checks` mapping")
+
+    unknown = sorted(str(key) for key in checks if key not in CHECK_NAMES)
+    if unknown:
+        raise ChecksConfigError(
+            f"{path} names unknown check(s) {', '.join(unknown)}; allowed: {', '.join(CHECK_NAMES)}"
+        )
+
+    commands = checks.get(name)
+    if commands is None:
+        return []
+    if not isinstance(commands, list):
+        raise ChecksConfigError(f"{path}: `{name}` must be a list of commands")
+    for cmd in commands:
+        if not isinstance(cmd, list) or not cmd or not all(isinstance(arg, str) for arg in cmd):
+            raise ChecksConfigError(
+                f"{path}: every `{name}` command must be a non-empty list of strings, got {cmd!r}"
+            )
+    return [[arg.replace(PYTHON_TOKEN, sys.executable) for arg in cmd] for cmd in commands]
 
 
 def _write_evidence(
@@ -66,16 +120,8 @@ def _write_evidence(
     return path
 
 
-def _run_command_check(
-    name: str,
-    cmd: list[str],
-    story_slug: str,
-    run_id: str,
-    *,
-    state_base: str | os.PathLike = state_io.FACTORY_DIR,
-    cwd: str | os.PathLike | None = None,
-) -> dict:
-    """Run `cmd`, write its evidence, and return the result dict.
+def _run_command(cmd: list[str], *, cwd: str | os.PathLike | None = None) -> dict:
+    """Run `cmd` and return its result dict, writing nothing.
 
     A non-zero exit is a legitimate `status: "fail"` result, not a script error --
     this never raises for that. Only an OSError (e.g. the command isn't on PATH) is
@@ -85,22 +131,52 @@ def _run_command_check(
     try:
         proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=False)
     except OSError as e:
-        result = {
+        return {
             "status": "fail",
             "command": cmd,
             "returncode": None,
             "detail": f"failed to run {cmd!r}: {e}",
         }
+    status = "pass" if proc.returncode == 0 else "fail"
+    # Concatenate both streams rather than preferring stderr -- a command run via
+    # `uv run --with X X ...` (lint's `ruff`, test's `pytest`) writes uv's own
+    # download/install banner to stderr and the wrapped tool's real findings to
+    # stdout; picking stderr-first (the previous behavior) silently discarded the
+    # actionable output and surfaced only uv's noise. Discovered live during
+    # ticket 13's end-to-end run.
+    detail = "" if status == "pass" else "\n".join(p for p in (proc.stdout.strip(), proc.stderr.strip()) if p)
+    return {"status": status, "command": cmd, "returncode": proc.returncode, "detail": detail}
+
+
+def run_check(
+    name: str,
+    story_slug: str,
+    run_id: str,
+    *,
+    state_base: str | os.PathLike = state_io.FACTORY_DIR,
+    cwd: str | os.PathLike | None = None,
+) -> dict:
+    """Run check `name`'s configured commands, write its evidence, return the result.
+
+    The result keeps one shape whatever the outcome: `status`, `command`,
+    `returncode`, `detail` are those of the failing command, or of the last one when
+    all pass, and `commands` lists every command that ran.
+    """
+    try:
+        commands = load_commands(name, cwd=cwd)
+    except ChecksConfigError as e:
+        result = {"status": "fail", "command": None, "returncode": None, "detail": str(e), "commands": []}
     else:
-        status = "pass" if proc.returncode == 0 else "fail"
-        # Concatenate both streams rather than preferring stderr -- a command run via
-        # `uv run --with X X ...` (lint's `ruff`, test's `pytest`) writes uv's own
-        # download/install banner to stderr and the wrapped tool's real findings to
-        # stdout; picking stderr-first (the previous behavior) silently discarded the
-        # actionable output and surfaced only uv's noise. Discovered live during
-        # ticket 13's end-to-end run.
-        detail = "" if status == "pass" else "\n".join(p for p in (proc.stdout.strip(), proc.stderr.strip()) if p)
-        result = {"status": status, "command": cmd, "returncode": proc.returncode, "detail": detail}
+        if not commands:
+            result = {"status": "skipped", "command": None, "returncode": None, "detail": NOT_CONFIGURED_DETAIL, "commands": []}
+        else:
+            ran = []
+            for cmd in commands:
+                result = _run_command(cmd, cwd=cwd)
+                ran.append(cmd)
+                if result["status"] == "fail":
+                    break
+            result["commands"] = ran
 
     _write_evidence(name, story_slug, run_id, result, state_base=state_base)
     return result
@@ -113,8 +189,7 @@ def run_build(
     state_base: str | os.PathLike = state_io.FACTORY_DIR,
     cwd: str | os.PathLike | None = None,
 ) -> dict:
-    cmd = [sys.executable, "-m", "compileall", "factory", "-q"]
-    return _run_command_check("build", cmd, story_slug, run_id, state_base=state_base, cwd=cwd)
+    return run_check("build", story_slug, run_id, state_base=state_base, cwd=cwd)
 
 
 def run_test(
@@ -124,16 +199,7 @@ def run_test(
     state_base: str | os.PathLike = state_io.FACTORY_DIR,
     cwd: str | os.PathLike | None = None,
 ) -> dict:
-    cmd = [
-        "uv",
-        "run",
-        "--with",
-        "pytest",
-        "pytest",
-        "factory/graph/tests/",
-        "factory/scripts/tests/",
-    ]
-    return _run_command_check("test", cmd, story_slug, run_id, state_base=state_base, cwd=cwd)
+    return run_check("test", story_slug, run_id, state_base=state_base, cwd=cwd)
 
 
 def run_lint(
@@ -143,9 +209,7 @@ def run_lint(
     state_base: str | os.PathLike = state_io.FACTORY_DIR,
     cwd: str | os.PathLike | None = None,
 ) -> dict:
-    """Run ruff over `factory/` via uv, using the repo-root `ruff.toml`."""
-    cmd = ["uv", "run", "--with", "ruff", "ruff", "check", "factory/"]
-    return _run_command_check("lint", cmd, story_slug, run_id, state_base=state_base, cwd=cwd)
+    return run_check("lint", story_slug, run_id, state_base=state_base, cwd=cwd)
 
 
 def run_security(
@@ -155,14 +219,7 @@ def run_security(
     state_base: str | os.PathLike = state_io.FACTORY_DIR,
     cwd: str | os.PathLike | None = None,
 ) -> dict:
-    """Always a placeholder -- never runs a command, never reports `"pass"` (see
-    module docstring and deferred-work.md)."""
-    result = {"status": "skipped", "command": None, "detail": PLACEHOLDER_DETAIL}
-    _write_evidence("security", story_slug, run_id, result, state_base=state_base)
-    return result
-
-
-_RUNNERS = {"build": run_build, "test": run_test, "lint": run_lint, "security": run_security}
+    return run_check("security", story_slug, run_id, state_base=state_base, cwd=cwd)
 
 
 # --- CLI ---------------------------------------------------------------------
@@ -184,7 +241,7 @@ def main(argv: list[str] | None = None) -> int:
 
     args = p.parse_args(argv)
 
-    result = _RUNNERS[args.check](args.story_slug, args.run_id)
+    result = run_check(args.check, args.story_slug, args.run_id)
     print(json.dumps(result))
     return 1 if result["status"] == "fail" else 0
 

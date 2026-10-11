@@ -179,10 +179,11 @@ jobs:
             --run-id "${{ needs.analysis.outputs.run-id }}"
 
       # CAP-5 mechanical checks (AD-6): 4 direct pipeline steps, never a graph node or
-      # agent tool call. build/test/lint are real checks -- a failing step exits
-      # non-zero and stops the job; security has no tool wired yet and always records
-      # status: skipped (never pass), so it always exits 0. See
-      # factory/scripts/run_checks.py and story-mechanical-checks-plan.md.
+      # agent tool call. Each step runs the commands the repo configures for that
+      # check in .github/post-implementation-checks.yml -- a failing command exits
+      # non-zero and stops the job; a check with no command records status: skipped
+      # (never pass) and exits 0, which is `security` in this repo. See
+      # factory/scripts/run_checks.py and AD-6's addendum.
       - name: Build check
         run: |
           uv run factory/scripts/run_checks.py build \
@@ -201,7 +202,7 @@ jobs:
             --story-slug "${{ needs.analysis.outputs.story-slug }}" \
             --run-id "${{ needs.analysis.outputs.run-id }}"
 
-      - name: Security check (placeholder)
+      - name: Security check
         run: |
           uv run factory/scripts/run_checks.py security \
             --story-slug "${{ needs.analysis.outputs.story-slug }}" \
