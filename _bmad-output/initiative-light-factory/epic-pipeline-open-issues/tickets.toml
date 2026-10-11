@@ -1,6 +1,7 @@
 # tickets.toml — epic-pipeline-open-issues's agreed children, in build order.
 # Tracer bullet: entry 1. Refactor sweep: entry 6. Closing end-to-end suite: entry 7.
 # Entry 3 ("Real security tooling") dropped 2026-10-11, moved to deferred-work.md; its id is not reused.
+# Entry 8 ("Explicit job naming and QS sub-jobs") added 2026-10-11, placed before entry 6.
 
 [[entry]]
 id = 1
@@ -53,13 +54,26 @@ unknown = "Exact deployment-review API query/fields needed to distinguish a reje
 references = ["architecture-light-factory/architecture-light-factory.md#ad-2", "architecture-light-factory/architecture-light-factory.md#ad-4", "deferred-work.md"]
 
 [[entry]]
+id = 8
+type = "story"
+title = "Explicit job naming and QS sub-jobs"
+description = "Rename the workflow's generic 'Job N: ...' job names to explicit, descriptive names with no number prefix, and extract the Implementation job's QS steps (build/test/lint/security checks and the bounded review/fix-loop) out of its step list into their own job(s), grouped sensibly, with no behavior change."
+verify = "The pipeline runs end to end with the same outcome as before for a trivial story -- same checks, same review/fix-loop result, same gates at plan-approval and evidence-approval -- now under the renamed, split job structure."
+covers = []
+after = [1, 2, 4, 5]
+hitl = false
+risk = "medium"
+unknown = "Evidence files (evidence/checks/*.json, review.md) are only written to the job's local runner disk and reach git only when a fix cycle commits them (AD-10) -- splitting QS into separate jobs needs a decided way to carry that state across job boundaries (e.g. always committing it, or passing it as a workflow artifact); expect this build to author an AD-10 addendum documenting the chosen approach, mirroring how AD-14 was settled during epic 1's entry 11 and how entry 5 is expected to add its own AD addendum."
+references = ["architecture-light-factory/architecture-light-factory.md#ad-2", "architecture-light-factory/architecture-light-factory.md#ad-6", "architecture-light-factory/architecture-light-factory.md#ad-10", ".github/workflows/light-factory.yml"]
+
+[[entry]]
 id = 6
 type = "story"
 title = "Refactor sweep"
-description = "Closes out doc drift and deferred findings accumulated across entries 1, 2, 4, and 5, per the epic's own closing-sweep convention; no new behavior."
-verify = "The checks suite passes, and every review finding deferred across entries 1, 2, 4, and 5 is either resolved or explicitly re-parked in Notes with a reason."
+description = "Closes out doc drift and deferred findings accumulated across entries 1, 2, 4, 5, and 8, per the epic's own closing-sweep convention; no new behavior."
+verify = "The checks suite passes, and every review finding deferred across entries 1, 2, 4, 5, and 8 is either resolved or explicitly re-parked in Notes with a reason."
 covers = []
-after = [1, 2, 4, 5]
+after = [1, 2, 4, 5, 8]
 hitl = false
 risk = "low"
 
