@@ -33,6 +33,8 @@ Oneshot: about 15 lines of code and workflow, plus tests — one function and on
 - No edit to `checks`, `review`, or `merge`: each needs `implementation`, and GitHub skips a job whose needed job was skipped. `close-rejected-pr`'s own `if:` requires a `failure` result, so it stays off too. A job-level `if:` is evaluated before Environment protection, so a skipped `implementation` requests no review.
 - Architecture AD-13 gains one sentence naming the mechanism.
 - Verified locally with the unit tests and lint only. The workflow behavior itself — no pending `plan-approval` review on a halted run, a pause on a clean one — needs a live dispatch after a push; that is this entry's own verify check and is still open.
+- Live proof, clean-story half (2026-10-11): runs `38146170332`, `38147061301`, and `38148260661` each resolved to `ready-for-review` and paused at `plan-approval` with the `status` output in place.
+- Live proof, halted half: to be shown with `stories/one-input-path-per-story-slug.md`, a real story (the per-slug concurrency finding from `deferred-work.md`) that leaves one decision open on purpose and says so. Expected: `awaiting-clarification`; the PR labeled `clarification-round`, commented with the question, and closed; `Implementation`, `Checks`, `Review & fix loop`, `Merge`, and `Close PR on gate reject` all skipped; the run concludes `success` with no pending review.
 
 ## Plan Change Log
 
