@@ -57,6 +57,25 @@ def test_derive_story_slug_allows_digits():
     assert state_io.derive_story_slug("stories/story-v2.md") == "story-v2"
 
 
+@pytest.mark.parametrize("path", ["stories/foo.md", "./stories/foo.md", "/repo/stories/foo.md"])
+def test_derive_story_slug_accepts_stories_directory(path):
+    assert state_io.derive_story_slug(path) == "foo"
+
+
+@pytest.mark.parametrize("path", ["other/foo.md", "foo.md", "stories/billing/foo.md"])
+def test_derive_story_slug_rejects_wrong_location(path):
+    with pytest.raises(ValueError, match="stories") as excinfo:
+        state_io.derive_story_slug(path)
+    assert path in str(excinfo.value)
+
+
+def test_derive_story_slug_extension_and_kebab_checks_run_before_location():
+    with pytest.raises(ValueError, match=r"\.md extension"):
+        state_io.derive_story_slug("other/foo.txt")
+    with pytest.raises(ValueError, match="kebab-case"):
+        state_io.derive_story_slug("other/Not_Kebab.md")
+
+
 def test_derive_run_id_formats_run_dash_prefix():
     assert state_io.derive_run_id(12345) == "run-12345"
     assert state_io.derive_run_id("12345") == "run-12345"
@@ -277,6 +296,14 @@ def test_cli_derive_non_kebab_case_exits_2_and_prints_stderr(capsys):
     rc = state_io.main(
         ["derive", "--story-file", "stories/Not_Kebab.md", "--github-run-id", "999"]
     )
+    captured = capsys.readouterr()
+    assert rc == 2
+    assert captured.out == ""
+    assert "error" in captured.err
+
+
+def test_cli_derive_wrong_folder_exits_2_and_prints_stderr(capsys):
+    rc = state_io.main(["derive", "--story-file", "other/foo.md", "--github-run-id", "999"])
     captured = capsys.readouterr()
     assert rc == 2
     assert captured.out == ""
