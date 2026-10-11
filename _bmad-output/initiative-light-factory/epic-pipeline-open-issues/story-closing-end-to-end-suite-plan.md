@@ -3,13 +3,13 @@ title: 'Closing end-to-end suite'
 type: 'chore'
 ticket: '7'
 created: '2026-10-11'
-status: 'in-progress'
+status: 'built'
 baseline_revision: '7abcb19ba2a174f68014c9e1431b6ca9ba9e8c65'
 route: 'oneshot'
 route_source: 'auto'
-review: ''
-review_source: ''
-lenses_ran: []
+review: 'quick'
+review_source: 'pinned'
+lenses_ran: ['quick']
 review_loop_iteration: 0
 context: []
 ---
@@ -38,6 +38,19 @@ Oneshot: the only authored content is one story file; everything else is dispatc
 Known going in (re-parked in entry 6): a clarification-halted run still pauses at `plan-approval`. Run 1 will sit at that gate until run 2's dispatch cancels it through the concurrency group — no reject needed.
 
 Also to observe, carried from entries 4, 5, 8: `close-rejected-pr`'s run condition, gate expression and `actions: read` scope; separate evidence commits from `checks` and `review`.
+
+Results, all on `senacor3/software-factory-demo`, 2026-10-11, story `stories/validate-story-file-location.md`. Every gate decision was the human's own action.
+
+- **Run 1 (`38140686643`) — clarification halt.** Analysis returned the one open question the story left open. PR #4 labeled `clarification-round`, commented with the question, closed. The run then paused at `plan-approval` (the re-parked dangling gate) and was cancelled by run 2's dispatch.
+- **Run 2 (`38140757607`) — answered re-trigger.** Story edited to answer (sub-folders rejected, commit `09e2d7c`). Analysis resolved; PR #5 open, unlabeled, "Plan ready for review"; paused at `plan-approval`.
+- **Run 3 (`38140846697`) — supersession, reject at `plan-approval`.** Run 2 cancelled by the concurrency group; PR #5 closed with "Superseded by #6"; PR #6 carries "Retry of #5". After the reject: `Implementation` `failure` with no steps, `Checks`/`Review & fix loop`/`Merge` skipped, `Close PR on gate reject` ran and closed PR #6 with a comment naming the gate and reviewer and quoting the review comment. No label.
+- **Run 4 (`38141347400`) — reject at `evidence-approval`.** `plan-approval` approved; `Implementation`, `Checks`, `Review & fix loop` succeeded as separate jobs; the run branch shows one commit per job (`Analysis`, `Implementation`, `Checks`, `Review`); evidence summary posted (build/test/lint pass, security skipped, review resolved, 0 findings, 0 fix cycles). After the reject: `Merge` `failure`, `Close PR on gate reject` closed PR #7 with a comment naming `evidence-approval`; the review history's `approved` entry for `plan-approval` did not confuse it. PR #7 had no "Retry of" comment, correctly, since #6 was already closed.
+
+No pipeline defect surfaced and no pipeline code was changed. No open PR remains; all four run branches are left in place.
+
+Not shown by this suite: the fix loop engaging (0 cycles used; the loop demonstrated is the clarification loop, one round of two); the clarification cap being reached; the six-job pipeline merging (no final merge run, user's choice) — so the story's change is not on `main` and the concurrency-key finding stays open in `deferred-work.md`; `close-rejected-pr` staying off after a `checks` failure (no check failed); and the two `gh`-behaviour questions carried from entries 4 and 5 (closing an already-closed PR, a stale `rejected` entry across a re-run), which no run exercised.
+
+Review: the authored diff is one story file plus this plan; read inline by the implementing session (no subagents, as for entry 6), no findings.
 
 ## Plan Change Log
 
