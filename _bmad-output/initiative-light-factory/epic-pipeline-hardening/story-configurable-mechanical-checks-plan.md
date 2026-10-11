@@ -3,7 +3,7 @@ title: 'Configurable mechanical checks'
 type: 'feature'
 ticket: '1'
 created: '2026-10-11'
-status: 'built'
+status: done
 baseline_revision: 'a9ececa2ffa920adfffe78fb83e704155aee6fa2'
 route: 'full'
 route_source: 'auto'
