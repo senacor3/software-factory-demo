@@ -31,8 +31,9 @@ tell the two apart.
 
 A fifth case -- plan.md/decisions.md wrote successfully but a deterministic post-analysis
 step itself fails (`git`/`gh` subprocess error, whether from opening the branch/PR (AD-12),
-posting the gate-summary comment (AD-4), or from the clarification label/comment/close or
-cap-notice call (AD-13/AD-15)) -- raises `AnalysisPROpenError`, distinct from both of the
+superseding this story-slug's prior open PRs inside that same step (AD-15), posting the
+gate-summary comment (AD-4), or from the clarification label/comment/close or cap-notice
+call (AD-13/AD-15)) -- raises `AnalysisPROpenError`, distinct from both of the
 above (per the `change-pr-at-intake` amendment, AD-12). A sixth, earlier failure point --
 the round-count query itself (`clarification_status`), which now runs *before* the state
 write -- also raises `AnalysisPROpenError`, but in that case plan.md/decisions.md are not
@@ -81,14 +82,15 @@ class AnalysisHalted(RuntimeError):
 
 class AnalysisPROpenError(RuntimeError):
     """A deterministic step around the analysis itself failed -- the round-count query
-    (`clarification_status`), the branch/PR-open step (AD-12), or the clarification
-    label/comment/close or cap-notice step (AD-13/AD-15) -- distinct from AnalysisHalted (a
+    (`clarification_status`), the branch/PR-open step (AD-12) including its supersession
+    of this story-slug's prior open PRs (AD-15), or the clarification label/comment/close
+    or cap-notice step (AD-13/AD-15) -- distinct from AnalysisHalted (a
     CAP-1 judgment) and AnalysisInvocationError (a `claude` CLI tooling failure).
 
     Whether plan.md/decisions.md exist yet depends on which step raised this: the
     round-count query now runs *before* the state write, so a failure there leaves no
-    state files; a failure in any later step (PR-open, labeling, closing, commenting)
-    leaves plan.md/decisions.md already written."""
+    state files; a failure in any later step (PR-open, supersession, labeling, closing,
+    commenting) leaves plan.md/decisions.md already written."""
 
 
 # --- the single invocation (isolated so entry 4 can re-call it from its own loop) -------

@@ -14,13 +14,14 @@ Idempotent: if an open PR already exists for this exact branch name, its info is
 returned instead of recreating anything -- entry 4's clarification rounds re-call
 `run_analysis` and must not fail or duplicate work against an already-open PR.
 
-Does NOT implement AD-15 supersession-closing (searching other branches for this
-story-slug) -- out of scope for this ticket, see deferred-work.md. Relatedly: leaving an
-at-cap PR open (see `post_clarification_cap_notice` below) means a developer who ignores
-it and re-triggers anyway accumulates a second, also-capped, also-unclosed open PR for the
-same story-slug on every further ignored re-trigger -- an accepted, documented limitation
-until AD-15 supersession-closing ships (epic-pipeline-open-issues/4), not a defect fixed
-here.
+Supersession (AD-15): once this run's PR exists, every *other* open PR whose head branch
+starts with `light-factory/<story-slug>/` is closed with a "Superseded by #N" comment and
+the new PR gets one "Retry of #M" comment (see `supersede_prior_prs`). Only the PR closes
+-- branches and state directories stay. This runs on the idempotent-reuse path too, so a
+same-run-id re-run finishes a supersession its first attempt left incomplete. An at-cap PR
+that `post_clarification_cap_notice` deliberately left open is superseded like any other
+on the next re-trigger; it still counts toward the clarification cap, since
+`count_clarification_rounds` queries all states.
 
 All `git`/`gh` subprocess failures raise a single `PROpenError`, carrying the failing
 command and its output, so callers can distinguish this failure mode from a CAP-1
@@ -137,6 +138,67 @@ def clarification_status(
     return "clarification-cap-reached" if count >= CLARIFICATION_CAP else "awaiting-clarification"
 
 
+def supersede_prior_prs(
+    story_slug: str,
+    run_id: str,
+    new_pr_number: int,
+    *,
+    cwd: str | os.PathLike | None = None,
+) -> list[int]:
+    """AD-15's supersession rule: post one "Retry of #M" comment on `new_pr_number`, then
+    close every other open PR for this story-slug with a "Superseded by #N" comment.
+    Returns the closed PR numbers in ascending order (empty when there was no predecessor,
+    in which case nothing is closed or commented).
+
+    Same query shape as `count_clarification_rounds` -- `gh pr list --head` has no prefix
+    mode, so this lists open PRs repo-wide (`--limit 100`, same unpaginated PoC limitation)
+    and filters client-side on `light-factory/<story_slug>/` with the trailing slash (so
+    slug `foo` never matches `foo-bar`), excluding `run_id`'s own branch.
+
+    Never `--delete-branch` and never touches state directories (AD-10/AD-12/AD-15).
+    Comments first, closes second: a failure part-way leaves the back-link complete, and a
+    same-run-id re-run closes whatever is still open at worst with a duplicate "Retry of"
+    comment -- never a predecessor closed without being named. Raises PROpenError on any
+    subprocess failure."""
+    out = _run(
+        [
+            "gh",
+            "pr",
+            "list",
+            "--state",
+            "open",
+            "--limit",
+            "100",
+            "--json",
+            "number,headRefName",
+        ],
+        cwd=cwd,
+    )
+    import json
+
+    prs = json.loads(out) if out else []
+    prefix = f"light-factory/{story_slug}/"
+    own_branch = f"light-factory/{story_slug}/{run_id}"
+    prior = sorted(
+        pr["number"]
+        for pr in prs
+        if pr.get("headRefName", "").startswith(prefix)
+        and pr.get("headRefName") != own_branch
+        and pr["number"] != new_pr_number
+    )
+    if not prior:
+        return []
+
+    retry_of = ", ".join(f"#{number}" for number in prior)
+    _run(["gh", "pr", "comment", str(new_pr_number), "--body", f"Retry of {retry_of}"], cwd=cwd)
+    for number in prior:
+        _run(
+            ["gh", "pr", "close", str(number), "--comment", f"Superseded by #{new_pr_number}"],
+            cwd=cwd,
+        )
+    return prior
+
+
 def open_pr_for_story(
     story_slug: str,
     run_id: str,
@@ -148,12 +210,15 @@ def open_pr_for_story(
     """Create the isolated branch, commit plan.md/decisions.md, push, and open the PR.
 
     Idempotent: returns the existing open PR's info if one is already open for this
-    branch, without creating anything new. Raises PROpenError on any git/gh failure.
+    branch, without creating anything new. Either way, supersedes this story-slug's other
+    open PRs (AD-15, `supersede_prior_prs`) before returning. Raises PROpenError on any
+    git/gh failure.
     """
     branch = f"light-factory/{story_slug}/{run_id}"
 
     existing = find_open_pr(branch, cwd=cwd)
     if existing is not None:
+        supersede_prior_prs(story_slug, run_id, existing["pr_number"], cwd=cwd)
         return existing
 
     state_directory = state_io.state_dir(story_slug, run_id, base=state_base)
@@ -196,6 +261,7 @@ def open_pr_for_story(
     created = find_open_pr(branch, cwd=cwd)
     if created is None:
         raise PROpenError(f"gh pr create reported success but no open PR found for branch {branch!r}")
+    supersede_prior_prs(story_slug, run_id, created["pr_number"], cwd=cwd)
     return created
 
 

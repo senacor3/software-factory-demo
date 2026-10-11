@@ -5,10 +5,10 @@
 """Tests for open_implementation_pr.py. Run:
 uv run --with pytest pytest factory/scripts/tests/test_open_implementation_pr.py
 
-Covers the amendment's Acceptance Criterion 3 (idempotent-reuse) plus fresh-create and
-subprocess-failure, with `subprocess.run` mocked throughout -- no real `git`/`gh`
-process in the committed suite (mirrors how test_analysis_graph.py mocks the `claude`
-CLI call).
+Covers the amendment's Acceptance Criterion 3 (idempotent-reuse) plus fresh-create,
+subprocess-failure, and AD-15 supersession-closing, with `subprocess.run` mocked
+throughout -- no real `git`/`gh` process in the committed suite (mirrors how
+test_analysis_graph.py mocks the `claude` CLI call).
 """
 
 import json
@@ -40,6 +40,22 @@ def _labeled_pr_list_output(head_ref_names):
     return json.dumps([{"headRefName": h} for h in head_ref_names])
 
 
+def _is_head_query(cmd):
+    # find_open_pr's exact-branch query, as opposed to supersede_prior_prs's repo-wide one.
+    return cmd[:3] == ["gh", "pr", "list"] and "--head" in cmd
+
+
+def _is_supersession_query(cmd):
+    return cmd[:3] == ["gh", "pr", "list"] and "--head" not in cmd and "--label" not in cmd
+
+
+def _open_pr_list_output(prs):
+    return json.dumps([{"number": n, "headRefName": h} for n, h in prs])
+
+
+SUPERSESSION_QUERY = ["gh", "pr", "list", "--state", "open", "--limit", "100", "--json", "number,headRefName"]
+
+
 # --- fresh-create success path -----------------------------------------------------------
 
 
@@ -48,7 +64,9 @@ def test_fresh_create_creates_branch_commits_pushes_and_opens_pr(tmp_path):
 
     def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
         calls.append(cmd)
-        if cmd[:3] == ["gh", "pr", "list"]:
+        if _is_supersession_query(cmd):
+            return _ok(_open_pr_list_output([]))
+        if _is_head_query(cmd):
             # First call (pre-create check): nothing open yet. Second call (post-create
             # read-back): the PR gh pr create just made.
             if calls.count(cmd) == 1:
@@ -81,13 +99,19 @@ def test_fresh_create_creates_branch_commits_pushes_and_opens_pr(tmp_path):
     create_calls = [c for c in calls if c[:3] == ["gh", "pr", "create"]]
     assert len(create_calls) == 1
 
+    # first run for this slug: the supersession query ran, but nothing is closed or commented.
+    assert calls.count(SUPERSESSION_QUERY) == 1
+    assert [c for c in calls if c[:3] in (["gh", "pr", "close"], ["gh", "pr", "comment"])] == []
+
 
 def test_fresh_create_commits_the_correct_state_files(tmp_path):
     calls = []
 
     def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
         calls.append(cmd)
-        if cmd[:3] == ["gh", "pr", "list"]:
+        if _is_supersession_query(cmd):
+            return _ok(_open_pr_list_output([]))
+        if _is_head_query(cmd):
             if calls.count(cmd) == 1:
                 return _ok(_pr_list_output([]))
             return _ok(_pr_list_output([{"number": 1, "url": "https://github.com/org/repo/pull/1"}]))
@@ -111,7 +135,9 @@ def test_idempotent_reuse_returns_existing_pr_without_recreating(tmp_path):
 
     def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
         calls.append(cmd)
-        if cmd[:3] == ["gh", "pr", "list"]:
+        if _is_supersession_query(cmd):
+            return _ok(_open_pr_list_output([(7, "light-factory/foo/run-1")]))
+        if _is_head_query(cmd):
             return _ok(_pr_list_output([{"number": 7, "url": "https://github.com/org/repo/pull/7"}]))
         raise AssertionError(f"unexpected subprocess call: {cmd}")
 
@@ -125,8 +151,12 @@ def test_idempotent_reuse_returns_existing_pr_without_recreating(tmp_path):
         "pr_number": 7,
         "pr_url": "https://github.com/org/repo/pull/7",
     }
-    # only the pre-create existence check ran -- no git/gh mutation calls.
-    assert calls == [["gh", "pr", "list", "--head", "light-factory/foo/run-1", "--state", "open", "--json", "number,url"]]
+    # only the pre-create existence check and the supersession query ran -- no git/gh
+    # mutation calls (the only open PR on the slug prefix is this run's own).
+    assert calls == [
+        ["gh", "pr", "list", "--head", "light-factory/foo/run-1", "--state", "open", "--json", "number,url"],
+        SUPERSESSION_QUERY,
+    ]
 
 
 # --- git/gh subprocess failure raises PROpenError -------------------------------------------
@@ -134,7 +164,7 @@ def test_idempotent_reuse_returns_existing_pr_without_recreating(tmp_path):
 
 def test_git_checkout_failure_raises_pr_open_error(tmp_path):
     def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
-        if cmd[:3] == ["gh", "pr", "list"]:
+        if _is_head_query(cmd):
             return _ok(_pr_list_output([]))
         if cmd[:2] == ["git", "checkout"]:
             return _fail(stderr="fatal: a branch named 'light-factory/foo/run-1' already exists")
@@ -147,7 +177,7 @@ def test_git_checkout_failure_raises_pr_open_error(tmp_path):
 
 def test_gh_pr_create_failure_raises_pr_open_error(tmp_path):
     def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
-        if cmd[:3] == ["gh", "pr", "list"]:
+        if _is_head_query(cmd):
             return _ok(_pr_list_output([]))
         if cmd[:3] == ["gh", "pr", "create"]:
             return _fail(stderr="gh: authentication required")
@@ -165,6 +195,245 @@ def test_subprocess_oserror_raises_pr_open_error(tmp_path):
 
 
 # --- state_base is forwarded to state_io.state_dir, not hardcoded -------------------------
+
+
+# --- supersede_prior_prs (AD-15) ----------------------------------------------------------
+
+
+def _supersession_fake_run(open_prs, calls):
+    def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
+        calls.append(cmd)
+        if _is_supersession_query(cmd):
+            return _ok(_open_pr_list_output(open_prs))
+        if cmd[:3] in (["gh", "pr", "close"], ["gh", "pr", "comment"]):
+            return _ok()
+        raise AssertionError(f"unexpected subprocess call: {cmd}")
+
+    return fake_run
+
+
+def test_supersede_prior_prs_queries_open_prs_only():
+    calls = []
+
+    with patch("open_implementation_pr.subprocess.run", side_effect=_supersession_fake_run([], calls)):
+        open_implementation_pr.supersede_prior_prs("foo", "run-2", 9)
+
+    assert calls == [SUPERSESSION_QUERY]
+
+
+def test_supersede_prior_prs_first_run_closes_and_comments_nothing():
+    calls = []
+    open_prs = [(9, "light-factory/foo/run-2")]
+
+    with patch("open_implementation_pr.subprocess.run", side_effect=_supersession_fake_run(open_prs, calls)):
+        closed = open_implementation_pr.supersede_prior_prs("foo", "run-2", 9)
+
+    assert closed == []
+    assert calls == [SUPERSESSION_QUERY]
+
+
+def test_supersede_prior_prs_closes_one_predecessor_and_links_both_ways():
+    calls = []
+    open_prs = [(7, "light-factory/foo/run-1"), (9, "light-factory/foo/run-2")]
+
+    with patch("open_implementation_pr.subprocess.run", side_effect=_supersession_fake_run(open_prs, calls)):
+        closed = open_implementation_pr.supersede_prior_prs("foo", "run-2", 9)
+
+    assert closed == [7]
+    assert calls[1:] == [
+        ["gh", "pr", "comment", "9", "--body", "Retry of #7"],
+        ["gh", "pr", "close", "7", "--comment", "Superseded by #9"],
+    ]
+    assert all("--delete-branch" not in c for c in calls)
+
+
+def test_supersede_prior_prs_closes_cascading_predecessors_with_one_retry_comment():
+    calls = []
+    # unsorted on purpose: the result and the comment are in ascending order regardless.
+    open_prs = [
+        (7, "light-factory/foo/run-1b"),
+        (9, "light-factory/foo/run-2"),
+        (5, "light-factory/foo/run-1a"),
+    ]
+
+    with patch("open_implementation_pr.subprocess.run", side_effect=_supersession_fake_run(open_prs, calls)):
+        closed = open_implementation_pr.supersede_prior_prs("foo", "run-2", 9)
+
+    assert closed == [5, 7]
+    assert calls[1:] == [
+        ["gh", "pr", "comment", "9", "--body", "Retry of #5, #7"],
+        ["gh", "pr", "close", "5", "--comment", "Superseded by #9"],
+        ["gh", "pr", "close", "7", "--comment", "Superseded by #9"],
+    ]
+    assert all("--delete-branch" not in c for c in calls)
+
+
+def test_supersede_prior_prs_leaves_other_stories_and_non_factory_prs_untouched():
+    calls = []
+    open_prs = [
+        (3, "light-factory/foo-bar/run-3"),  # shares the slug as a string prefix only
+        (4, "light-factory/other/run-4"),
+        (6, "feature/foo"),
+        (8, "light-factory/foo"),  # no trailing slash, not a run branch
+        (9, "light-factory/foo/run-2"),
+    ]
+
+    with patch("open_implementation_pr.subprocess.run", side_effect=_supersession_fake_run(open_prs, calls)):
+        closed = open_implementation_pr.supersede_prior_prs("foo", "run-2", 9)
+
+    assert closed == []
+    assert calls == [SUPERSESSION_QUERY]
+
+
+def test_supersede_prior_prs_closes_only_the_matching_slug_among_decoys():
+    calls = []
+    open_prs = [
+        (3, "light-factory/foo-bar/run-3"),
+        (7, "light-factory/foo/run-1"),
+        (9, "light-factory/foo/run-2"),
+    ]
+
+    with patch("open_implementation_pr.subprocess.run", side_effect=_supersession_fake_run(open_prs, calls)):
+        closed = open_implementation_pr.supersede_prior_prs("foo", "run-2", 9)
+
+    assert closed == [7]
+    assert [c[3] for c in calls if c[:3] == ["gh", "pr", "close"]] == ["7"]
+
+
+@pytest.mark.parametrize("failing", ["list", "close", "comment"])
+def test_supersede_prior_prs_gh_failure_raises_pr_open_error(failing):
+    def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
+        if cmd[2] == failing:
+            return _fail(stderr=f"gh: {failing} failed")
+        if _is_supersession_query(cmd):
+            return _ok(_open_pr_list_output([(7, "light-factory/foo/run-1")]))
+        return _ok()
+
+    with patch("open_implementation_pr.subprocess.run", side_effect=fake_run):
+        with pytest.raises(open_implementation_pr.PROpenError, match=f"{failing} failed"):
+            open_implementation_pr.supersede_prior_prs("foo", "run-2", 9)
+
+
+def test_supersede_prior_prs_posts_retry_comment_before_a_failing_close():
+    # #5 closes, #7 fails: the back-link naming both is already on the new PR, so a
+    # same-run-id re-run only has #7 left to close and no link is ever lost.
+    calls = []
+
+    def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
+        calls.append(cmd)
+        if _is_supersession_query(cmd):
+            return _ok(
+                _open_pr_list_output(
+                    [(5, "light-factory/foo/run-1a"), (7, "light-factory/foo/run-1b")]
+                )
+            )
+        if cmd[:4] == ["gh", "pr", "close", "7"]:
+            return _fail(stderr="gh: close failed")
+        return _ok()
+
+    with patch("open_implementation_pr.subprocess.run", side_effect=fake_run):
+        with pytest.raises(open_implementation_pr.PROpenError, match="close failed"):
+            open_implementation_pr.supersede_prior_prs("foo", "run-2", 9)
+
+    assert calls[1:] == [
+        ["gh", "pr", "comment", "9", "--body", "Retry of #5, #7"],
+        ["gh", "pr", "close", "5", "--comment", "Superseded by #9"],
+        ["gh", "pr", "close", "7", "--comment", "Superseded by #9"],
+    ]
+
+
+# --- open_pr_for_story runs supersession on both return paths --------------------------------
+
+
+def test_fresh_create_supersedes_predecessor_after_the_new_pr_exists(tmp_path):
+    calls = []
+
+    def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
+        calls.append(cmd)
+        if _is_supersession_query(cmd):
+            return _ok(
+                _open_pr_list_output(
+                    [(7, "light-factory/foo/run-1"), (9, "light-factory/foo/run-2")]
+                )
+            )
+        if _is_head_query(cmd):
+            if calls.count(cmd) == 1:
+                return _ok(_pr_list_output([]))
+            return _ok(_pr_list_output([{"number": 9, "url": "https://github.com/org/repo/pull/9"}]))
+        return _ok()
+
+    with patch("open_implementation_pr.subprocess.run", side_effect=fake_run):
+        result = open_implementation_pr.open_pr_for_story("foo", "run-2", state_base=tmp_path)
+
+    # returned dict shape is unchanged by supersession.
+    assert result == {
+        "branch": "light-factory/foo/run-2",
+        "pr_number": 9,
+        "pr_url": "https://github.com/org/repo/pull/9",
+    }
+    create_index = next(i for i, c in enumerate(calls) if c[:3] == ["gh", "pr", "create"])
+    assert calls[create_index + 1 :] == [
+        ["gh", "pr", "list", "--head", "light-factory/foo/run-2", "--state", "open", "--json", "number,url"],
+        SUPERSESSION_QUERY,
+        ["gh", "pr", "comment", "9", "--body", "Retry of #7"],
+        ["gh", "pr", "close", "7", "--comment", "Superseded by #9"],
+    ]
+
+
+def test_same_run_id_rerun_completes_an_interrupted_supersession(tmp_path):
+    calls = []
+
+    def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
+        calls.append(cmd)
+        if _is_supersession_query(cmd):
+            return _ok(
+                _open_pr_list_output(
+                    [(7, "light-factory/foo/run-1"), (9, "light-factory/foo/run-2")]
+                )
+            )
+        if _is_head_query(cmd):
+            return _ok(_pr_list_output([{"number": 9, "url": "https://github.com/org/repo/pull/9"}]))
+        if cmd[:3] in (["gh", "pr", "close"], ["gh", "pr", "comment"]):
+            return _ok()
+        raise AssertionError(f"unexpected subprocess call: {cmd}")
+
+    with patch("open_implementation_pr.subprocess.run", side_effect=fake_run):
+        result = open_implementation_pr.open_pr_for_story("foo", "run-2", state_base=tmp_path)
+
+    assert result == {
+        "branch": "light-factory/foo/run-2",
+        "pr_number": 9,
+        "pr_url": "https://github.com/org/repo/pull/9",
+    }
+    # existing PR reused (no git, no gh pr create), predecessor still superseded.
+    assert calls == [
+        ["gh", "pr", "list", "--head", "light-factory/foo/run-2", "--state", "open", "--json", "number,url"],
+        SUPERSESSION_QUERY,
+        ["gh", "pr", "comment", "9", "--body", "Retry of #7"],
+        ["gh", "pr", "close", "7", "--comment", "Superseded by #9"],
+    ]
+
+
+def test_supersession_failure_fails_open_pr_for_story_and_leaves_new_pr_open(tmp_path):
+    calls = []
+
+    def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
+        calls.append(cmd)
+        if _is_supersession_query(cmd):
+            return _fail(stderr="gh: rate limited")
+        if _is_head_query(cmd):
+            if calls.count(cmd) == 1:
+                return _ok(_pr_list_output([]))
+            return _ok(_pr_list_output([{"number": 9, "url": "https://github.com/org/repo/pull/9"}]))
+        return _ok()
+
+    with patch("open_implementation_pr.subprocess.run", side_effect=fake_run):
+        with pytest.raises(open_implementation_pr.PROpenError, match="rate limited"):
+            open_implementation_pr.open_pr_for_story("foo", "run-2", state_base=tmp_path)
+
+    # the new PR was created and nothing closed it.
+    assert len([c for c in calls if c[:3] == ["gh", "pr", "create"]]) == 1
+    assert [c for c in calls if c[:3] == ["gh", "pr", "close"]] == []
 
 
 # --- close_for_clarification --------------------------------------------------------------
@@ -365,7 +634,9 @@ def test_state_base_override_is_used_for_git_add_paths(tmp_path):
 
     def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
         calls.append(cmd)
-        if cmd[:3] == ["gh", "pr", "list"]:
+        if _is_supersession_query(cmd):
+            return _ok(_open_pr_list_output([]))
+        if _is_head_query(cmd):
             if calls.count(cmd) == 1:
                 return _ok(_pr_list_output([]))
             return _ok(_pr_list_output([{"number": 1, "url": "https://github.com/org/repo/pull/1"}]))
