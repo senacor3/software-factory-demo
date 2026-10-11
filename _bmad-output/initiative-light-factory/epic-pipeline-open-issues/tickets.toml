@@ -1,5 +1,6 @@
 # tickets.toml — epic-pipeline-open-issues's agreed children, in build order.
 # Tracer bullet: entry 1. Refactor sweep: entry 6. Closing end-to-end suite: entry 7.
+# Entry 3 ("Real security tooling") dropped 2026-10-11, moved to deferred-work.md; its id is not reused.
 
 [[entry]]
 id = 1
@@ -25,18 +26,6 @@ hitl = false
 risk = "medium"
 unknown = "Implementation shape depends entirely on entry 1's decision -- cannot be planned further until then."
 references = ["architecture-light-factory/architecture-light-factory.md#ad-13", "deferred-work.md"]
-
-[[entry]]
-id = 3
-type = "story"
-title = "Real security tooling"
-description = "Wire a real security scanner (e.g. bandit) into run_checks.py's run_security, replacing the permanent 'skipped' placeholder, mirroring how lint went real in ticket 1.13."
-verify = "run_security reports a genuine pass/fail against a real finding, not status: skipped."
-covers = ["CAP-5"]
-after = []
-hitl = false
-risk = "low"
-references = ["spec-light-factory/spec-light-factory.md#capabilities", "architecture-light-factory/architecture-light-factory.md#ad-6", "deferred-work.md"]
 
 [[entry]]
 id = 4
@@ -67,10 +56,10 @@ references = ["architecture-light-factory/architecture-light-factory.md#ad-2", "
 id = 6
 type = "story"
 title = "Refactor sweep"
-description = "Closes out doc drift and deferred findings accumulated across entries 1-5, per the epic's own closing-sweep convention; no new behavior."
-verify = "The checks suite passes, and every review finding deferred across entries 1-5 is either resolved or explicitly re-parked in Notes with a reason."
+description = "Closes out doc drift and deferred findings accumulated across entries 1, 2, 4, and 5, per the epic's own closing-sweep convention; no new behavior."
+verify = "The checks suite passes, and every review finding deferred across entries 1, 2, 4, and 5 is either resolved or explicitly re-parked in Notes with a reason."
 covers = []
-after = [1, 2, 3, 4, 5]
+after = [1, 2, 4, 5]
 hitl = false
 risk = "low"
 
@@ -78,7 +67,7 @@ risk = "low"
 id = 7
 type = "story"
 title = "Closing end-to-end suite"
-description = "Runs live dispatches that exercise the clarification-or-fix loop, a real gate reject with automatic PR-closing, and a retriggered supersession -- proving entries 1-5's Done-when criteria live, not just unit-tested."
+description = "Runs live dispatches that exercise the clarification-or-fix loop, a real gate reject with automatic PR-closing, and a retriggered supersession -- proving entries 1, 2, 4, and 5's Done-when criteria live, not just unit-tested."
 verify = "A live run demonstrates loop engagement within its cap, a reject correctly closing its PR, and a retrigger superseding its predecessor's PR cleanly."
 covers = []
 after = [6]

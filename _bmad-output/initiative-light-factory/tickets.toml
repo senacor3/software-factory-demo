@@ -12,5 +12,5 @@ covers = ["CAP-1", "CAP-2", "CAP-3", "CAP-4", "CAP-5", "CAP-6", "CAP-7", "CAP-8"
 id = 2
 slug = "epic-pipeline-open-issues"
 title = "Closing the pipeline's open issues"
-covers = ["CAP-1", "CAP-2", "CAP-3", "CAP-5", "CAP-7", "CAP-8"]
+covers = ["CAP-1", "CAP-2", "CAP-3", "CAP-7", "CAP-8"]
 after = [{ epic = 1, needs = "the built, live-proven pipeline" }]
