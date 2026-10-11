@@ -10,9 +10,12 @@ assignee: ""
 risk: medium
 estimate: ""
 estimate_basis: "envelope"
+status: done
 ---
 
 # Configurable checks and the pipeline's remaining gaps
+
+> **Status:** done (2026-10-11). Shown live: the checks running from the repo's config, a clarification halt ending without the `plan-approval` gate, three stories merged through the six-job pipeline, and the fix loop engaging for the first time. Not shown live: a halt at the clarification cap. Three low findings stay open in `deferred-work.md` — see the closure note at the end of Notes.
 
 ## Description
 
@@ -69,3 +72,11 @@ The pipeline itself (`.github/workflows/`, `factory/`, `.claude/skills/`, `.fact
   6. **Nothing deferred** — entries 3 and 5.
 - Entry 2's live proof completed (2026-10-11): run `38149509051` halted for clarification on `stories/one-input-path-per-story-slug.md` and ended without opening `plan-approval` — every later job skipped, no review requested, PR #11 labeled and closed with the questions. Done-when 2 is met below the cap; the at-cap variant shares the code path and was not run. This closes item 5 of entry 6's disposition list. The story itself is unanswered: its question (reject or normalise other spellings of a story path) is the user's, and the per-slug concurrency finding stays open in `deferred-work.md` until it is answered and re-dispatched.
 - Fix loop engaged live (2026-10-11): run `38150142797` (`stories/one-input-path-per-story-slug.md`, PR #12, merged as `c60279b`), the answered re-dispatch of the story used for entry 2's proof. The first review raised one finding (two CLI tests the plan listed were missing), one fix cycle added them, the second review was clean: `fix_cycle: 1`, within the cap of 2, then `evidence-approval` and merge. Not seeded. This is the proof entry 4 was after before it moved to `epic-demo-app`; it happened here on an unticketed run, so no entry of this epic claims it and CAP-7 stays out of `covers`. The same run also showed the second clarification round resolving (one round of two spent, PR #11) and built the per-slug half of the concurrency finding.
+- Closure (2026-10-11, user's call), checked against Done when and Requirements:
+  1. **Done-when 1, met** — ticket 1 (`825c3b7`); on the runner, every run since `38146170332` records the commands from `.github/post-implementation-checks.yml`, and `security` records `skipped` with "no command configured".
+  2. **Done-when 2, met below the cap; at the cap not shown live** — ticket 2 (`621ad6a`); run `38149509051` halted with `awaiting-clarification`, every later job skipped, no review requested. A `clarification-cap-reached` halt takes the same path (the `implementation` job's `if:` allows only `ready-for-review`) and is covered by unit tests of the status output, but no story has spent both rounds. Accepted as closed on that basis.
+  3. **Done-when 3, met** — ticket 3; run `38146170332` merged PR #8 as `5f56b5f`, and run `38146620264` rejected `other/foo.md`.
+  4. **Done-when 4, met** — ticket 5: no mechanism now, reopen when a second repository adopts the pipeline.
+  - **Moved, not dropped** — entry 4 (the fix loop's live proof) went to `epic-demo-app` and was then delivered here anyway, on run `38150142797`; that entry is now review-agent instructions only.
+  - **Requirement met in part, by decision** — CAP-1's "one story-slug cannot run twice at once": a different file can no longer share a slug (PR #8, PR #12), but two spellings of one file are still two concurrency groups (user's call to normalise, 2026-10-11).
+  - **Open in `deferred-work.md`, all low and unowned** — the PR a run can leave open when `analysis` fails after opening it; the two holes left in the checks guard (`run_checks.py` runs from the story branch; the working-tree fallback); the two-spellings remainder above. Update-propagation is re-parked by decision, not a defect.
