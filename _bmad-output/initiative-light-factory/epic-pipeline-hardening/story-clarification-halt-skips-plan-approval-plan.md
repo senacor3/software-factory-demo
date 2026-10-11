@@ -3,7 +3,7 @@ title: 'Clarification halt skips plan-approval'
 type: 'bugfix'
 ticket: '2'
 created: '2026-10-11'
-status: 'built'
+status: done
 baseline_revision: '67fae9b3fef6b6b350a1e9b49b89a24eb4adb8b6'
 route: 'oneshot'
 route_source: 'auto'

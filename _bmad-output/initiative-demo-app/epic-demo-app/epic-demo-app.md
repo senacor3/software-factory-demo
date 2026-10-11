@@ -35,7 +35,7 @@ light-factory has been exercised against a realistic codebase, not just its own 
 2. A tender can be created, listed in the open/closed overview, viewed, and gets remarks and offers added while open; adding either to a closed tender is rejected — exercised by both a real test suite and the Angular UI.
 3. The pipeline's build, test, and lint checks run the demo app's own commands (via the checks config), and it has run at least one real story against the app end to end, both gates exercised.
 4. The repo and that completed story are presentable as a demo without extra prep.
-5. A live run against the app shows the pipeline's fix loop engaging at least once and finishing within its cap of 2 (taken over from `initiative-light-factory`, CAP-7 — see Notes).
+5. The review agent's instructions are extended, and a live run on a freight-tenders story shows the review applying them (see Notes).
 
 ## Boundaries
 
@@ -60,3 +60,4 @@ The app's own code under `freight-tenders/`, its CI, and the checks config that 
 - Decision (2026-10-11): entries 7 and 9, the two hitl entries, were pulled into story files so their acceptance criteria are written before the build. Both are drafts (`refined` not set) until reviewed with the user.
 - Decision (2026-10-11): entry 10, "Fix loop engaged on a live run", moved here from `initiative-light-factory`'s `epic-pipeline-hardening` (its entry 4) with its plan, placed after entry 7 and before the sweep (user's call). Two small pipeline stories there produced no review finding; the app's larger, cross-layer stories are a better chance. Done when 5 is added for it; it cites no D-requirement, so `covers = []`, and it closes the open half of `initiative-light-factory`'s Done-when 3.
 - Decision (2026-10-11): entry 10 also gives the review agent more instructions (user's call). That edits `.claude/skills/light-factory-review/SKILL.md`, which is pipeline logic — a deliberate, single exception to this epic's Boundaries.
+- Decision (2026-10-11): entry 10 narrowed to "Give the review agent more instructions" (user's call). The fix loop engaged live on the pipeline itself before the entry started — run `38150142797` (`stories/one-input-path-per-story-slug.md`, PR #12, merged as `c60279b`): one finding, one fix cycle, resolved within the cap — so the proof is no longer this epic's to deliver. Done when 5 was reworded to the review-instruction work, and the entry's plan was renamed to match its title.

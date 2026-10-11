@@ -1,6 +1,7 @@
 # tickets.toml — epic-demo-app's agreed children, in build order.
 # Tracer bullet: entry 1. Refactor sweep: entry 8. Closing end-to-end suite: entry 9.
-# Entry 10 ("Fix loop engaged on a live run") added 2026-10-11, moved from initiative-light-factory's epic-pipeline-hardening; placed before entry 8.
+# Entry 10 added 2026-10-11, moved from initiative-light-factory's epic-pipeline-hardening as "Fix loop engaged on a live run"; placed before entry 8.
+# Narrowed the same day to "Give the review agent more instructions" once the fix loop engaged live on the pipeline itself.
 
 [[entry]]
 id = 1
@@ -83,15 +84,15 @@ unknown = "Waits on initiative-light-factory's epic-pipeline-hardening entry 1 (
 [[entry]]
 id = 10
 type = "story"
-title = "Fix loop engaged on a live run"
-description = "Gives the review agent more instructions (`.claude/skills/light-factory-review/SKILL.md`), so its review goes beyond reading the implementation against the plan's subtasks, then runs real freight-tenders stories through the pipeline until one run's review raises a finding and the bounded fix loop engages -- moved from initiative-light-factory's epic-pipeline-hardening entry 4 after two pipeline stories gave 0 fix cycles."
-verify = "The review skill's added instructions are merged, and a live run's review.md shows at least one fix cycle and no more than 2 before the run reaches evidence-approval; no story tells an agent to leave something out."
+title = "Give the review agent more instructions"
+description = "Extends the review agent's instructions (`.claude/skills/light-factory-review/SKILL.md`) so its review goes beyond reading the implementation against the plan's subtasks -- narrowed 2026-10-11 from \"Fix loop engaged on a live run\", whose live proof was delivered on the pipeline itself (run 38150142797) before this entry started."
+verify = "The review skill's added instructions are merged, and a live run on a freight-tenders story shows the review applying them (its review.md or findings refer to something the old instructions did not ask for)."
 covers = []
 after = [7]
 hitl = true
 risk = "medium"
-unknown = "Which instructions to add to the review agent is not settled -- candidates are judging behavior and edge cases beyond the plan's subtasks, the adequacy of the tests, and leftover or unremovable files (the implementation agent cannot delete a file); decide with the user at refine time. Editing the review skill is pipeline logic, which this epic's Boundaries otherwise exclude (see the epic's Notes)."
-references = [".claude/skills/light-factory-review/SKILL.md", "../../initiative-light-factory/architecture-light-factory/architecture-light-factory.md#ad-11", "story-fix-loop-engaged-on-a-live-run-plan.md"]
+unknown = "Which instructions to add is not settled -- candidates are judging behavior and edge cases beyond the plan's subtasks, the adequacy of the tests, and leftover or unremovable files (the implementation agent cannot delete a file); decide with the user at refine time. Editing the review skill is pipeline logic, which this epic's Boundaries otherwise exclude (see the epic's Notes)."
+references = [".claude/skills/light-factory-review/SKILL.md", "../../initiative-light-factory/architecture-light-factory/architecture-light-factory.md#ad-11", "story-give-the-review-agent-more-instructions-plan.md"]
 
 [[entry]]
 id = 8

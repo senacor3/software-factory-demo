@@ -1,5 +1,5 @@
 ---
-title: 'Fix loop engaged on a live run'
+title: 'Give the review agent more instructions'
 type: 'chore'
 ticket: '10'
 created: '2026-10-11'
@@ -24,6 +24,8 @@ context: []
 
 **Renegotiated by the human, 2026-10-11:** stopped after two attempts with 0 fix cycles and moved to `epic-demo-app` as entry 10. On resume the work has two parts: first give the review agent more instructions (an authored change to `.claude/skills/light-factory-review/SKILL.md`, which replaces the "no pipeline code is changed by hand" rule for that file only), then run real freight-tenders stories until the loop engages. Which instructions to add is decided with the human when the entry is refined.
 
+**Renegotiated again by the human, 2026-10-11:** the fix loop engaged live on the pipeline itself before this entry started (run `38150142797` (`stories/one-input-path-per-story-slug.md`, PR #12, merged as `c60279b`): the first review found two CLI tests the plan listed and the implementer had not written; one fix cycle added them; the second review was clean; `fix_cycle: 1`). The entry is narrowed to the first part only — extending the review agent's instructions — and retitled. Its live check is now that a run on a freight-tenders story shows the review applying the new instructions.
+
 </frozen-after-approval>
 
 ## Implementation Notes
@@ -42,6 +44,8 @@ Attempts, on `senacor3/software-factory-demo`, 2026-10-11. Every gate decision w
 Stopped here and moved (user's call, 2026-10-11). What the two attempts, and the four live runs before them, suggest: the loop can only engage on a deviation from the plan that no test catches, because a functional mistake fails a check and stops the run before review, and the plans have been explicit enough to leave the implementer nothing to interpret. The review skill also limits itself to the plan's subtasks. Ideas for the resumed entry, none decided: widen the review agent's remit (behavior and edge cases beyond the subtasks, adequacy of the tests); a story that needs a file removed or renamed, which the implementation agent cannot do with Read/Write/Edit/Grep/Glob -- that would likely end at the cap with `unresolved-after-cap` and expose the missing delete capability.
 
 The plan's status is back to `draft`: the intent changed, so planning resumes from here when entry 10 starts.
+
+What the engaging run adds to the picture above: the finding was a deviation from the plan that no test could catch — missing tests. The analysis plan listed tests the story had not asked for, and the implementer skipped two of them. That is the kind of gap the current review instructions already catch; the open question for this entry is what they do not ask for.
 
 ## Plan Change Log
 
