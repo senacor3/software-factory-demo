@@ -1,0 +1,7 @@
+{
+  "status": "skipped",
+  "command": null,
+  "returncode": null,
+  "detail": "no command configured for this check in .github/post-implementation-checks.yml",
+  "commands": []
+}
