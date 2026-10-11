@@ -57,12 +57,31 @@ def test_derive_story_slug_allows_digits():
     assert state_io.derive_story_slug("stories/story-v2.md") == "story-v2"
 
 
-@pytest.mark.parametrize("path", ["stories/foo.md", "./stories/foo.md", "/repo/stories/foo.md"])
-def test_derive_story_slug_accepts_stories_directory(path):
+@pytest.fixture(autouse=True)
+def _repo_root_cwd(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "path", ["stories/foo.md", "./stories/foo.md", "stories//foo.md", "ABS/stories/foo.md"]
+)
+def test_derive_story_slug_accepts_stories_directory(path, tmp_path):
+    if path.startswith("ABS/"):
+        path = str(tmp_path / path[len("ABS/") :])
     assert state_io.derive_story_slug(path) == "foo"
 
 
-@pytest.mark.parametrize("path", ["other/foo.md", "foo.md", "stories/billing/foo.md"])
+@pytest.mark.parametrize(
+    "path",
+    [
+        "other/foo.md",
+        "foo.md",
+        "stories/billing/foo.md",
+        "docs/stories/foo.md",
+        "../stories/foo.md",
+        "/elsewhere/stories/foo.md",
+    ],
+)
 def test_derive_story_slug_rejects_wrong_location(path):
     with pytest.raises(ValueError, match="stories") as excinfo:
         state_io.derive_story_slug(path)
@@ -308,6 +327,29 @@ def test_cli_derive_wrong_folder_exits_2_and_prints_stderr(capsys):
     assert rc == 2
     assert captured.out == ""
     assert "error" in captured.err
+
+
+def test_cli_derive_nested_stories_dir_exits_2_and_prints_stderr(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    rc = state_io.main(
+        ["derive", "--story-file", "docs/stories/foo.md", "--github-run-id", "999"]
+    )
+    captured = capsys.readouterr()
+    assert rc == 2
+    assert captured.out == ""
+    assert "error" in captured.err
+    assert "docs/stories/foo.md" in captured.err
+
+
+def test_cli_derive_dot_slash_path_normalises(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    rc = state_io.main(
+        ["derive", "--story-file", "./stories/foo.md", "--github-run-id", "999"]
+    )
+    assert rc == 0
+    assert "story-slug=foo" in capsys.readouterr().out
 
 
 def test_cli_write_then_read_round_trip(tmp_path, capsys):

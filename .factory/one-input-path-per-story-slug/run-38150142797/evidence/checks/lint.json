@@ -1,0 +1,26 @@
+{
+  "status": "pass",
+  "command": [
+    "uv",
+    "run",
+    "--with",
+    "ruff",
+    "ruff",
+    "check",
+    "factory/"
+  ],
+  "returncode": 0,
+  "detail": "",
+  "commands": [
+    [
+      "uv",
+      "run",
+      "--with",
+      "ruff",
+      "ruff",
+      "check",
+      "factory/"
+    ]
+  ],
+  "config_source": "origin/main"
+}
