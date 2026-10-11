@@ -329,6 +329,29 @@ def test_cli_derive_wrong_folder_exits_2_and_prints_stderr(capsys):
     assert "error" in captured.err
 
 
+def test_cli_derive_nested_stories_dir_exits_2_and_prints_stderr(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    rc = state_io.main(
+        ["derive", "--story-file", "docs/stories/foo.md", "--github-run-id", "999"]
+    )
+    captured = capsys.readouterr()
+    assert rc == 2
+    assert captured.out == ""
+    assert "error" in captured.err
+    assert "docs/stories/foo.md" in captured.err
+
+
+def test_cli_derive_dot_slash_path_normalises(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    rc = state_io.main(
+        ["derive", "--story-file", "./stories/foo.md", "--github-run-id", "999"]
+    )
+    assert rc == 0
+    assert "story-slug=foo" in capsys.readouterr().out
+
+
 def test_cli_write_then_read_round_trip(tmp_path, capsys):
     path = tmp_path / "plan.md"
     rc = state_io.main(
