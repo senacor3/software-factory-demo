@@ -3,7 +3,7 @@ title: 'Merge the story-file-location story through the pipeline'
 type: 'chore'
 ticket: '3'
 created: '2026-10-11'
-status: 'built'
+status: done
 baseline_revision: '621ad6a126698423a9bbd7d6342801ee92b1add2'
 route: 'oneshot'
 route_source: 'auto'
