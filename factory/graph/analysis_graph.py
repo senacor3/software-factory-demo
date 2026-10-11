@@ -39,6 +39,12 @@ the round-count query itself (`clarification_status`), which now runs *before* t
 write -- also raises `AnalysisPROpenError`, but in that case plan.md/decisions.md are not
 yet written.
 
+A seventh case -- the status-output write (`GITHUB_OUTPUT`) failing after plan.md,
+decisions.md and the PR already exist -- raises `AnalysisStatusOutputError`.
+
+Exit codes per failure case: halted = 1, invocation = 3, PR-open = 4 (including the
+round-count query failure), status-output = 5.
+
 The single-invocation call (`run_analysis`) is kept isolated from the LangGraph wiring
 (`build_graph`) for reuse and testability -- callers can invoke the subprocess/parse logic
 directly without going through the graph.
@@ -91,6 +97,12 @@ class AnalysisPROpenError(RuntimeError):
     round-count query now runs *before* the state write, so a failure there leaves no
     state files; a failure in any later step (PR-open, supersession, labeling, closing,
     commenting) leaves plan.md/decisions.md already written."""
+
+
+class AnalysisStatusOutputError(RuntimeError):
+    """Writing the analysis status to `GITHUB_OUTPUT` failed after the analysis (and
+    plan.md, decisions.md and the PR) had completed -- distinct from the other failure
+    types so the `analysis` job fails with its own exit code and the gate stays closed."""
 
 
 # --- the single invocation (one per run; clarification rounds are re-triggers, AD-13) ---
@@ -315,12 +327,17 @@ def _write_status_output(status: str) -> None:
     The workflow's `implementation` job runs only on `ready-for-review`, so a run
     halted for clarification ends without opening the `plan-approval` gate. Outside
     GitHub Actions `GITHUB_OUTPUT` is unset and nothing is written.
+
+    Raises AnalysisStatusOutputError if the output file cannot be opened or written.
     """
     output_path = os.environ.get("GITHUB_OUTPUT")
     if not output_path:
         return
-    with open(output_path, "a", encoding="utf-8") as f:
-        f.write(f"status={status}\n")
+    try:
+        with open(output_path, "a", encoding="utf-8") as f:
+            f.write(f"status={status}\n")
+    except OSError as e:
+        raise AnalysisStatusOutputError(f"could not write status to {output_path}: {e}") from e
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -343,7 +360,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"branch/PR-open step failed: {e}", file=sys.stderr)
         return 4
 
-    _write_status_output(outcome["status"])
+    try:
+        _write_status_output(outcome["status"])
+    except AnalysisStatusOutputError as e:
+        print(f"status output write failed: {e}", file=sys.stderr)
+        return 5
+
     print(json.dumps({"ok": True, "status": outcome["status"]}))
     return 0
 

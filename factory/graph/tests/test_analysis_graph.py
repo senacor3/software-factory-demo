@@ -444,6 +444,29 @@ def test_cli_main_appends_status_to_github_output(tmp_path, monkeypatch, status)
     assert output.read_text() == f"story-slug=foo\nstatus={status}\n"
 
 
+@pytest.mark.parametrize("target", ["dir", "missing_parent"])
+def test_cli_main_status_output_write_failure_exits_5(tmp_path, monkeypatch, capsys, target):
+    path = tmp_path if target == "dir" else tmp_path / "nope" / "github_output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(path))
+    with patch("analysis_graph.run_analysis", return_value={"status": "ready-for-review"}):
+        rc = analysis_graph.main(_MAIN_ARGS)
+
+    captured = capsys.readouterr()
+    assert rc == 5
+    assert "status output write failed" in captured.err
+    assert str(path) in captured.err
+    assert captured.out == ""
+
+
+def test_write_status_output_raises_analysis_status_output_error(tmp_path, monkeypatch):
+    monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path))
+    with pytest.raises(analysis_graph.AnalysisStatusOutputError) as exc:
+        analysis_graph._write_status_output("ready-for-review")
+
+    assert str(tmp_path) in str(exc.value)
+    assert isinstance(exc.value.__cause__, OSError)
+
+
 def test_cli_main_without_github_output_writes_no_file(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
