@@ -31,6 +31,18 @@ describe('TenderApiService', () => {
     req.flush([]);
   });
 
+  it('calls POST /api/tenders/{id}/close and emits the returned summary', () => {
+    let result: unknown;
+    service.close(5).subscribe((summary) => (result = summary));
+
+    const req = httpMock.expectOne('/api/tenders/5/close');
+    expect(req.request.method).toBe('POST');
+    const summary = { id: 5, origin: 'Hamburg', destination: 'Berlin', status: 'CLOSED' };
+    req.flush(summary);
+
+    expect(result).toEqual(summary);
+  });
+
   it('calls POST /api/tenders with origin and destination', () => {
     service.create('Hamburg', 'Berlin').subscribe();
 
