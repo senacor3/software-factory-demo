@@ -9,7 +9,22 @@
       <span [class]="isClosed() ? 'pill-closed' : 'pill-open'" data-testid="status">{{
         statusLabel()
       }}</span>
+      @if (!isClosed()) {
+        <button
+          type="button"
+          class="btn-secondary"
+          data-testid="close-tender"
+          [disabled]="closing()"
+          (click)="onClose()"
+        >
+          Ausschreibung schließen
+        </button>
+      }
     </header>
+
+    @if (closeError()) {
+      <p class="form-error" data-testid="close-error">{{ closeError() }}</p>
+    }
 
     @if (isClosed()) {
       <p class="notice" data-testid="closed-explanation">{{ closedExplanation }}</p>

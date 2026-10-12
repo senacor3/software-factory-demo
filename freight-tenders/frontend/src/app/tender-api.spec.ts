@@ -55,6 +55,17 @@ describe('TenderApiService', () => {
     });
   });
 
+  it('calls POST /api/tenders/:id/close and returns the closed tender', () => {
+    let result: unknown;
+    service.close(7).subscribe((tender) => (result = tender));
+
+    const req = httpMock.expectOne('/api/tenders/7/close');
+    expect(req.request.method).toBe('POST');
+    const closed = { id: 7, origin: 'Hamburg', destination: 'Berlin', status: 'CLOSED' };
+    req.flush(closed);
+    expect(result).toEqual(closed);
+  });
+
   it('calls POST /api/tenders/:id/remarks with the text', () => {
     service.addRemark(42, 'Bitte schnell liefern').subscribe();
 

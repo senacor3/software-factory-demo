@@ -54,6 +54,10 @@ export class TenderApiService {
     return this.http.get<TenderDetail>(`/api/tenders/${id}`);
   }
 
+  close(id: number): Observable<TenderSummary> {
+    return this.http.post<TenderSummary>(`/api/tenders/${id}/close`, {});
+  }
+
   addRemark(id: number, text: string): Observable<RemarkSummary> {
     return this.http.post<RemarkSummary>(`/api/tenders/${id}/remarks`, { text });
   }

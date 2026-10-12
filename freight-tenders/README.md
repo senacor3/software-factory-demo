@@ -54,7 +54,7 @@ all calling the backend through one shared `TenderApiService`:
 |---|---|---|
 | `/` | `TenderOverview` | Two tables, "Offene Ausschreibungen" (open) and "Geschlossene Ausschreibungen" (closed); a row opens that tender |
 | `/tenders/new` | `TenderCreate` | A form for origin ("Von") and destination ("Nach"); on success it returns to the overview |
-| `/tenders/:id` | `TenderDetail` | The tender's status, its remarks and offers as two tables, and a form to add each |
+| `/tenders/:id` | `TenderDetail` | The tender's status, its remarks and offers as two tables, a form to add each, and an "Ausschreibung schließen" button while the tender is open |
 
 All four tables sort by a single column: selecting a column header sorts
 ascending, selecting it again reverses. The default order is newest first, and
@@ -62,10 +62,11 @@ the sort resets on every visit. The overview and the detail page show a German
 loading message while their request is in flight, a German empty-state row for
 an empty table, and a German error message if the backend is unreachable; the
 create form shows a German error below its fields if saving fails. On a closed
-tender the detail page disables both forms and explains why. There is no UI
-for closing a tender; that is done through the API only. Global styles (design
-tokens and the shared table, form, and button styles) live in
-`src/styles.scss`.
+tender the detail page disables both forms and explains why. An open tender
+can be closed from its detail page with the "Ausschreibung schließen" button;
+the page switches to the closed state in place, and a German error is shown if
+closing fails. Global styles (design tokens and the shared table, form, and
+button styles) live in `src/styles.scss`.
 
 ```bash
 cd frontend
@@ -87,7 +88,8 @@ cd frontend && npm start
 ```
 
 Open `http://localhost:4200`: the page shows the tender overview, empty on a
-fresh start. Closing a tender has no UI; call the API directly:
+fresh start. A tender can be closed from its detail page, or by calling the
+API directly:
 
 ```bash
 curl -X POST http://localhost:8080/api/tenders/1/close

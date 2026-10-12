@@ -17,6 +17,8 @@ const REMARK_ERROR_MESSAGE =
   'Die Bemerkung konnte nicht gespeichert werden. Bitte versuchen Sie es später erneut.';
 const OFFER_ERROR_MESSAGE =
   'Das Angebot konnte nicht gespeichert werden. Bitte versuchen Sie es später erneut.';
+const CLOSE_ERROR_MESSAGE =
+  'Die Ausschreibung konnte nicht geschlossen werden. Bitte versuchen Sie es später erneut.';
 const CLOSED_EXPLANATION =
   'Diese Ausschreibung ist geschlossen, daher können keine weiteren Bemerkungen oder Angebote hinzugefügt werden.';
 
@@ -74,6 +76,9 @@ export class TenderDetail implements OnInit {
   protected readonly offerError = signal<string | null>(null);
   protected readonly offerSubmitting = signal(false);
 
+  protected readonly closeError = signal<string | null>(null);
+  protected readonly closing = signal(false);
+
   ngOnInit(): void {
     const idParam = this.route.snapshot.paramMap.get('id');
     const id = idParam === null ? NaN : Number(idParam);
@@ -114,6 +119,33 @@ export class TenderDetail implements OnInit {
 
   protected formatAmount(amount: number): string {
     return AMOUNT_FORMAT.format(amount);
+  }
+
+  protected onClose(): void {
+    const current = this.tender();
+    if (current === null || this.isClosed() || this.closing()) {
+      return;
+    }
+
+    this.closing.set(true);
+    this.closeError.set(null);
+
+    this.tenderApi
+      .close(current.id)
+      .pipe(catchError(() => of(null)))
+      .subscribe((closed) => {
+        this.closing.set(false);
+
+        if (closed === null) {
+          this.closeError.set(CLOSE_ERROR_MESSAGE);
+          return;
+        }
+
+        // The close response carries no collections, so keep the loaded remarks and offers.
+        this.tender.update((value) => (value === null ? value : { ...value, status: 'CLOSED' }));
+        this.remarkForm.disable();
+        this.offerForm.disable();
+      });
   }
 
   protected onAddRemark(): void {

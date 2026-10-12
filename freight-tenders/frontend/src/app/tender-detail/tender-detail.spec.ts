@@ -504,6 +504,80 @@ describe('TenderDetail', () => {
       .flush({ id: 21, supplierName: 'Neuer Anbieter', amount: 750 });
   });
 
+  function closeButton(element: HTMLElement): HTMLButtonElement | null {
+    return element.querySelector<HTMLButtonElement>('[data-testid="close-tender"]');
+  }
+
+  it('shows a German close button for an open tender', async () => {
+    const element = await render(OPEN_TENDER);
+
+    expect(closeButton(element)?.textContent?.trim()).toBe('Ausschreibung schließen');
+  });
+
+  it('shows no close button for a tender that is already closed', async () => {
+    const element = await render(CLOSED_TENDER);
+
+    expect(closeButton(element)).toBeNull();
+  });
+
+  it('closes the tender in place without reloading, keeping remarks and offers', async () => {
+    const element = await render(OPEN_TENDER);
+
+    closeButton(element)!.click();
+    const req = httpMock.expectOne('/api/tenders/1/close');
+    expect(req.request.method).toBe('POST');
+    req.flush({ id: 1, origin: 'Hamburg', destination: 'Berlin', status: 'CLOSED' });
+    harness.detectChanges();
+
+    expect(texts(element, 'status')).toEqual(['Geschlossen']);
+    expect(element.querySelector('[data-testid="closed-explanation"]')).toBeTruthy();
+    expect(closeButton(element)).toBeNull();
+    for (const testId of ['remark-submit', 'offer-submit', 'remark-input', 'offer-supplier-input']) {
+      expect(element.querySelector<HTMLInputElement>(`[data-testid="${testId}"]`)?.disabled).toBe(
+        true,
+      );
+    }
+    expect(texts(element, 'remarks-row')).toEqual(['Bestehende Bemerkung']);
+    expect(texts(element, 'offers-row').length).toBe(1);
+    httpMock.expectNone('/api/tenders/1');
+  });
+
+  it('disables the close button while the request is pending and ignores a second click', async () => {
+    const element = await render(OPEN_TENDER);
+    const button = closeButton(element)!;
+
+    button.click();
+    harness.detectChanges();
+    expect(button.disabled).toBe(true);
+    button.click();
+
+    httpMock
+      .expectOne('/api/tenders/1/close')
+      .flush({ id: 1, origin: 'Hamburg', destination: 'Berlin', status: 'CLOSED' });
+  });
+
+  it('shows a German error and keeps the tender open when closing fails', async () => {
+    const element = await render(OPEN_TENDER);
+
+    closeButton(element)!.click();
+    httpMock
+      .expectOne('/api/tenders/1/close')
+      .flush('Fehler', { status: 500, statusText: 'Server Error' });
+    harness.detectChanges();
+
+    expect(element.querySelector('[data-testid="close-error"]')?.textContent).toContain(
+      'konnte nicht geschlossen werden',
+    );
+    expect(texts(element, 'status')).toEqual(['Offen']);
+    expect(closeButton(element)?.disabled).toBe(false);
+    expect(
+      element.querySelector<HTMLButtonElement>('[data-testid="remark-input"]')?.disabled,
+    ).toBe(false);
+    expect(
+      element.querySelector<HTMLButtonElement>('[data-testid="offer-supplier-input"]')?.disabled,
+    ).toBe(false);
+  });
+
   it('places the single closed explanation before both add-forms in DOM order', async () => {
     const element = await render(CLOSED_TENDER);
 
