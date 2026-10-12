@@ -3,7 +3,7 @@ title: 'Give the review agent more instructions'
 type: 'chore'
 ticket: '10'
 created: '2026-10-11'
-status: 'built'
+status: done
 baseline_revision: 'dc8b3f62d9c52fb6dda785e1bab6baf0ed4103dc'
 route: 'oneshot'
 route_source: 'auto'
