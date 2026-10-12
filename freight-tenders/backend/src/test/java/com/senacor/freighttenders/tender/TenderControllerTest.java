@@ -1,7 +1,9 @@
 package com.senacor.freighttenders.tender;
 
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -43,6 +45,87 @@ class TenderControllerTest {
         .andExpect(jsonPath("$.origin").value("Hamburg"))
         .andExpect(jsonPath("$.destination").value("Rotterdam"))
         .andExpect(jsonPath("$.status").value("OPEN"));
+  }
+
+  @Test
+  void createTenderWithBlankOriginReturns400WithViolationAndSkipsService() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/tenders")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"origin\":\"\",\"destination\":\"Rotterdam\"}"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error").value("Bad Request"))
+        .andExpect(jsonPath("$.message").exists())
+        .andExpect(jsonPath("$.path").value("/api/tenders"))
+        .andExpect(jsonPath("$.timestamp").exists())
+        .andExpect(jsonPath("$.violations.length()").value(1))
+        .andExpect(jsonPath("$.violations[0].field").value("origin"))
+        .andExpect(jsonPath("$.violations[0].message").exists());
+
+    verifyNoInteractions(tenderService);
+  }
+
+  @Test
+  void createTenderWithBlankDestinationReturns400WithViolation() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/tenders")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"origin\":\"Hamburg\",\"destination\":\"\"}"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.violations.length()").value(1))
+        .andExpect(jsonPath("$.violations[0].field").value("destination"));
+
+    verifyNoInteractions(tenderService);
+  }
+
+  @Test
+  void createTenderWithMissingFieldsReturns400WithViolationForEachField() throws Exception {
+    mockMvc
+        .perform(post("/api/tenders").contentType(MediaType.APPLICATION_JSON).content("{}"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.violations.length()").value(2))
+        .andExpect(
+            jsonPath("$.violations[*].field").value(containsInAnyOrder("origin", "destination")));
+
+    verifyNoInteractions(tenderService);
+  }
+
+  @Test
+  void createTenderWithNullOrWhitespaceValuesReturns400() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/tenders")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"origin\":null,\"destination\":\"   \"}"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.violations.length()").value(2));
+
+    verifyNoInteractions(tenderService);
+  }
+
+  @Test
+  void notFoundResponseOmitsViolations() throws Exception {
+    given(tenderService.getTender(99L)).willThrow(new TenderNotFoundException(99L));
+
+    mockMvc
+        .perform(get("/api/tenders/{id}", 99L))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.violations").doesNotExist());
+  }
+
+  @Test
+  void conflictResponseOmitsViolations() throws Exception {
+    given(tenderService.addRemark(eq(1L), eq("Too late"))).willThrow(new TenderClosedException(1L));
+
+    mockMvc
+        .perform(
+            post("/api/tenders/{id}/remarks", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"text\":\"Too late\"}"))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.violations").doesNotExist());
   }
 
   @Test
