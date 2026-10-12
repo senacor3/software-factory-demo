@@ -1,5 +1,6 @@
 package com.senacor.freighttenders.tender;
 
+import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.http.HttpStatus;
@@ -24,7 +25,8 @@ public class TenderController {
   }
 
   @PostMapping("")
-  public ResponseEntity<TenderResponse> createTender(@RequestBody CreateTenderRequest request) {
+  public ResponseEntity<TenderResponse> createTender(
+      @Valid @RequestBody CreateTenderRequest request) {
     Tender tender = tenderService.createTender(request.origin(), request.destination());
     return ResponseEntity.status(HttpStatus.CREATED).body(TenderResponse.from(tender));
   }

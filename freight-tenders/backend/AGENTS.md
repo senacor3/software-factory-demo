@@ -8,7 +8,7 @@ Spring Boot 4.1.1 / Java 25 REST API for the freight tender domain (`src/main/ja
 ## Policy
 
 - Backend code, API, domain model, and docs (README, Javadoc) stay English — German is frontend-only, UI-facing text.
-- New or changed request DTOs validate input via Jakarta Bean Validation (`@Valid` + constraint annotations) at the API boundary. Not yet wired anywhere — none of `CreateTenderRequest`/`AddOfferRequest`/`AddRemarkRequest` has it, and `spring-boot-starter-validation` isn't a dependency yet; add it when the first one does.
+- New or changed request DTOs validate input via Jakarta Bean Validation (`@Valid` + constraint annotations) at the API boundary. Wired for `CreateTenderRequest` only (`spring-boot-starter-validation` is a dependency; `TenderExceptionHandler` maps `MethodArgumentNotValidException` to a 400 with `violations`); `AddOfferRequest`/`AddRemarkRequest` don't have it yet.
 
 ## Running and verifying
 
