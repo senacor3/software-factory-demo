@@ -9,10 +9,26 @@
 #
 # run_checks.py reads this file from origin/main, not from the story branch, so a
 # change here applies to runs started after it is merged.
+#
+# `toolchains:` names the runner toolchain versions the commands above need (e.g. a
+# JDK or Node) -- read by `run_checks.py toolchains` and wired into the `checks` job's
+# own setup steps (AD-6 addendum). A key with no value, or the whole mapping absent,
+# means no setup step runs for it.
+toolchains:
+  java: '25'
+  node: '26'
+
 checks:
   build:
     - ["{python}", "-m", "compileall", "factory", "-q"]
+    - ["bash", "-c", "JAVA_HOME=\"$JAVA_HOME_25_X64\" mvn -B -f freight-tenders/backend/pom.xml compile"]
+    - ["npm", "--prefix", "freight-tenders/frontend", "ci"]
+    - ["npm", "--prefix", "freight-tenders/frontend", "run", "build"]
   test:
     - ["uv", "run", "--with", "pytest", "--with", "pyyaml", "pytest", "factory/graph/tests/", "factory/scripts/tests/"]
+    - ["bash", "-c", "JAVA_HOME=\"$JAVA_HOME_25_X64\" mvn -B -f freight-tenders/backend/pom.xml test"]
+    - ["npm", "--prefix", "freight-tenders/frontend", "test", "--", "--watch=false"]
   lint:
     - ["uv", "run", "--with", "ruff", "ruff", "check", "factory/"]
+    - ["bash", "-c", "JAVA_HOME=\"$JAVA_HOME_25_X64\" mvn -B -f freight-tenders/backend/pom.xml spotless:check"]
+    - ["npm", "--prefix", "freight-tenders/frontend", "run", "lint"]

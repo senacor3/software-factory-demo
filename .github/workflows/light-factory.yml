@@ -190,6 +190,36 @@ jobs:
             --story-slug "${{ needs.analysis.outputs.story-slug }}" \
             --run-id "${{ needs.analysis.outputs.run-id }}"
 
+      # Runner toolchain setup for the checks below (AD-6 addendum): the commands
+      # configured in .github/post-implementation-checks.yml may need a JDK and/or
+      # Node that this job's `ubuntu-latest` runner doesn't provide implicitly, so
+      # read the versions the repo names from that same config's `toolchains:`
+      # mapping, into $GITHUB_OUTPUT the same way "Derive story-slug and run-id"
+      # does (see run_checks.py's `toolchains` subcommand). Each setup step below is
+      # gated on its own output being non-empty, so a repo/config with no
+      # `toolchains:` entry runs exactly as before this addendum -- no setup step,
+      # no behavior change.
+      - name: Read toolchain versions
+        id: toolchain
+        run: |
+          uv run factory/scripts/run_checks.py toolchains >> "$GITHUB_OUTPUT"
+
+      - name: Set up Java
+        if: steps.toolchain.outputs.java != ''
+        uses: actions/setup-java@v6
+        with:
+          distribution: 'temurin'
+          java-version: ${{ steps.toolchain.outputs.java }}
+          cache: 'maven'
+
+      - name: Set up Node
+        if: steps.toolchain.outputs.node != ''
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ steps.toolchain.outputs.node }}
+          cache: 'npm'
+          cache-dependency-path: freight-tenders/frontend/package-lock.json
+
       # CAP-5 mechanical checks (AD-6): 4 direct pipeline steps, never a graph node or
       # agent tool call. Each step runs the commands the repo configures for that
       # check in .github/post-implementation-checks.yml, read as it is on origin/main

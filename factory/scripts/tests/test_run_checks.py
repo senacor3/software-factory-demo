@@ -274,13 +274,28 @@ def test_named_runners_run_their_own_check(repo, runner, name):
 
 
 def test_repo_config_holds_the_commands_the_script_used_to_hard_code():
-    assert run_checks.load_commands("build", cwd=REPO_ROOT) == [[sys.executable, "-m", "compileall", "factory", "-q"]]
+    # Each list's first entry is still factory/'s own original command, untouched;
+    # the freight-tenders backend/frontend commands are appended after it.
+    assert run_checks.load_commands("build", cwd=REPO_ROOT) == [
+        [sys.executable, "-m", "compileall", "factory", "-q"],
+        ["bash", "-c", 'JAVA_HOME="$JAVA_HOME_25_X64" mvn -B -f freight-tenders/backend/pom.xml compile'],
+        ["npm", "--prefix", "freight-tenders/frontend", "ci"],
+        ["npm", "--prefix", "freight-tenders/frontend", "run", "build"],
+    ]
     # Unchanged apart from `--with pyyaml`, which this module's own tests now need.
     assert run_checks.load_commands("test", cwd=REPO_ROOT) == [
-        ["uv", "run", "--with", "pytest", "--with", "pyyaml", "pytest", "factory/graph/tests/", "factory/scripts/tests/"]
+        ["uv", "run", "--with", "pytest", "--with", "pyyaml", "pytest", "factory/graph/tests/", "factory/scripts/tests/"],
+        ["bash", "-c", 'JAVA_HOME="$JAVA_HOME_25_X64" mvn -B -f freight-tenders/backend/pom.xml test'],
+        ["npm", "--prefix", "freight-tenders/frontend", "test", "--", "--watch=false"],
     ]
-    assert run_checks.load_commands("lint", cwd=REPO_ROOT) == [["uv", "run", "--with", "ruff", "ruff", "check", "factory/"]]
+    assert run_checks.load_commands("lint", cwd=REPO_ROOT) == [
+        ["uv", "run", "--with", "ruff", "ruff", "check", "factory/"],
+        ["bash", "-c", 'JAVA_HOME="$JAVA_HOME_25_X64" mvn -B -f freight-tenders/backend/pom.xml spotless:check'],
+        ["npm", "--prefix", "freight-tenders/frontend", "run", "lint"],
+    ]
     assert run_checks.load_commands("security", cwd=REPO_ROOT) == []
+    # The toolchain versions those appended mvn/npm commands need (AD-6 addendum).
+    assert run_checks.load_toolchains(cwd=REPO_ROOT) == {"java": "25", "node": "26"}
 
 
 # --- config read from the target branch -------------------------------------------------
@@ -396,3 +411,94 @@ def test_cli_exits_nonzero_when_the_config_is_missing(tmp_path, monkeypatch):
 def test_cli_requires_story_slug_and_run_id():
     with pytest.raises(SystemExit):
         run_checks.main(["build"])
+
+
+# --- toolchains: present, absent, malformed ---------------------------------------
+
+TOOLCHAIN_CONFIG = CONFIG + "toolchains:\n  java: '25'\n  node: '26'\n"
+
+
+def test_load_toolchains_returns_configured_versions(tmp_path):
+    _write_config(tmp_path, TOOLCHAIN_CONFIG)
+    assert run_checks.load_toolchains(cwd=tmp_path) == {"java": "25", "node": "26"}
+
+
+def test_load_toolchains_missing_key_is_empty_string(tmp_path):
+    _write_config(tmp_path, CONFIG + "toolchains:\n  java: '25'\n")
+    assert run_checks.load_toolchains(cwd=tmp_path) == {"java": "25", "node": ""}
+
+
+def test_load_toolchains_absent_mapping_is_all_empty(repo):
+    assert run_checks.load_toolchains(cwd=repo) == {"java": "", "node": ""}
+
+
+def test_load_toolchains_null_mapping_is_all_empty(tmp_path):
+    _write_config(tmp_path, CONFIG + "toolchains:\n")
+    assert run_checks.load_toolchains(cwd=tmp_path) == {"java": "", "node": ""}
+
+
+def test_load_toolchains_rejects_non_mapping(tmp_path):
+    _write_config(tmp_path, CONFIG + "toolchains:\n  - java\n  - node\n")
+    with pytest.raises(run_checks.ChecksConfigError, match="must be a mapping"):
+        run_checks.load_toolchains(cwd=tmp_path)
+
+
+def test_load_toolchains_rejects_unknown_toolchain(tmp_path):
+    _write_config(tmp_path, CONFIG + "toolchains:\n  python: '3.13'\n")
+    with pytest.raises(run_checks.ChecksConfigError, match="python"):
+        run_checks.load_toolchains(cwd=tmp_path)
+
+
+def test_load_toolchains_rejects_non_string_version(tmp_path):
+    _write_config(tmp_path, CONFIG + "toolchains:\n  java: 25\n")
+    with pytest.raises(run_checks.ChecksConfigError, match="must be a string"):
+        run_checks.load_toolchains(cwd=tmp_path)
+
+
+def test_load_toolchains_missing_config_raises(tmp_path):
+    with pytest.raises(run_checks.ChecksConfigError, match=str(run_checks.CONFIG_RELPATH)):
+        run_checks.load_toolchains(cwd=tmp_path)
+
+
+def test_load_toolchains_malformed_yaml_raises(tmp_path):
+    _write_config(tmp_path, "toolchains: [unclosed")
+    with pytest.raises(run_checks.ChecksConfigError, match="not valid YAML"):
+        run_checks.load_toolchains(cwd=tmp_path)
+
+
+def test_load_toolchains_reads_from_target_branch(repo, no_target_config):
+    no_target_config.return_value = CONFIG + "toolchains:\n  java: '21'\n"
+    assert run_checks.load_toolchains(cwd=repo) == {"java": "21", "node": ""}
+
+
+# --- CLI: toolchains subcommand ----------------------------------------------------
+
+
+def test_cmd_toolchains_prints_java_and_node_lines(tmp_path, monkeypatch, capsys):
+    _write_config(tmp_path, TOOLCHAIN_CONFIG)
+    monkeypatch.chdir(tmp_path)
+    rc = run_checks.main(["toolchains"])
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "java=25" in out
+    assert "node=26" in out
+
+
+def test_cmd_toolchains_prints_empty_values_when_absent(repo, monkeypatch, capsys):
+    monkeypatch.chdir(repo)
+    rc = run_checks.main(["toolchains"])
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "java=\n" in out
+    assert "node=\n" in out
+
+
+def test_cmd_toolchains_exits_nonzero_on_malformed_config(tmp_path, monkeypatch, capsys):
+    _write_config(tmp_path, CONFIG + "toolchains:\n  python: '3.13'\n")
+    monkeypatch.chdir(tmp_path)
+    rc = run_checks.main(["toolchains"])
+
+    assert rc == 2
+    assert "python" in capsys.readouterr().err

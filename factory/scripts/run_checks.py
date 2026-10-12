@@ -30,6 +30,12 @@ Usage (each `--story-slug S --run-id R`): run_checks.py build | test | lint | se
 
 Exits 1 only when the written result's status is `"fail"`; 0 for `"pass"` or
 `"skipped"`.
+
+A fifth subcommand, `toolchains` (no flags), reads the same config's `toolchains:`
+mapping and prints `java=`/`node=` lines shaped for `>> "$GITHUB_OUTPUT"` -- the
+`checks` job's workflow steps use it to set up the Java/Node versions the configured
+build/test/lint commands need, before any of the four checks above run. It writes no
+evidence and exits 2 only on a missing/unreadable/malformed config.
 """
 
 from __future__ import annotations
@@ -45,6 +51,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import state_io
 
 CHECK_NAMES = ("build", "test", "lint", "security")
+
+TOOLCHAIN_NAMES = ("java", "node")
 
 CONFIG_RELPATH = Path(".github") / "post-implementation-checks.yml"
 
@@ -100,6 +108,28 @@ def load_commands(name: str, *, cwd: str | os.PathLike | None = None) -> list[li
     return _load_config(name, cwd)[0]
 
 
+def _read_config_text(cwd: str | os.PathLike | None = None) -> tuple[str, str, object]:
+    """Return `(text, source, path)` for the checks config, origin/main-first.
+
+    Shared read step for `_load_config` and `load_toolchains`, so both read the same
+    config the same way: from `origin/<TARGET_BRANCH>` when that can be read, else
+    falling back to the working tree under `cwd`, else the working directory. Raises
+    `ChecksConfigError` (with `source` left at its default, None) when neither can be
+    read.
+    """
+    text = _read_target_config(cwd)
+    if text is not None:
+        return text, SOURCE_TARGET, f"{SOURCE_TARGET}:{CONFIG_RELPATH.as_posix()}"
+    path = Path(cwd or ".") / CONFIG_RELPATH
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        raise ChecksConfigError(f"checks config not found: {path}") from None
+    except (OSError, UnicodeDecodeError) as e:
+        raise ChecksConfigError(f"cannot read checks config {path}: {e}") from e
+    return text, SOURCE_WORKING_TREE, path
+
+
 def _load_config(name: str, cwd: str | os.PathLike | None = None) -> tuple[list[list[str]], str | None]:
     """Return `(commands, source)` for check `name`; no commands means none configured.
 
@@ -115,19 +145,7 @@ def _load_config(name: str, cwd: str | os.PathLike | None = None) -> tuple[list[
     # the graphs' own deferred `langgraph` import.
     import yaml
 
-    text = _read_target_config(cwd)
-    if text is not None:
-        source = SOURCE_TARGET
-        path = f"{SOURCE_TARGET}:{CONFIG_RELPATH.as_posix()}"
-    else:
-        path = Path(cwd or ".") / CONFIG_RELPATH
-        try:
-            text = path.read_text(encoding="utf-8")
-        except FileNotFoundError:
-            raise ChecksConfigError(f"checks config not found: {path}") from None
-        except (OSError, UnicodeDecodeError) as e:
-            raise ChecksConfigError(f"cannot read checks config {path}: {e}") from e
-        source = SOURCE_WORKING_TREE
+    text, source, path = _read_config_text(cwd)
 
     try:
         return _parse_commands(name, text, path, yaml), source
@@ -163,6 +181,60 @@ def _parse_commands(name: str, text: str, path: object, yaml) -> list[list[str]]
                 f"{path}: every `{name}` command must be a non-empty list of strings, got {cmd!r}"
             )
     return [[arg.replace(PYTHON_TOKEN, sys.executable) for arg in cmd] for cmd in commands]
+
+
+def _parse_toolchains(text: str, path: object, yaml) -> dict[str, str]:
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError as e:
+        raise ChecksConfigError(f"{path} is not valid YAML: {e}") from e
+
+    toolchains = data.get("toolchains") if isinstance(data, dict) else None
+    if toolchains is None:
+        toolchains = {}
+    if not isinstance(toolchains, dict):
+        raise ChecksConfigError(f"{path}: `toolchains` must be a mapping")
+
+    unknown = sorted(str(key) for key in toolchains if key not in TOOLCHAIN_NAMES)
+    if unknown:
+        raise ChecksConfigError(
+            f"{path} names unknown toolchain(s) {', '.join(unknown)}; allowed: {', '.join(TOOLCHAIN_NAMES)}"
+        )
+
+    result: dict[str, str] = {}
+    for name in TOOLCHAIN_NAMES:
+        value = toolchains.get(name)
+        if value is None:
+            result[name] = ""
+        elif isinstance(value, str):
+            result[name] = value
+        else:
+            raise ChecksConfigError(f"{path}: `toolchains.{name}` must be a string, got {value!r}")
+    return result
+
+
+def load_toolchains(*, cwd: str | os.PathLike | None = None) -> dict[str, str]:
+    """Return `{"java": ..., "node": ...}` from the config's `toolchains:` mapping.
+
+    Reuses `_load_config`'s own origin/main-with-working-tree-fallback read (via
+    `_read_config_text`), so this reads the exact same config `checks:` does. A
+    missing `toolchains:` key, or a missing key within it, maps to `""` rather than
+    raising -- the workflow's `if:` gates treat an empty string as "no setup needed",
+    mirroring `state_io.py`'s `cmd_derive` output convention rather than
+    `_parse_commands`'s "absent means fail" posture for `checks:` itself. Raises
+    `ChecksConfigError` (carrying `source`) for a missing/unreadable config, invalid
+    YAML, a `toolchains:` value that isn't a mapping, an unknown toolchain name, or a
+    version value that isn't a string -- same "fail loud on malformed, never a silent
+    skip" posture `_parse_commands` already applies to `checks:`.
+    """
+    import yaml
+
+    text, source, path = _read_config_text(cwd)
+    try:
+        return _parse_toolchains(text, path, yaml)
+    except ChecksConfigError as e:
+        e.source = source
+        raise
 
 
 def _write_evidence(
@@ -298,13 +370,34 @@ def _add_check_subparser(sub, name: str):
     return pc
 
 
+def cmd_toolchains(args) -> int:
+    """Print the config's `toolchains:` versions as `java=`/`node=` lines.
+
+    Shaped for direct `>> "$GITHUB_OUTPUT"` redirection, mirroring `state_io.py`'s
+    `cmd_derive`. A key absent from the config prints as an empty value (`java=`),
+    never raises -- only a missing/unreadable/malformed config is an error.
+    """
+    try:
+        toolchains = load_toolchains()
+    except ChecksConfigError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    for name in TOOLCHAIN_NAMES:
+        print(f"{name}={toolchains[name]}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
     for name in CHECK_NAMES:
         _add_check_subparser(sub, name)
+    sub.add_parser("toolchains", help="print configured runner toolchain versions (java=/node=)")
 
     args = p.parse_args(argv)
+
+    if args.cmd == "toolchains":
+        return cmd_toolchains(args)
 
     result = run_check(args.check, args.story_slug, args.run_id)
     print(json.dumps(result))
