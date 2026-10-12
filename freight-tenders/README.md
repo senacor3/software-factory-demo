@@ -34,6 +34,7 @@ gone on restart.
 cd backend
 mvn -B verify        # build + test
 mvn spotless:check   # lint (formatting)
+mvn spotbugs:check   # static analysis (bug patterns)
 mvn spring-boot:run  # run locally on :8080
 ```
 
@@ -53,6 +54,7 @@ npm ci
 npm run build          # production build
 npm test -- --watch=false   # unit tests
 npm run lint            # lint
+npm run static-analysis # static analysis (bug patterns)
 npm start                # run locally on :4200, proxying /api to localhost:8080
 ```
 

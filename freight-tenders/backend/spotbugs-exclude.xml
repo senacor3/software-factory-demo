@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Narrow, documented suppressions only: never a blanket rule for a whole bug pattern or
+  package (see AGENTS.md's "fix the code or document a suppression with a reason" posture).
+  Each entry below is a real SpotBugs finding on a pattern this codebase uses deliberately and
+  cannot change without breaking the framework contract it follows.
+-->
+<FindBugsFilter>
+  <!-- JPA @ManyToOne bidirectional association getters: Offer/Remark.getTender() returning the
+       related Tender entity by reference is how JPA navigation works, not a leaked mutable
+       collection. Defensively copying an entity reference here would break the association. -->
+  <Match>
+    <Class name="com.senacor.freighttenders.tender.Offer" />
+    <Method name="getTender" />
+    <Bug pattern="EI_EXPOSE_REP" />
+  </Match>
+  <Match>
+    <Class name="com.senacor.freighttenders.tender.Remark" />
+    <Method name="getTender" />
+    <Bug pattern="EI_EXPOSE_REP" />
+  </Match>
+
+  <!-- Spring constructor injection of a singleton service bean (AGENTS.md: "constructor
+       injection ... never field/setter injection"). TenderService is not an externally mutable
+       value object that needs defensive copying; it is the one shared bean Spring wires in. -->
+  <Match>
+    <Class name="com.senacor.freighttenders.tender.TenderController" />
+    <Method name="&lt;init&gt;" />
+    <Bug pattern="EI_EXPOSE_REP2" />
+  </Match>
+</FindBugsFilter>

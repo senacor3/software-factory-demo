@@ -15,6 +15,7 @@ Spring Boot 4.1.1 / Java 25 REST API for the freight tender domain (`src/main/ja
 - `mvn -B verify` — build + test (JUnit 5/Mockito/AssertJ; `@WebMvcTest`+`MockMvc` and `@DataJpaTest` slices).
 - `mvn spotless:check` — formatting lint, run as its own step; deliberately *not* bound to the `verify` lifecycle, so a clean `mvn verify` does not mean formatting is clean — always run both (caught one real violation this way during ticket 1).
 - `mvn spotless:apply` — auto-fixes what `spotless:check` finds.
+- `mvn spotbugs:check` — static analysis (bug patterns), also run as its own step, independent of `spotless:check`'s formatting-only result; `spotbugs-exclude.xml` documents the three findings suppressed as real framework-pattern false positives (JPA `@ManyToOne` getters, Spring constructor injection) rather than weakening the ruleset.
 
 ## Conventions that differ from defaults
 

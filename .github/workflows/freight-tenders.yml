@@ -60,6 +60,9 @@ jobs:
       - name: Lint (formatting)
         run: mvn -B spotless:check
 
+      - name: Static analysis
+        run: mvn -B spotbugs:check
+
   frontend:
     name: "Frontend"
     needs: changes
@@ -90,3 +93,6 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      - name: Static analysis
+        run: npm run static-analysis

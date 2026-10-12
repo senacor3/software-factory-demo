@@ -14,6 +14,13 @@ public record TenderDetailResponse(
     List<RemarkResponse> remarks,
     List<OfferResponse> offers) {
 
+  // Defensive copy so neither the constructor nor the accessors expose the caller's or this
+  // record's own list instance for external mutation (SpotBugs EI_EXPOSE_REP/EI_EXPOSE_REP2).
+  public TenderDetailResponse {
+    remarks = List.copyOf(remarks);
+    offers = List.copyOf(offers);
+  }
+
   public static TenderDetailResponse from(Tender tender) {
     return new TenderDetailResponse(
         tender.getId(),

@@ -87,6 +87,10 @@ describe('TenderCreate', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     compiled.querySelector('form')!.dispatchEvent(new Event('submit'));
 
-    httpMock.expectNone('/api/tenders');
+    // httpMock.expectNone throws if a matching request was made; wrapping it in an explicit
+    // expect(...).not.toThrow() keeps that same check but as a recognized assertion (plain
+    // httpMock.expectNone(...) isn't picked up by eslint-plugin-sonarjs's assertions-in-tests
+    // rule, part of the new static_analysis check).
+    expect(() => httpMock.expectNone('/api/tenders')).not.toThrow();
   });
 });

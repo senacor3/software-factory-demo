@@ -4,8 +4,8 @@
 # every story, and the check stops at the first one that fails.
 #
 # The check names are fixed: build, test, lint, security, static_analysis. A check
-# with no commands records `status: skipped`, never `pass` -- that is `security` and
-# `static_analysis` in this repo.
+# with no commands records `status: skipped`, never `pass` -- that is `security` in
+# this repo.
 # `{python}` is replaced with the interpreter running run_checks.py.
 #
 # run_checks.py reads this file from origin/main, not from the story branch, so a
@@ -34,3 +34,5 @@ checks:
     - ["bash", "-c", "JAVA_HOME=\"$JAVA_HOME_25_X64\" mvn -B -f freight-tenders/backend/pom.xml spotless:check"]
     - ["npm", "--prefix", "freight-tenders/frontend", "run", "lint"]
   static_analysis:
+    - ["bash", "-c", "JAVA_HOME=\"$JAVA_HOME_25_X64\" mvn -B -f freight-tenders/backend/pom.xml spotbugs:check"]
+    - ["npm", "--prefix", "freight-tenders/frontend", "run", "static-analysis"]

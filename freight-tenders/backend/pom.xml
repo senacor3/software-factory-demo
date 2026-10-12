@@ -84,6 +84,20 @@
                     </java>
                 </configuration>
             </plugin>
+
+            <!-- Not bound to a lifecycle phase on purpose, same as spotless above:
+                 CI (and the Verification section below) invoke `mvn spotbugs:check`
+                 as its own step, kept separate from `mvn -B verify` so a build/test
+                 failure and a bug-pattern finding show up as distinct CI steps, and
+                 independent of `spotless:check`'s own formatting-only result. -->
+            <plugin>
+                <groupId>com.github.spotbugs</groupId>
+                <artifactId>spotbugs-maven-plugin</artifactId>
+                <version>4.10.5.0</version>
+                <configuration>
+                    <excludeFilterFile>spotbugs-exclude.xml</excludeFilterFile>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 </project>

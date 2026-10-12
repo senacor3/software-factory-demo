@@ -60,6 +60,12 @@ public class TenderExceptionHandler {
       Instant timestamp,
       @JsonInclude(JsonInclude.Include.NON_NULL) List<Violation> violations) {
 
+    // Defensive copy (null stays null, since violations is only present on 400s) so neither the
+    // constructor nor the accessor exposes a caller-mutable list (SpotBugs EI_EXPOSE_REP/REP2).
+    public ErrorResponse {
+      violations = violations == null ? null : List.copyOf(violations);
+    }
+
     static ErrorResponse of(HttpStatus status, String message, HttpServletRequest request) {
       return new ErrorResponse(
           status.getReasonPhrase(), message, request.getRequestURI(), Instant.now(), null);

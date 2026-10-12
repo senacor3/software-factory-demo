@@ -19,6 +19,7 @@ Angular 22 (standalone, signals, Vitest) frontend for the freight tender domain.
 - `npm ci && npm run build` — production build.
 - `npm test -- --watch=false` — Vitest unit tests; the bare `ng test`/`npm test` default watches and never exits.
 - `npm run lint` — `ng lint`.
+- `npm run static-analysis` — `eslint -c eslint.static-analysis.config.js .`; bug-pattern rules (`eslint-plugin-sonarjs`'s recommended set), independent of `npm run lint`'s style/formatting config (`eslint.config.js`) — a separate config file and script, since `ng lint` is pinned to one config via `angular.json`.
 - `npm start` — dev server on `:4200`, proxying `/api` to `localhost:8080` — the backend must already be running locally.
 
 ## Conventions that differ from defaults
