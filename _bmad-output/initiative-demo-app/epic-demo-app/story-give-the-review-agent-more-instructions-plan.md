@@ -3,13 +3,13 @@ title: 'Give the review agent more instructions'
 type: 'chore'
 ticket: '10'
 created: '2026-10-11'
-status: 'draft'
+status: 'built'
 baseline_revision: 'dc8b3f62d9c52fb6dda785e1bab6baf0ed4103dc'
 route: 'oneshot'
 route_source: 'auto'
-review: ''
-review_source: ''
-lenses_ran: []
+review: 'quick'
+review_source: 'pinned'
+lenses_ran: ['quick']
 review_loop_iteration: 0
 context: []
 ---
@@ -26,11 +26,15 @@ context: []
 
 **Renegotiated again by the human, 2026-10-11:** the fix loop engaged live on the pipeline itself before this entry started (run `38150142797` (`stories/one-input-path-per-story-slug.md`, PR #12, merged as `c60279b`): the first review found two CLI tests the plan listed and the implementer had not written; one fix cycle added them; the second review was clean; `fix_cycle: 1`). The entry is narrowed to the first part only — extending the review agent's instructions — and retitled. Its live check is now that a run on a freight-tenders story shows the review applying the new instructions.
 
+**Renegotiated again by the human, 2026-10-12:** which instructions to add is settled — one skill, not two agents (considered and rejected a separate "technical quality" reviewer: no permission/context reason to split, and the epic's one pipeline-logic exception was scoped to editing this one file, not to standing up a second graph-invoked agent). `.claude/skills/light-factory-review/SKILL.md` gains a new Step 3, alongside the existing plan-conformance Step 2: judge the implementation's technical quality and its accordance with this repo's agent instructions (`AGENTS.md`/`CLAUDE.md`, read generically if present — not specific rules text baked into the prompt), explicitly excluding anything the mechanical `build`/`test`/`lint`/`security` checks already catch. `factory/graph/schemas/review_result.schema.json`'s `findings` descriptions were reworded to match (no structural change — `review_graph.py`/`fix_loop_graph.py` are untouched and need no change, findings of either kind flow through the same array). Prerequisite work, done first: root + `freight-tenders/backend` + `freight-tenders/frontend` each got an `AGENTS.md` via `bmad-project-context`, adapted from the human's reference harness (a different stack) rather than copied — so Step 3 has real conventions to check the demo app against. Committed as `bc6cb2a` (`AGENTS.md`s + a backend error-shape retrofit) and a second commit for the `SKILL.md`/schema change. Remaining: dispatch a real freight-tenders story through the pipeline and confirm `review.md` shows Step 3 actually applying — a finding (or an explicit clean pass) that cites `AGENTS.md` or a quality point, not just plan-conformance. That dispatch is a live, hard-to-reverse pipeline run (opens a PR, runs CI) and needs the human's go-ahead before it's triggered.
+
 </frozen-after-approval>
 
 ## Implementation Notes
 
 Oneshot: the authored content is one story file per attempt plus this plan; the rest is dispatching and observing.
+
+**2026-10-12:** `.claude/skills/light-factory-review/SKILL.md` — added Step 3 (technical quality + `AGENTS.md`/`CLAUDE.md` accordance, explicitly excluding what the mechanical checks already catch) and reworded the frontmatter `description` and the `Output` section to cover both steps. `factory/graph/schemas/review_result.schema.json` — reworded `findings`'s and its items' `description` fields to stop saying "against the plan's acceptance criteria" exclusively (text only; schema shape, `review_graph.py`, and `fix_loop_graph.py` are unchanged — verified via the full test suite, still 288 passed, and `ruff check factory/` clean). Prerequisite: ran `bmad-project-context` to set up `AGENTS.md` at the repo root and in `freight-tenders/backend`/`freight-tenders/frontend`, filtered hard against a human-supplied reference harness from an unrelated project (different stack — most of its stack-specific rules didn't apply or conflicted with this already-shipped codebase; kept only what's portable or what the human explicitly chose to adopt). Also retrofitted the backend's error-response shape (`{error, message, path, timestamp}`) as part of that AGENTS.md work, since the human approved doing so immediately rather than just documenting it (verified: `mvn -B verify` 25/25 tests pass, `mvn spotless:check` clean after one `spotless:apply` fix). Both committed (`bc6cb2a`, then the `SKILL.md`/schema change).
 
 Design choice in the first story, made while drafting and put to the human with the story: of the three options the deferred entry names, it takes "read the checks config from the target branch". Denying the agent writes to `.github/` and `factory/` would block legitimate stories (this one included), and flagging in the summary alone prevents nothing. The story prescribes a separate `_read_target_config` function with a working-tree fallback so the existing tests, which mock `subprocess.run` wholesale, keep passing — the implementation agent has no shell and cannot run them.
 
@@ -51,8 +55,17 @@ What the engaging run adds to the picture above: the finding was a deviation fro
 
 ## Review Triage Log
 
+### Review pass 1 (quick, iteration 0) — 2026-10-12
+
+Verdict counts: high: 0, medium: 1, low: 0, false: 0, maybe-false: 0
+
+- Step 3's wording ("every directory the diff touches") asked the review skill to use a boundary it has no tool to enumerate — `--allowedTools` is `Read Grep Glob` only, no git/Bash, confirmed in `review_graph.py`'s `_build_command` (unchanged by this diff) — **medium**, confirmed. Not unsafe (read-only judgment work), but would cause a silent, inconsistent miss of a directory's `AGENTS.md` whenever `plan.md` doesn't name every touched path. Route: patch — reworded Step 3 to ground the check in what the agent can actually see (`plan.md`'s own references, and what `Grep`/`Glob` surfaced during Step 2's own exploration) instead of "the diff."
+
 ## Verification
 
+**Commands:**
+- `uv run --with pytest --with pyyaml pytest factory/graph/tests/ factory/scripts/tests/` -- expected: all pass (confirms the schema/skill wording change caused no code regression)
+- `uv run --with ruff ruff check factory/` -- expected: clean
+
 **Manual checks (if no CLI):**
-- The run's `review.md` frontmatter shows `fix_cycle` of 1 or 2, and the run reaches `evidence-approval`.
-- The run branch shows the fix cycle's commit(s) after the first review.
+- Dispatch a real freight-tenders story through the pipeline; `review.md` or `evidence/review/findings.json` shows a finding (or an explicit clean pass) distinguishable as Step 3's own — citing `AGENTS.md`/`CLAUDE.md` or a technical-quality point, not just plan-conformance — proof the new instructions were actually applied, not just authored.

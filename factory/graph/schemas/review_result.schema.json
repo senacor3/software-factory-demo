@@ -7,7 +7,7 @@
   "properties": {
     "findings": {
       "type": "array",
-      "description": "Issues found in the implementation against the plan's acceptance criteria. Empty array = clean pass.",
+      "description": "Issues found in the implementation, against the plan's acceptance criteria or against technical quality and this repo's agent instructions. Empty array = clean pass.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -18,7 +18,7 @@
           },
           "description": {
             "type": "string",
-            "description": "What is wrong and why it matters against the plan's acceptance criteria."
+            "description": "What is wrong and why it matters."
           }
         },
         "required": ["location", "description"]
