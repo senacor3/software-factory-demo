@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -112,5 +113,29 @@ class TenderServiceTest {
 
     assertThat(tender.getOffers()).isEmpty();
     verify(tenderRepository, never()).save(any());
+  }
+
+  @Test
+  void listTendersWithNoFilterDelegatesToFindAll() {
+    Tender openTender = new Tender("Hamburg", "Rotterdam");
+    Tender closedTender = new Tender("Berlin", "Munich");
+    closedTender.close();
+    given(tenderRepository.findAll()).willReturn(List.of(openTender, closedTender));
+
+    List<Tender> result = tenderService.listTenders(Optional.empty());
+
+    assertThat(result).containsExactly(openTender, closedTender);
+    verify(tenderRepository, never()).findByStatus(any());
+  }
+
+  @Test
+  void listTendersFilteredByStatusDelegatesToFindByStatus() {
+    Tender openTender = new Tender("Hamburg", "Rotterdam");
+    given(tenderRepository.findByStatus(TenderStatus.OPEN)).willReturn(List.of(openTender));
+
+    List<Tender> result = tenderService.listTenders(Optional.of(TenderStatus.OPEN));
+
+    assertThat(result).containsExactly(openTender);
+    verify(tenderRepository, never()).findAll();
   }
 }

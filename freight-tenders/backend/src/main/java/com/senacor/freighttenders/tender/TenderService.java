@@ -1,6 +1,8 @@
 package com.senacor.freighttenders.tender;
 
 import java.math.BigDecimal;
+import java.util.List;
+import java.util.Optional;
 import org.springframework.stereotype.Service;
 
 /**
@@ -41,10 +43,16 @@ public class TenderService {
     return tenderRepository.save(tender);
   }
 
+  public Tender getTender(Long id) {
+    return getTenderOrThrow(id);
+  }
+
+  public List<Tender> listTenders(Optional<TenderStatus> status) {
+    return status.map(tenderRepository::findByStatus).orElseGet(tenderRepository::findAll);
+  }
+
   private Tender getTenderOrThrow(Long id) {
-    return tenderRepository
-        .findById(id)
-        .orElseThrow(() -> new IllegalArgumentException("No tender found with id " + id));
+    return tenderRepository.findById(id).orElseThrow(() -> new TenderNotFoundException(id));
   }
 
   private void rejectIfClosed(Tender tender) {
