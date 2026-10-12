@@ -119,9 +119,7 @@ describe('TenderDetail', () => {
     const harness = await RouterTestingHarness.create('/tenders/1');
 
     const element = harness.routeNativeElement as HTMLElement;
-    expect(element.querySelector('[data-testid="loading"]')?.textContent).toContain(
-      'wird geladen',
-    );
+    expect(element.querySelector('[data-testid="loading"]')?.textContent).toContain('wird geladen');
 
     httpMock.expectOne('/api/tenders/1').flush(OPEN_TENDER);
   });
@@ -155,9 +153,10 @@ describe('TenderDetail', () => {
     remarkInput.dispatchEvent(new Event('input'));
     harness.detectChanges();
 
-    element.querySelector('[data-testid="remark-input"]')!.closest('form')!.dispatchEvent(
-      new Event('submit'),
-    );
+    element
+      .querySelector('[data-testid="remark-input"]')!
+      .closest('form')!
+      .dispatchEvent(new Event('submit'));
 
     const remarkReq = httpMock.expectOne('/api/tenders/1/remarks');
     expect(remarkReq.request.body).toEqual({ text: 'Neue Bemerkung' });
@@ -181,9 +180,10 @@ describe('TenderDetail', () => {
     amountInput.dispatchEvent(new Event('input'));
     harness.detectChanges();
 
-    element.querySelector('[data-testid="offer-supplier-input"]')!.closest('form')!.dispatchEvent(
-      new Event('submit'),
-    );
+    element
+      .querySelector('[data-testid="offer-supplier-input"]')!
+      .closest('form')!
+      .dispatchEvent(new Event('submit'));
 
     const offerReq = httpMock.expectOne('/api/tenders/1/offers');
     expect(offerReq.request.body).toEqual({ supplierName: 'Neuer Anbieter', amount: 750 });
@@ -201,9 +201,7 @@ describe('TenderDetail', () => {
     harness.detectChanges();
 
     const element = harness.routeNativeElement as HTMLElement;
-    expect(element.querySelector('[data-testid="status"]')?.textContent).toContain(
-      'Geschlossen',
-    );
+    expect(element.querySelector('[data-testid="status"]')?.textContent).toContain('Geschlossen');
     expect(element.querySelector('[data-testid="closed-explanation"]')?.textContent).toContain(
       'geschlossen',
     );
@@ -237,7 +235,9 @@ describe('TenderDetail', () => {
   it('shows the route as the page heading and the status as a German pill, never the raw enum', async () => {
     const element = await render(SORTABLE_TENDER);
 
-    expect(element.querySelector('[data-testid="page-title"]')?.textContent).toContain('Hamburg → Rotterdam');
+    expect(element.querySelector('[data-testid="page-title"]')?.textContent).toContain(
+      'Hamburg → Rotterdam',
+    );
     expect(texts(element, 'status')).toEqual(['Offen']);
   });
 

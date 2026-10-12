@@ -120,7 +120,7 @@ describe('TenderOverview', () => {
     );
   });
 
-  it('links to the create-tender page and to each tender\'s detail page', () => {
+  it("links to the create-tender page and to each tender's detail page", () => {
     const tenders: TenderSummary[] = [
       { id: 1, origin: 'Hamburg', destination: 'Berlin', status: 'OPEN' },
     ];
@@ -153,7 +153,9 @@ describe('TenderOverview', () => {
   it("shows the page heading and each tender's status as a German pill, never the raw enum", () => {
     const compiled = load(SORTABLE_TENDERS);
 
-    expect(compiled.querySelector('[data-testid="page-title"]')?.textContent).toContain('Ausschreibungen');
+    expect(compiled.querySelector('[data-testid="page-title"]')?.textContent).toContain(
+      'Ausschreibungen',
+    );
 
     const openRow = compiled.querySelector('[data-testid="open-tenders-row"]');
     const closedRow = compiled.querySelector('[data-testid="closed-tenders-row"]');

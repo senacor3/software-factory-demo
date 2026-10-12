@@ -1,7 +1,7 @@
 /* Global styles: the DESIGN.md tokens and the components all three pages share. */
-@import '@fontsource/inter/400.css';
-@import '@fontsource/inter/600.css';
-@import '@fontsource/inter/700.css';
+@use '@fontsource/inter/400.css' as *;
+@use '@fontsource/inter/600.css' as *;
+@use '@fontsource/inter/700.css' as *;
 
 :root {
   --color-primary: #003478;

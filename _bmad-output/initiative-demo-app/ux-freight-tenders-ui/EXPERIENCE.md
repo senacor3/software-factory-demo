@@ -37,10 +37,10 @@ Behavioral. Visual specs live in `DESIGN.md.Components`.
 
 | Component | Use | Behavioral rules |
 |---|---|---|
-| Sortable table | Overview (open/closed tender lists), detail page (remarks, offers) | Select a column header to sort ascending by that column; select the same header again to reverse to descending; select a different header to switch the sort column (always single-column, per the recorded decision). Default sort: newest-first by id (matches current creation order) until a user sorts. Sort state is page-local — not persisted across navigation. |
+| Sortable table | Overview (open/closed tender lists), detail page (remarks, offers) | Select a column header to sort ascending by that column; select the same header again to reverse to descending; select a different header to switch the sort column (always single-column, per the recorded decision). Default sort: newest-first by id until a user sorts, so a newly added row appears at the top. Sort state is page-local — not persisted across navigation. |
 | Status pill | Overview table row, detail-page header | `status-pill-open`/`status-pill-closed` per `DESIGN.md`; label is "Offen"/"Geschlossen", never the raw backend value. |
 | Create-tender form | `/tenders/new` | Origin/destination required; submit disabled until both are filled. Success navigates to `/`; failure handled per State Patterns → Form submit failed, form state preserved so the user can retry without retyping. |
-| Add-remark / add-offer form | Detail page, inside each table's own section | One field-set per table (remark: free text; offer: supplier + amount). Submitting appends the new row to that table without a full page reload. Both forms disable (fields + submit) together when the tender is closed, replaced by one shared explanation line above both — not duplicated per form. |
+| Add-remark / add-offer form | Detail page, inside each table's own section | One field-set per table (remark: free text; offer: supplier + amount). Submitting adds the new row to that table without a full page reload — at the top by default, or at its sorted position when a column is active. Both forms disable (fields + submit) together when the tender is closed, replaced by one shared explanation line above both — not duplicated per form. |
 | Empty state | Any table with no rows | Centered `{typography.caption}` text inside the table's body area (not a full-page takeover), for example "Keine Bemerkungen vorhanden." |
 
 ## State Patterns
@@ -88,7 +88,7 @@ Failure: the remark submission fails (backend hiccup) — inline error appears b
 
 1. From the overview, Lena selects "Neue Ausschreibung erstellen".
 2. She fills "Von" with "Bremen" and "Nach" with "Antwerpen", then selects "Erstellen".
-3. **Climax:** she's returned to the overview, and the new Bremen → Antwerpen tender is already sitting in the open-tenders table — still sorted by whatever column she last chose, not reset to a default — so her mental model of "where things are" isn't disrupted by her own action.
+3. **Climax:** she's returned to the overview, and the new Bremen → Antwerpen tender is already sitting at the top of the open-tenders table — in the default newest-first order, since sort state is page-local and resets on every visit — so she sees her own action land without having to look for it.
 
 Failure: she leaves "Nach" empty and selects "Erstellen" — nothing happens (button was disabled until both fields were filled), so there's no error to recover from in the first place.
 
