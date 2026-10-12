@@ -17,6 +17,8 @@ const REMARK_ERROR_MESSAGE =
   'Die Bemerkung konnte nicht gespeichert werden. Bitte versuchen Sie es später erneut.';
 const OFFER_ERROR_MESSAGE =
   'Das Angebot konnte nicht gespeichert werden. Bitte versuchen Sie es später erneut.';
+const CLOSE_ERROR_MESSAGE =
+  'Die Ausschreibung konnte nicht geschlossen werden. Bitte versuchen Sie es später erneut.';
 const CLOSED_EXPLANATION =
   'Diese Ausschreibung ist geschlossen, daher können keine weiteren Bemerkungen oder Angebote hinzugefügt werden.';
 
@@ -37,6 +39,9 @@ export class TenderDetail implements OnInit {
   protected readonly tender = signal<TenderDetailModel | null>(null);
   protected readonly loading = signal<boolean>(true);
   protected readonly loadError = signal<string | null>(null);
+
+  protected readonly closing = signal(false);
+  protected readonly closeError = signal<string | null>(null);
 
   protected readonly isClosed = computed(() => this.tender()?.status === 'CLOSED');
   protected readonly statusLabel = computed(() => {
@@ -114,6 +119,33 @@ export class TenderDetail implements OnInit {
 
   protected formatAmount(amount: number): string {
     return AMOUNT_FORMAT.format(amount);
+  }
+
+  protected onClose(): void {
+    const current = this.tender();
+    if (current === null || this.closing()) {
+      return;
+    }
+
+    this.closing.set(true);
+    this.closeError.set(null);
+
+    this.tenderApi
+      .close(current.id)
+      .pipe(catchError(() => of(null)))
+      .subscribe((result) => {
+        this.closing.set(false);
+
+        if (result === null) {
+          this.closeError.set(CLOSE_ERROR_MESSAGE);
+          return;
+        }
+
+        // The response is a summary without remarks/offers, so merge only the status.
+        this.tender.update((value) => value && { ...value, status: result.status });
+        this.remarkForm.disable();
+        this.offerForm.disable();
+      });
   }
 
   protected onAddRemark(): void {

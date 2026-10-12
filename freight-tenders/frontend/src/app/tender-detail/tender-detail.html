@@ -11,6 +11,24 @@
       }}</span>
     </header>
 
+    @if (!isClosed()) {
+      <div class="page-actions">
+        <button
+          type="button"
+          class="btn-secondary"
+          data-testid="close-tender"
+          [disabled]="closing()"
+          (click)="onClose()"
+        >
+          Ausschreibung schließen
+        </button>
+
+        @if (closeError()) {
+          <p class="form-error" data-testid="close-error">{{ closeError() }}</p>
+        }
+      </div>
+    }
+
     @if (isClosed()) {
       <p class="notice" data-testid="closed-explanation">{{ closedExplanation }}</p>
     }
