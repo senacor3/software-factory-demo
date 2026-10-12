@@ -449,6 +449,12 @@ jobs:
   merge:
     name: "Merge"
     needs: [analysis, implementation, review]
+    # Explicit `if:` because the default `success()` also looks at `review`'s own
+    # ancestors: `checks-fix-loop` is `skipped` on the all-pass-first-try path, and
+    # a skipped ancestor skips this job -- and its evidence-approval gate -- even
+    # though `review` itself succeeded. `!cancelled()` keeps it off a
+    # concurrency-cancelled run, same as the jobs above.
+    if: ${{ !cancelled() && needs.review.result == 'success' }}
     environment: evidence-approval
     runs-on: ubuntu-24.04
     # AD-5/AD-14: contents:write + pull-requests:write scope merge_story.py's `gh pr
