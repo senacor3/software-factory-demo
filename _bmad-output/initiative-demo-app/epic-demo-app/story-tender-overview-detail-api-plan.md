@@ -3,7 +3,7 @@ title: 'Tender overview + detail API'
 type: 'feature'
 ticket: 4
 created: '2026-10-12'
-status: 'built'
+status: done
 route: 'full'
 route_source: 'auto'
 review: 'quick'

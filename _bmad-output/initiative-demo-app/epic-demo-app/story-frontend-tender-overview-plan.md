@@ -3,7 +3,7 @@ title: 'Frontend: tender overview'
 type: 'feature'
 ticket: 5
 created: '2026-10-12'
-status: 'built'
+status: done
 route: 'full'
 route_source: 'auto'
 review: 'quick'

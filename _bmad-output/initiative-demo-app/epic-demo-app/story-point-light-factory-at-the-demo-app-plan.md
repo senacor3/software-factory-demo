@@ -3,7 +3,7 @@ title: 'Point light-factory at the demo app'
 type: 'chore'
 ticket: '7'
 created: '2026-10-12'
-status: 'built'
+status: done
 route: 'full'
 route_source: 'auto'
 review: 'quick'
