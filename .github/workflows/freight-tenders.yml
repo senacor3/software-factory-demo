@@ -20,7 +20,7 @@ on:
 jobs:
   changes:
     name: "Detect changes"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       freight-tenders: ${{ steps.filter.outputs.freight-tenders }}
     steps:
@@ -29,7 +29,7 @@ jobs:
 
       - name: Filter changed paths
         id: filter
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         with:
           filters: |
             freight-tenders:
@@ -39,7 +39,7 @@ jobs:
     name: "Backend"
     needs: changes
     if: needs.changes.outputs.freight-tenders == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: freight-tenders/backend
@@ -64,7 +64,7 @@ jobs:
     name: "Frontend"
     needs: changes
     if: needs.changes.outputs.freight-tenders == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: freight-tenders/frontend
