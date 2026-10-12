@@ -129,7 +129,7 @@ class TenderControllerTest {
   }
 
   @Test
-  void closeTenderReturns200WithClosedTender()throws Exception {
+  void closeTenderReturns200WithClosedTender() throws Exception {
     Tender tender = new Tender("Hamburg", "Rotterdam");
     tender.close();
     given(tenderService.closeTender(1L)).willReturn(tender);
