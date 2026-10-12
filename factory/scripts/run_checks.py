@@ -5,10 +5,10 @@
 # ///
 """run_checks -- CAP-5's deterministic mechanical-checks script (AD-6).
 
-Four checks -- `build`, `test`, `lint`, `security` -- every one a plain subprocess
-call from this single script, never a LangGraph node or agent tool call (AD-6). Wired
-into the `checks` job's workflow as 4 direct steps, each invoking one subcommand here
-right after "Checkout implementation branch".
+Five checks -- `build`, `test`, `lint`, `security`, `static_analysis` -- every one a
+plain subprocess call from this single script, never a LangGraph node or agent tool
+call (AD-6). Wired into the `checks` job's workflow as 5 direct steps, each invoking
+one subcommand here right after "Checkout implementation branch".
 
 The commands are not written here: they come from the repo's own
 `.github/post-implementation-checks.yml` (AD-6 addendum), so the same script checks
@@ -18,23 +18,24 @@ config (this script itself still runs from the story branch); only when
 `origin/main` cannot be read does it fall back to the working tree. Where it came from
 is recorded as `config_source` in every evidence file. Each check holds a list of commands; all of them
 run, in order, and the check stops at the first failure. A check with no commands
-records `status: "skipped"`, never `"pass"` -- in this repo that is `security`, by
-decision (user's call, 2026-10-11). A missing or malformed config is a `"fail"` that
-names the problem, never a silent skip of every check.
+records `status: "skipped"`, never `"pass"` -- in this repo that is `security` and
+`static_analysis`, by decision (user's call, 2026-10-11 and 2026-10-12). A missing or
+malformed config is a `"fail"` that names the problem, never a silent skip of every
+check.
 
 Evidence is written to `evidence/checks/<name>.json` via `state_io.write_atomic`
 *before* `main()` inspects the result's status to decide the exit code -- a failing
 check always leaves a record, never just a non-zero exit with nothing on disk.
 
-Usage (each `--story-slug S --run-id R`): run_checks.py build | test | lint | security
+Usage (each `--story-slug S --run-id R`): run_checks.py build | test | lint | security | static_analysis
 
 Exits 1 only when the written result's status is `"fail"`; 0 for `"pass"` or
 `"skipped"`.
 
-A fifth subcommand, `toolchains` (no flags), reads the same config's `toolchains:`
+A sixth subcommand, `toolchains` (no flags), reads the same config's `toolchains:`
 mapping and prints `java=`/`node=` lines shaped for `>> "$GITHUB_OUTPUT"` -- the
 `checks` job's workflow steps use it to set up the Java/Node versions the configured
-build/test/lint commands need, before any of the four checks above run. It writes no
+build/test/lint commands need, before any of the five checks above run. It writes no
 evidence and exits 2 only on a missing/unreadable/malformed config.
 """
 
@@ -50,7 +51,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import state_io
 
-CHECK_NAMES = ("build", "test", "lint", "security")
+CHECK_NAMES = ("build", "test", "lint", "security", "static_analysis")
 
 TOOLCHAIN_NAMES = ("java", "node")
 
@@ -357,6 +358,16 @@ def run_security(
     cwd: str | os.PathLike | None = None,
 ) -> dict:
     return run_check("security", story_slug, run_id, state_base=state_base, cwd=cwd)
+
+
+def run_static_analysis(
+    story_slug: str,
+    run_id: str,
+    *,
+    state_base: str | os.PathLike = state_io.FACTORY_DIR,
+    cwd: str | os.PathLike | None = None,
+) -> dict:
+    return run_check("static_analysis", story_slug, run_id, state_base=state_base, cwd=cwd)
 
 
 # --- CLI ---------------------------------------------------------------------

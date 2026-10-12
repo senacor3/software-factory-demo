@@ -220,15 +220,15 @@ jobs:
           cache: 'npm'
           cache-dependency-path: freight-tenders/frontend/package-lock.json
 
-      # CAP-5 mechanical checks (AD-6): 4 direct pipeline steps, never a graph node or
+      # CAP-5 mechanical checks (AD-6): 5 direct pipeline steps, never a graph node or
       # agent tool call. Each step runs the commands the repo configures for that
       # check in .github/post-implementation-checks.yml, read as it is on origin/main
       # so a story cannot change them by editing the config (run_checks.py itself
       # still comes from the story branch); a check with no command records status:
-      # skipped (never pass) and exits 0, which is `security` in this repo. See
-      # factory/scripts/run_checks.py and AD-6's addendum.
+      # skipped (never pass) and exits 0, which is `security` and `static_analysis`
+      # in this repo. See factory/scripts/run_checks.py and AD-6's addendum.
       #
-      # AD-10 addendum: each step has `continue-on-error: true` so all 4 always run
+      # AD-10 addendum: each step has `continue-on-error: true` so all 5 always run
       # and leave evidence, regardless of an earlier one failing -- a failing step's
       # own outcome is still recorded (`steps.<id>.outcome`), and "Fail job if any
       # check failed" below explicitly fails the job from that, preserving today's
@@ -266,10 +266,18 @@ jobs:
             --story-slug "${{ needs.analysis.outputs.story-slug }}" \
             --run-id "${{ needs.analysis.outputs.run-id }}"
 
+      - name: Static analysis check
+        id: static_analysis
+        continue-on-error: true
+        run: |
+          uv run factory/scripts/run_checks.py static_analysis \
+            --story-slug "${{ needs.analysis.outputs.story-slug }}" \
+            --run-id "${{ needs.analysis.outputs.run-id }}"
+
       # Always commits this job's evidence (AD-10), extending the existing
       # git-based state mechanism rather than adding a second one (e.g. workflow
       # artifacts) -- so the `review`/`checks-fix-loop` jobs' checkout always has
-      # it, regardless of whether any of the 4 checks above failed or whether a fix
+      # it, regardless of whether any of the 5 checks above failed or whether a fix
       # cycle later also commits. `if: always()` -- the step above's
       # `continue-on-error: true` already keeps the job going on a failing check,
       # but without this the job would still skip straight past a *crashing* step
@@ -293,7 +301,8 @@ jobs:
             "${{ steps.build.outcome }}" \
             "${{ steps.test.outcome }}" \
             "${{ steps.lint.outcome }}" \
-            "${{ steps.security.outcome }}"; do
+            "${{ steps.security.outcome }}" \
+            "${{ steps.static_analysis.outcome }}"; do
             if [ "$outcome" = "failure" ]; then
               echo "at least one check failed" >&2
               exit 1

@@ -59,7 +59,7 @@ def _open_pr(pr_number=7, pr_url="https://github.com/org/repo/pull/7"):
 
 def test_posts_summary_when_review_resolved(tmp_path):
     state_directory = state_io.ensure_layout("foo-bar", "run-1", base=tmp_path)
-    _write_checks(state_directory, {"build": "pass", "test": "pass", "lint": "skipped", "security": "skipped"})
+    _write_checks(state_directory, {"build": "pass", "test": "pass", "lint": "skipped", "security": "skipped", "static_analysis": "skipped"})
     _write_review(state_directory, "resolved", fix_cycle=0)
     _write_findings(state_directory, [])
 
@@ -81,7 +81,7 @@ def test_posts_summary_when_review_resolved(tmp_path):
 
 def test_posts_summary_when_review_unresolved_after_cap(tmp_path):
     state_directory = state_io.ensure_layout("foo-bar", "run-1", base=tmp_path)
-    _write_checks(state_directory, {"build": "pass", "test": "pass", "lint": "skipped", "security": "skipped"})
+    _write_checks(state_directory, {"build": "pass", "test": "pass", "lint": "skipped", "security": "skipped", "static_analysis": "skipped"})
     _write_review(state_directory, "unresolved-after-cap", fix_cycle=2)
     findings = [{"location": "foo.py:10", "description": "still broken"}]
     _write_findings(state_directory, findings)
@@ -179,7 +179,7 @@ def test_config_line_unknown_when_a_check_was_not_run(tmp_path):
 
 def test_no_open_pr_raises_evidence_summary_error(tmp_path):
     state_directory = state_io.ensure_layout("foo-bar", "run-1", base=tmp_path)
-    _write_checks(state_directory, {"build": "pass", "test": "pass", "lint": "skipped", "security": "skipped"})
+    _write_checks(state_directory, {"build": "pass", "test": "pass", "lint": "skipped", "security": "skipped", "static_analysis": "skipped"})
     _write_review(state_directory, "resolved", fix_cycle=0)
     _write_findings(state_directory, [])
 
@@ -193,7 +193,7 @@ def test_no_open_pr_raises_evidence_summary_error(tmp_path):
 
 def test_gh_pr_comment_failure_raises_evidence_summary_error(tmp_path):
     state_directory = state_io.ensure_layout("foo-bar", "run-1", base=tmp_path)
-    _write_checks(state_directory, {"build": "pass", "test": "pass", "lint": "skipped", "security": "skipped"})
+    _write_checks(state_directory, {"build": "pass", "test": "pass", "lint": "skipped", "security": "skipped", "static_analysis": "skipped"})
     _write_review(state_directory, "resolved", fix_cycle=0)
     _write_findings(state_directory, [])
 
@@ -208,7 +208,7 @@ def test_gh_pr_comment_failure_raises_evidence_summary_error(tmp_path):
 
 def test_find_open_pr_failure_raises_evidence_summary_error(tmp_path):
     state_directory = state_io.ensure_layout("foo-bar", "run-1", base=tmp_path)
-    _write_checks(state_directory, {"build": "pass", "test": "pass", "lint": "skipped", "security": "skipped"})
+    _write_checks(state_directory, {"build": "pass", "test": "pass", "lint": "skipped", "security": "skipped", "static_analysis": "skipped"})
     _write_review(state_directory, "resolved", fix_cycle=0)
     _write_findings(state_directory, [])
 

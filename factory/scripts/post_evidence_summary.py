@@ -4,7 +4,7 @@
 # ///
 """post_evidence_summary -- the review job's final step: CAP-8's evidence-approval gate summary (AD-4).
 
-Reads the 4 `evidence/checks/<name>.json` files (ticket 8), `review.md`'s frontmatter
+Reads the 5 `evidence/checks/<name>.json` files (ticket 8), `review.md`'s frontmatter
 (`status`/`fix_cycle`, tickets 9/10), and `evidence/review/findings.json`, renders a
 concise Markdown summary, and posts it as a PR comment via the shared `post_summary`
 module (AD-4) -- the same mechanism ticket 5 used for the `plan-approval` gate.
@@ -32,7 +32,7 @@ import open_implementation_pr
 import post_summary
 import state_io
 
-CHECK_NAMES = ("build", "test", "lint", "security")
+CHECK_NAMES = ("build", "test", "lint", "security", "static_analysis")
 
 
 class EvidenceSummaryError(RuntimeError):

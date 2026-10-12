@@ -260,13 +260,14 @@ def test_unknown_check_name_fails_the_check_being_run(tmp_path):
         (run_checks.run_test, "test"),
         (run_checks.run_lint, "lint"),
         (run_checks.run_security, "security"),
+        (run_checks.run_static_analysis, "static_analysis"),
     ],
 )
 def test_named_runners_run_their_own_check(repo, runner, name):
     with patch("run_checks.subprocess.run", return_value=_ok()):
         result = runner("foo-bar", "run-1", state_base=repo, cwd=repo)
 
-    assert result["status"] == ("skipped" if name == "security" else "pass")
+    assert result["status"] == ("skipped" if name in ("security", "static_analysis") else "pass")
     assert _evidence(repo, name)["status"] == result["status"]
 
 
