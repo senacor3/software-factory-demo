@@ -6,9 +6,13 @@ The frontend's home page is a tender overview that fetches the backend's
 tender list endpoint and renders it under German headings.
 
 This directory is independent of light-factory's own Python tooling: nothing
-here is built, tested, or linted with `uv`/pytest/ruff, and light-factory's CI
-(`.github/workflows/light-factory.yml`) does not touch it. CI for this app
-lives in its own workflow, `.github/workflows/freight-tenders.yml`.
+here is built, tested, or linted with `uv`/pytest/ruff. It has its own CI
+workflow, `.github/workflows/freight-tenders.yml`, running on every push/PR
+touching `freight-tenders/**`. light-factory's own pipeline
+(`.github/workflows/light-factory.yml`) also builds/tests/lints this app as
+part of its `checks` job, via commands named in
+`.github/post-implementation-checks.yml` — so a dispatched story touching
+`freight-tenders/` is checked by both.
 
 Backend code, API, domain model, and docs stay English; all UI-facing
 (Angular template) text is German.

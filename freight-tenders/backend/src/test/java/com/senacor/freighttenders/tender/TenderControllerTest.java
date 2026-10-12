@@ -166,7 +166,10 @@ class TenderControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"text\":\"Too late\"}"))
         .andExpect(status().isConflict())
-        .andExpect(jsonPath("$.message").value("Tender 1 is closed and can no longer be modified"));
+        .andExpect(jsonPath("$.error").value("Conflict"))
+        .andExpect(jsonPath("$.message").value("Tender 1 is closed and can no longer be modified"))
+        .andExpect(jsonPath("$.path").value("/api/tenders/1/remarks"))
+        .andExpect(jsonPath("$.timestamp").exists());
   }
 
   @Test
@@ -180,7 +183,10 @@ class TenderControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"supplierName\":\"Acme Logistics\",\"amount\":1234.56}"))
         .andExpect(status().isConflict())
-        .andExpect(jsonPath("$.message").value("Tender 1 is closed and can no longer be modified"));
+        .andExpect(jsonPath("$.error").value("Conflict"))
+        .andExpect(jsonPath("$.message").value("Tender 1 is closed and can no longer be modified"))
+        .andExpect(jsonPath("$.path").value("/api/tenders/1/offers"))
+        .andExpect(jsonPath("$.timestamp").exists());
   }
 
   @Test
@@ -190,7 +196,10 @@ class TenderControllerTest {
     mockMvc
         .perform(get("/api/tenders/{id}", 99L))
         .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.message").value("No tender found with id 99"));
+        .andExpect(jsonPath("$.error").value("Not Found"))
+        .andExpect(jsonPath("$.message").value("No tender found with id 99"))
+        .andExpect(jsonPath("$.path").value("/api/tenders/99"))
+        .andExpect(jsonPath("$.timestamp").exists());
   }
 
   @Test
@@ -204,7 +213,10 @@ class TenderControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"text\":\"Please expedite\"}"))
         .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.message").value("No tender found with id 99"));
+        .andExpect(jsonPath("$.error").value("Not Found"))
+        .andExpect(jsonPath("$.message").value("No tender found with id 99"))
+        .andExpect(jsonPath("$.path").value("/api/tenders/99/remarks"))
+        .andExpect(jsonPath("$.timestamp").exists());
   }
 
   @Test
@@ -218,6 +230,9 @@ class TenderControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"supplierName\":\"Acme Logistics\",\"amount\":1234.56}"))
         .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.message").value("No tender found with id 99"));
+        .andExpect(jsonPath("$.error").value("Not Found"))
+        .andExpect(jsonPath("$.message").value("No tender found with id 99"))
+        .andExpect(jsonPath("$.path").value("/api/tenders/99/offers"))
+        .andExpect(jsonPath("$.timestamp").exists());
   }
 }
