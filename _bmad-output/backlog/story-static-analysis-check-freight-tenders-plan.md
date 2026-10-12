@@ -3,7 +3,7 @@ title: 'freight-tenders gets real static_analysis commands -- SpotBugs backend, 
 type: 'feature'
 ticket: '2'
 created: '2026-10-12'
-status: 'built'
+status: 'done'
 route: 'full'
 route_source: 'auto'
 review: 'quick'
