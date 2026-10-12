@@ -1,0 +1,100 @@
+---
+name: Freight Tenders
+status: final
+sources:
+  - ../epic-demo-app/epic-demo-app.md
+updated: 2026-10-12
+---
+
+# Freight Tenders — Experience Spine
+
+Responsive web, desktop-primary. Angular (standalone components) on the existing `freight-tenders/frontend`. No component library — plain Angular + hand-rolled components per `DESIGN.md`. Single-tenant, no auth: anyone with the URL can create/view/extend tenders, matching the existing app's scope. `DESIGN.md` is the visual identity reference; this spine is the behavior.
+
+## Information Architecture
+
+| Surface | Reached from | Purpose |
+|---|---|---|
+| Tender overview (`/`) | App open, "Abbrechen" from either other surface | Two sortable tables — open tenders, closed tenders — and the entry point to create a new one |
+| Create tender (`/tenders/new`) | "Neue Ausschreibung erstellen" link on overview | Form: origin, destination → creates an open tender, returns to overview |
+| Tender detail (`/tenders/:id`) | Selecting a row in either overview table | One tender's full picture: identity, status, a sortable remarks table with an add-form, a sortable offers table with an add-form — both forms disabled once closed |
+
+No surface beyond these three; this redesign changes how they look and how their lists are presented (table vs. plain list), not what they do. → Composition reference: `mockups/tender-overview.html`, `mockups/tender-detail.html`. Spine wins on conflict.
+
+## Voice and Tone
+
+Microcopy stays German per the epic's existing boundary (backend/API/domain/docs stay English; UI text is German). Brand posture lives in `DESIGN.md.Brand & Style` — direct and factual, matching the "confident industrial" visual language: state what happened, not how the user should feel about it.
+
+| Do | Don't |
+|---|---|
+| "Keine offenen Ausschreibungen vorhanden." | "Hier gibt's leider noch nichts zu sehen! 😊" |
+| "Die Ausschreibung wurde nicht gefunden oder konnte nicht geladen werden." | "Huch, da ist wohl etwas schiefgelaufen." |
+| "Diese Ausschreibung ist geschlossen, daher können keine weiteren Bemerkungen oder Angebote hinzugefügt werden." | "Diese Ausschreibung ist leider zu." |
+| "Erstellen" / "Bemerkung hinzufügen" / "Angebot hinzufügen" | "Los geht's!" / "Jetzt hinzufügen!" |
+
+## Component Patterns
+
+Behavioral. Visual specs live in `DESIGN.md.Components`.
+
+| Component | Use | Behavioral rules |
+|---|---|---|
+| Sortable table | Overview (open/closed tender lists), detail page (remarks, offers) | Select a column header to sort ascending by that column; select the same header again to reverse to descending; select a different header to switch the sort column (always single-column, per the recorded decision). Default sort: newest-first by id (matches current creation order) until a user sorts. Sort state is page-local — not persisted across navigation. |
+| Status pill | Overview table row, detail-page header | `status-pill-open`/`status-pill-closed` per `DESIGN.md`; label is "Offen"/"Geschlossen", never the raw backend value. |
+| Create-tender form | `/tenders/new` | Origin/destination required; submit disabled until both are filled. Success navigates to `/`; failure handled per State Patterns → Form submit failed, form state preserved so the user can retry without retyping. |
+| Add-remark / add-offer form | Detail page, inside each table's own section | One field-set per table (remark: free text; offer: supplier + amount). Submitting appends the new row to that table without a full page reload. Both forms disable (fields + submit) together when the tender is closed, replaced by one shared explanation line above both — not duplicated per form. |
+| Empty state | Any table with no rows | Centered `{typography.caption}` text inside the table's body area (not a full-page takeover), for example "Keine Bemerkungen vorhanden." |
+
+## State Patterns
+
+| State | Surface | Treatment |
+|---|---|---|
+| Loading | Overview, detail | A loading line in place of the table or content area, `{typography.caption}` — "Ausschreibungen werden geladen…" / "Ausschreibung wird geladen…". Never show a stale empty-state message while a request is still in flight (existing bug class this redesign must not reintroduce). |
+| Empty table | Overview (one or both lists), detail (remarks/offers) | Caption-styled message inside that table's body; the table header row still renders so the user sees what *would* be sortable once rows exist. |
+| Backend unreachable | Overview, detail | One caption-styled error message replacing the affected content; existing German copy is reused as-is. |
+| Unknown tender id | Detail | Same error treatment as backend-unreachable, German not-found message, no crash. |
+| Closed tender | Detail | Status pill shows "Geschlossen"; both add-forms disabled; one explanation line shown above them. |
+| Form submit in flight | Create, add-remark, add-offer | Submit button disabled for the duration (prevents double-submit); no spinner needed at this scale — the round trip is local and fast. |
+| Form submit failed | Create, add-remark, add-offer | Inline error message in `{colors.error}` directly below that form, above its submit button; fields keep their entered values. This is the canonical error-placement rule — see `DESIGN.md`'s Components → Forms for the visual spec. |
+
+## Interaction Primitives
+
+- **Select a column header** — the only sort interaction.
+- **Select a table row (overview)** — navigates to that tender's detail page. The whole row is selectable, not just a link inside it, so scanning stays fast on a dense table.
+- **Tab order** follows visual order: table headers (sort controls) → table rows → add-form fields → submit button, top to bottom on every surface.
+- **Keyboard:** Enter submits the focused form; sortable headers are reachable and triggerable via Tab + Enter/Space, not mouse-only.
+
+## Accessibility Floor
+
+Behavioral; visual contrast lives in `DESIGN.md` (palette chosen for WCAG AA text contrast against its surfaces).
+
+- WCAG 2.2 AA as the floor — this is an internal demo app, not a full audit target, but contrast and keyboard operability are not optional.
+- Every sortable column header is a real button (or has `role="button"` + `tabindex`) with an `aria-sort` attribute reflecting its current state (`ascending`/`descending`/`none`), so a screen reader announces sort state, not just a visual triangle.
+- Status pills carry the German text as real text content, never as color-only meaning (a color-blind user still reads "Offen"/"Geschlossen").
+- Disabled form controls use `disabled` (not just visual dimming) so assistive tech announces them correctly; the shared explanation line sits immediately before the forms in DOM order, so it's read before a screen-reader user reaches the disabled fields.
+- Focus is never trapped; `Escape` is not required anywhere since there are no modals in this app's surface set.
+
+## Key Flows
+
+### Flow 1 — Lena checks and closes out a tender (Lena, Dispositionsmitarbeiterin, Tuesday morning)
+
+1. Lena opens the app and lands on the overview. Two tables: "Offene Ausschreibungen" above "Geschlossene Ausschreibungen", each with sortable columns (Von, Nach).
+2. She selects the "Nach" header on the open-tenders table to sort by destination — she's looking for everything headed to Rotterdam today.
+3. She finds the Hamburg → Rotterdam row and selects it, landing on its detail page: status pill "Offen", one existing remark, two offers in a sortable table.
+4. She selects the offers table's "Betrag" header to sort by amount, confirms the lowest offer is reasonable, and adds a remark noting she's accepted it.
+5. **Climax:** the remark appears in the table instantly — no reload, no navigation away — and she can see her note sitting right above the offer she referenced, both still visible, before she moves to the next tender in her queue.
+
+Failure: the remark submission fails (backend hiccup) — inline error appears below the remark form, her typed text stays in the field, she selects "Bemerkung hinzufügen" again without retyping.
+
+### Flow 2 — Creating a new tender and watching it land (Lena, later that morning)
+
+1. From the overview, Lena selects "Neue Ausschreibung erstellen".
+2. She fills "Von" with "Bremen" and "Nach" with "Antwerpen", then selects "Erstellen".
+3. **Climax:** she's returned to the overview, and the new Bremen → Antwerpen tender is already sitting in the open-tenders table — still sorted by whatever column she last chose, not reset to a default — so her mental model of "where things are" isn't disrupted by her own action.
+
+Failure: she leaves "Nach" empty and selects "Erstellen" — nothing happens (button was disabled until both fields were filled), so there's no error to recover from in the first place.
+
+## Inspiration & Anti-patterns
+
+- **Lifted from ford.de:** one saturated brand color reserved for primary action, everything else neutral; bold single-typeface hierarchy over mixed fonts; flat surfaces with a single border-based depth cue instead of shadows.
+- **Rejected — card-grid layout for the tender lists:** ford.de's model carousels are built for browsing a handful of hero products; a dispatcher scanning dozens of tenders needs a table's density and sortability, not cards. The "card" idea from the source site doesn't survive contact with this app's actual task.
+- **Rejected — hero imagery/video:** nothing in this app's data (origin/destination strings, remarks, offer amounts) benefits from photography; the confident-automotive feeling here comes from typography and color discipline alone.
+- **Rejected — multi-column/shift-click sort:** per the recorded decision, single-column click-to-sort only — simpler to build and test, and this app's lists are small enough that one sort key is always enough to find what you need.

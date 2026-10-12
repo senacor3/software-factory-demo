@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Tender overview — key screen mock</title>
+<style>
+/* Governed by: DESIGN.md (Colors, Typography, Components.table, Components.status-pill-*)
+   EXPERIENCE.md (Information Architecture, Component Patterns: Sortable table / Status pill,
+   State Patterns: Empty table) */
+:root{
+  --primary:#003478; --on-primary:#fff;
+  --surface:#fff; --surface-dim:#f2f2f2; --surface-container-high:#e9ecf1;
+  --on-surface:#1a1a1a; --on-surface-variant:#4a4a4a;
+  --outline:#c7ccd4; --outline-variant:#e0e3e8;
+  --status-open:#1e7a34; --status-open-bg:#e3f3e6;
+  --status-closed:#6b6b6b; --status-closed-bg:#ededed;
+  font-family: Inter, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+body{margin:0;background:var(--surface-dim);color:var(--on-surface);}
+.browser-frame{max-width:1040px;margin:24px auto;background:#fff;border:1px solid var(--outline-variant);border-radius:4px;overflow:hidden;}
+.chrome{background:#e9ecf1;padding:8px 16px;font-size:12px;color:#666;border-bottom:1px solid var(--outline-variant);}
+.page{padding:48px;}
+h1{font-size:20px;font-weight:700;margin:0 0 24px;}
+a.create-link{display:inline-block;margin-bottom:40px;color:var(--primary);font-weight:600;font-size:15px;text-decoration:none;border:1px solid var(--primary);border-radius:2px;padding:10px 20px;}
+section{margin-bottom:40px;}
+h2{font-size:16px;font-weight:600;margin:0 0 12px;}
+table{width:100%;border-collapse:collapse;border:1px solid var(--outline-variant);}
+th,td{padding:12px 16px;text-align:left;font-size:15px;}
+th{background:var(--surface-container-high);font-size:13px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;color:var(--on-surface);border-bottom:1px solid var(--outline-variant);cursor:pointer;}
+th .sort-arrow{color:var(--primary);margin-left:4px;font-size:11px;}
+tr.row{border-bottom:1px solid var(--outline-variant);cursor:pointer;}
+tr.row:hover{background:var(--surface-dim);}
+.pill{display:inline-block;border-radius:999px;padding:3px 12px;font-size:12px;font-weight:600;}
+.pill-open{background:var(--status-open-bg);color:var(--status-open);}
+.pill-closed{background:var(--status-closed-bg);color:var(--status-closed);}
+.empty{padding:20px 16px;color:var(--on-surface-variant);font-size:13px;text-align:center;}
+caption{text-align:left;}
+</style>
+</head>
+<body>
+<div class="browser-frame">
+  <div class="chrome">localhost:4200/</div>
+  <div class="page">
+    <h1>Ausschreibungen</h1>
+    <a class="create-link">Neue Ausschreibung erstellen</a>
+
+    <section>
+      <h2>Offene Ausschreibungen</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Von</th>
+            <th>Nach<span class="sort-arrow">▲</span></th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="row"><td>Hamburg</td><td>Rotterdam</td><td><span class="pill pill-open">Offen</span></td></tr>
+          <tr class="row"><td>Bremen</td><td>Antwerpen</td><td><span class="pill pill-open">Offen</span></td></tr>
+          <tr class="row"><td>Köln</td><td>Mailand</td><td><span class="pill pill-open">Offen</span></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Geschlossene Ausschreibungen</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Von</th>
+            <th>Nach</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="row"><td>Stuttgart</td><td>Frankfurt</td><td><span class="pill pill-closed">Geschlossen</span></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Beispiel: leere Liste</h2>
+      <table>
+        <thead><tr><th>Von</th><th>Nach</th><th>Status</th></tr></thead>
+        <tbody><tr><td colspan="3" class="empty">Keine geschlossenen Ausschreibungen vorhanden.</td></tr></tbody>
+      </table>
+    </section>
+  </div>
+</div>
+</body>
+</html>

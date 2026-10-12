@@ -2,6 +2,7 @@
 # Tracer bullet: entry 1. Refactor sweep: entry 8. Closing end-to-end suite: entry 9.
 # Entry 10 added 2026-10-11, moved from initiative-light-factory's epic-pipeline-hardening as "Fix loop engaged on a live run"; placed before entry 8.
 # Narrowed the same day to "Give the review agent more instructions" once the fix loop engaged live on the pipeline itself.
+# Entry 11 added 2026-10-12: "Frontend: Ford-inspired UX redesign", backed by ux-freight-tenders-ui/DESIGN.md + EXPERIENCE.md. Placed after entry 6 (the last entry touching the three existing pages) and before entry 8, whose `after` was extended to include it.
 
 [[entry]]
 id = 1
@@ -95,13 +96,25 @@ unknown = "Which instructions to add is not settled -- candidates are judging be
 references = [".claude/skills/light-factory-review/SKILL.md", "../../initiative-light-factory/architecture-light-factory/architecture-light-factory.md#ad-11", "story-give-the-review-agent-more-instructions-plan.md"]
 
 [[entry]]
+id = 11
+type = "story"
+title = "Frontend: Ford-inspired UX redesign"
+description = "Restyles the three existing Angular pages (overview, create-tender, detail) per `ux-freight-tenders-ui/DESIGN.md` and `EXPERIENCE.md` -- a Ford.de-inspired visual identity -- and replaces the overview's and detail page's plain lists with sortable tables (single-column click-to-sort), per the same spine. No functional change: creating a tender, adding a remark/offer, and the closed-tender disabled state all keep their current behavior and German copy."
+verify = "The three pages visually match DESIGN.md's palette/typography/components; the tender list and the detail page's remarks/offers render as tables whose columns sort ascending/descending on selection, per EXPERIENCE.md's Component Patterns; the existing frontend test suite (extended for sorting) and `npm run lint`/`npm run build` all pass."
+covers = ["D2"]
+after = [6]
+hitl = false
+risk = "medium"
+references = ["../ux-freight-tenders-ui/DESIGN.md", "../ux-freight-tenders-ui/EXPERIENCE.md"]
+
+[[entry]]
 id = 8
 type = "story"
 title = "Refactor sweep"
-description = "Closes out scope deferred during entries 1-7 and 10 and findings surfaced along the way; no new behavior."
-verify = "The full test suite (backend + frontend) passes, and every finding deferred across entries 1-7 and 10 is resolved or re-parked in Notes with a reason."
+description = "Closes out scope deferred during entries 1-7, 10, and 11, and findings surfaced along the way; no new behavior."
+verify = "The full test suite (backend + frontend) passes, and every finding deferred across entries 1-7, 10, and 11 is resolved or re-parked in Notes with a reason."
 covers = []
-after = [1, 2, 3, 4, 5, 6, 7, 10]
+after = [1, 2, 3, 4, 5, 6, 7, 10, 11]
 hitl = false
 risk = "low"
 

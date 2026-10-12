@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Tender detail — key screen mock (open vs. closed)</title>
+<style>
+/* Governed by: DESIGN.md (Colors, Typography, Components.table/button/status-pill)
+   EXPERIENCE.md (Component Patterns: Sortable table / Add-remark-offer form / Status pill,
+   State Patterns: Closed tender, Form submit failed) */
+:root{
+  --primary:#003478; --on-primary:#fff;
+  --surface:#fff; --surface-dim:#f2f2f2; --surface-container-high:#e9ecf1;
+  --on-surface:#1a1a1a; --on-surface-variant:#4a4a4a;
+  --outline:#c7ccd4; --outline-variant:#e0e3e8;
+  --status-open:#1e7a34; --status-open-bg:#e3f3e6;
+  --status-closed:#6b6b6b; --status-closed-bg:#ededed;
+  --error:#b3261e;
+  font-family: Inter, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+body{margin:0;background:var(--surface-dim);color:var(--on-surface);}
+.cols{display:flex;gap:24px;max-width:1200px;margin:24px auto;padding:0 16px;}
+.browser-frame{flex:1;background:#fff;border:1px solid var(--outline-variant);border-radius:4px;overflow:hidden;}
+.chrome{background:#e9ecf1;padding:8px 16px;font-size:12px;color:#666;border-bottom:1px solid var(--outline-variant);}
+.page{padding:32px;}
+.col-caption{font-size:12px;color:#666;margin-bottom:6px;text-align:center;}
+h1{font-size:20px;font-weight:700;margin:0 0 8px;}
+.pill{display:inline-block;border-radius:999px;padding:3px 12px;font-size:12px;font-weight:600;margin-bottom:24px;}
+.pill-open{background:var(--status-open-bg);color:var(--status-open);}
+.pill-closed{background:var(--status-closed-bg);color:var(--status-closed);}
+section{margin-bottom:32px;}
+h2{font-size:16px;font-weight:600;margin:0 0 12px;}
+table{width:100%;border-collapse:collapse;border:1px solid var(--outline-variant);margin-bottom:16px;}
+th,td{padding:10px 14px;text-align:left;font-size:14px;}
+td.amount, th.amount{text-align:right;}
+th{background:var(--surface-container-high);font-size:12px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;border-bottom:1px solid var(--outline-variant);}
+th .sort-arrow{color:var(--primary);margin-left:4px;}
+tr{border-bottom:1px solid var(--outline-variant);}
+form{border:1px solid var(--outline-variant);border-radius:2px;padding:16px;}
+label{display:block;font-size:12px;font-weight:600;letter-spacing:.02em;margin-bottom:4px;color:var(--on-surface);}
+input{display:block;width:100%;box-sizing:border-box;border:1px solid var(--outline);border-radius:2px;padding:8px 10px;font-size:14px;margin-bottom:12px;}
+button{background:var(--primary);color:var(--on-primary);border:none;border-radius:2px;padding:10px 20px;font-size:14px;font-weight:600;cursor:pointer;}
+button:disabled{background:var(--outline);color:var(--on-surface-variant);cursor:not-allowed;}
+input:disabled{background:var(--surface-dim);color:var(--on-surface-variant);}
+.explanation{background:var(--status-closed-bg);color:var(--on-surface-variant);font-size:13px;padding:10px 14px;border-radius:2px;margin-bottom:16px;}
+.error{color:var(--error);font-size:13px;margin:-6px 0 12px;}
+</style>
+</head>
+<body>
+<div class="cols">
+  <div>
+    <div class="col-caption">Offene Ausschreibung — Formulare aktiv</div>
+    <div class="browser-frame">
+      <div class="chrome">localhost:4200/tenders/1</div>
+      <div class="page">
+        <h1>Hamburg → Rotterdam</h1>
+        <span class="pill pill-open">Offen</span>
+
+        <section>
+          <h2>Bemerkungen</h2>
+          <table>
+            <thead><tr><th>Bemerkung<span class="sort-arrow">▲</span></th></tr></thead>
+            <tbody><tr><td>Bitte schnell liefern</td></tr></tbody>
+          </table>
+          <form>
+            <label for="remark">Bemerkung</label>
+            <input id="remark" type="text" placeholder="">
+            <button type="submit">Bemerkung hinzufügen</button>
+          </form>
+        </section>
+
+        <section>
+          <h2>Angebote</h2>
+          <table>
+            <thead><tr><th>Anbieter</th><th class="amount">Betrag<span class="sort-arrow">▼</span></th></tr></thead>
+            <tbody>
+              <tr><td>Spedition Muster</td><td class="amount">1.234,56 €</td></tr>
+              <tr><td>Acme Logistics</td><td class="amount">980,00 €</td></tr>
+            </tbody>
+          </table>
+          <form>
+            <label for="supplier">Anbieter</label>
+            <input id="supplier" type="text">
+            <label for="amount">Betrag</label>
+            <input id="amount" type="number">
+            <div class="error">Das Angebot konnte nicht gespeichert werden. Bitte versuchen Sie es später erneut.</div>
+            <button type="submit">Angebot hinzufügen</button>
+          </form>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="col-caption">Geschlossene Ausschreibung — Formulare deaktiviert</div>
+    <div class="browser-frame">
+      <div class="chrome">localhost:4200/tenders/3</div>
+      <div class="page">
+        <h1>Stuttgart → Frankfurt</h1>
+        <span class="pill pill-closed">Geschlossen</span>
+
+        <div class="explanation">Diese Ausschreibung ist geschlossen, daher können keine weiteren Bemerkungen oder Angebote hinzugefügt werden.</div>
+
+        <section>
+          <h2>Bemerkungen</h2>
+          <table>
+            <thead><tr><th>Bemerkung</th></tr></thead>
+            <tbody><tr><td>Angebot angenommen</td></tr></tbody>
+          </table>
+          <form>
+            <label for="remark2">Bemerkung</label>
+            <input id="remark2" type="text" disabled>
+            <button type="submit" disabled>Bemerkung hinzufügen</button>
+          </form>
+        </section>
+
+        <section>
+          <h2>Angebote</h2>
+          <table>
+            <thead><tr><th>Anbieter</th><th class="amount">Betrag</th></tr></thead>
+            <tbody><tr><td>Spedition Muster</td><td class="amount">980,00 €</td></tr></tbody>
+          </table>
+          <form>
+            <label for="supplier2">Anbieter</label>
+            <input id="supplier2" type="text" disabled>
+            <label for="amount2">Betrag</label>
+            <input id="amount2" type="number" disabled>
+            <button type="submit" disabled>Angebot hinzufügen</button>
+          </form>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
