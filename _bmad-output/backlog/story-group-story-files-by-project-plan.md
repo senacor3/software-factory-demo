@@ -3,7 +3,7 @@ title: 'Story files live in one sub-folder per project, and the pipeline accepts
 type: 'feature'
 ticket: '3'
 created: '2026-10-12'
-status: 'built'
+status: done
 route: 'oneshot'
 route_source: 'auto'
 review: 'quick'
