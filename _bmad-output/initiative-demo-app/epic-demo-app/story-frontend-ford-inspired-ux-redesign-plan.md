@@ -3,7 +3,7 @@ title: 'Frontend: Ford-inspired UX redesign'
 type: 'feature'
 ticket: 11
 created: '2026-10-12'
-status: 'built'
+status: done
 route: 'full'
 route_source: 'auto'
 review: 'quick'
