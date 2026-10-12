@@ -3,7 +3,7 @@ title: 'Closing end-to-end suite'
 type: 'chore'
 ticket: 9
 created: '2026-10-12'
-status: 'built'
+status: done
 route: 'oneshot'
 route_source: 'auto'
 review: ''
@@ -18,34 +18,35 @@ context: []
 
 ## Intent
 
-**Problem:** light-factory has not yet carried a real, non-trivial freight-tenders story through all its jobs to a merge on `main` with both gates approved by a person, and the README has no walkthrough a semi-technical reader could follow.
+**Problem:** light-factory has not yet carried a real, non-trivial freight-tenders story through all its jobs to a merge on `main` with both gates approved by a person, and the README has to be presentable to a semi-technical reader.
 
-**Approach:** Dispatch `stories/close-tender-from-detail-page.md` through `.github/workflows/light-factory.yml`, follow it to merge (the human approves both gates), confirm the result in the running app, and add a walkthrough of that run to `freight-tenders/README.md`.
+**Approach:** Dispatch `stories/close-tender-from-detail-page.md` through `.github/workflows/light-factory.yml`, follow it to merge (the human approves both gates), confirm the result in the running app, and leave `freight-tenders/README.md` short and accurate.
 
 **Decisions (2026-10-12, reviewed with the user):**
 
 - Story to run: `stories/close-tender-from-detail-page.md`. It is frontend-only; "makes a business rule usable in the UI" is accepted as meeting criterion 1.
 - The agent dispatches the workflow; the human approves `plan-approval` and `evidence-approval`. The agent never approves a gate.
-- Acceptance criteria, as agreed:
+- Acceptance criteria, as agreed before dispatch and amended by the user after the run (2026-10-12: the README walkthrough and its security note were dropped):
   1. The dispatched run reaches merge on `main`.
   2. At `plan-approval` and `evidence-approval` the run pauses and a person approves.
-  3. The `checks` job runs the demo app's build, test, and lint commands and they pass; passing after a checks-fix-loop cycle counts, and the walkthrough says which happened.
-  4. With the merged app started, the story's behavior is visible in the German UI -- checked by the agent in a browser, together with the browser check of entry 11's forms and mobile layout that entry 8 re-parked here.
-  5. `freight-tenders/README.md`, in English, gains a walkthrough section of the run: the story, the plan, both gate decisions (linked to the run page that shows the approval), the evidence summary, and the merged change, each with a link.
-  6. The walkthrough says `security` is a skipped placeholder and does not present it as a passed check.
-  7. A run that halts or fails before merge does not satisfy this story: the agent reports it and the human decides whether to fix and re-dispatch. The walkthrough documents the run that merged and mentions any earlier attempt.
+  3. The `checks` job runs the demo app's build, test, and lint commands and they pass; passing after a checks-fix-loop cycle counts.
+  4. With the merged app started, the story's behavior is visible in the German UI -- checked by the agent in a browser, together with the browser check of entry 11's forms and narrow layout that entry 8 re-parked here.
+  5. `freight-tenders/README.md`, in English, says what the app is, lists its endpoints and pages, and gives the commands to build, test, lint, and run it. It carries no walkthrough of the run.
+  6. A run that halts or fails before merge does not satisfy this story: the agent reports it and the human decides whether to fix and re-dispatch.
 
 </frozen-after-approval>
 
 ## Implementation Notes
 
-Oneshot: the code change is the pipeline's own; this entry's direct edits are one README section.
+Oneshot: the code change is the pipeline's own; this entry's direct edits are to `freight-tenders/README.md`.
 
 **Attempt 1 -- run `38294064076`, PR #14 (closed unmerged).** Analysis, `plan-approval` (approved by the human), implementation, checks, and review all succeeded (0 findings, 0 fix cycles), but `Merge` was `skipped`, so `evidence-approval` never opened. Cause: `checks-fix-loop` (added in `472cc33`) is `skipped` when checks pass first try, and `Merge` had no `if:`, so GitHub's default `success()` skipped it on the skipped ancestor. Fixed with the human's go-ahead in `9817eba` (`if: ${{ !cancelled() && needs.review.result == 'success' }}` on `merge`) -- pipeline logic, outside this epic's Boundaries, a deliberate exception.
 
 **Attempt 2 -- run `38295852809`, PR #15, merged as `f0d1ad5`.** Same story, unchanged. Analysis raised no question; both gates approved by the human (`leichtundkross`, per the run's approvals API); checks build/test/lint passed first try (`checks-fix-loop` skipped), `security` recorded as `skipped`; review `resolved`, 0 findings, `fix_cycle: 0`; `Merge` succeeded, which also proves the workflow fix.
 
-**Criteria:** 1 met (merged on `main`). 2 met. 3 met, first try. 5 and 6 met by the new "Walkthrough" section in `freight-tenders/README.md`. 7: the walkthrough names attempt 1.
+**Criteria:** 1 met (merged on `main`). 2 met. 3 met, first try. 4 met, see below. 6: attempt 1 was reported and the human chose fix and re-dispatch.
+
+**Criterion 5 -- README.** A "Walkthrough" section was first added (commit `d9908a0`), then removed at the user's request together with the language paragraph, the backend error paragraph, and the frontend's functional prose. The README now holds the general description, the endpoint table, the route/page table, and the run commands. The criteria were amended to match; the run's record stays in PR #15 and `.factory/close-tender-from-detail-page/run-38295852809/`.
 
 **Criterion 4 -- browser check (Chrome, against the backend on :8080 and `ng serve` on :4200 already running locally, merged `main`), using a test tender "Testhafen -> Pruefstadt" created through the UI:**
 - Create form -> lands on the overview with the new tender at the top of the open table; selecting the row's Nach cell opens the detail page.

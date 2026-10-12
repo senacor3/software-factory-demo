@@ -15,9 +15,6 @@ part of its `checks` job, via commands named in
 `.github/post-implementation-checks.yml` — so a dispatched story touching
 `freight-tenders/` is checked by both.
 
-Backend code, API, domain model, and docs stay English; all UI-facing
-(Angular template) text is German.
-
 ## Backend (`backend/`)
 
 Spring Boot (Java 25) REST API over an in-memory H2 database, so all data is
@@ -33,11 +30,6 @@ gone on restart.
 | `POST /api/tenders/{id}/offers` | Adds an offer (`supplierName`, `amount`) | `201` |
 | `GET /api/health` | Liveness check, `{"status":"UP"}` | `200` |
 
-Errors: `404` for an unknown tender id; `409` when adding a remark or an offer
-to a closed tender; `400` with a `violations` array when a create request has
-a blank `origin` or `destination`. In these three cases the error body is
-`{error, message, path, timestamp}`.
-
 ```bash
 cd backend
 mvn -B verify        # build + test
@@ -47,27 +39,13 @@ mvn spring-boot:run  # run locally on :8080
 
 ## Frontend (`frontend/`)
 
-Angular (standalone components, SCSS, Vitest for unit tests). Three pages,
-all calling the backend through one shared `TenderApiService`:
+Angular (standalone components, SCSS, Vitest for unit tests).
 
 | Route | Page | Shows |
 |---|---|---|
 | `/` | `TenderOverview` | Two tables, "Offene Ausschreibungen" (open) and "Geschlossene Ausschreibungen" (closed); a row opens that tender |
 | `/tenders/new` | `TenderCreate` | A form for origin ("Von") and destination ("Nach"); on success it returns to the overview |
 | `/tenders/:id` | `TenderDetail` | The tender's status, its remarks and offers as two tables, a form to add each, and an "Ausschreibung schließen" button while the tender is open |
-
-All four tables sort by a single column: selecting a column header sorts
-ascending, selecting it again reverses. The default order is newest first, and
-the sort resets on every visit. The overview and the detail page show a German
-loading message while their request is in flight, a German empty-state row for
-an empty table, and a German error message if the backend is unreachable; the
-create form shows a German error below its fields if saving fails. On a closed
-tender the detail page disables both forms and explains why. An open tender
-has an "Ausschreibung schließen" button that closes it (with a German error
-message if that fails); the button disappears once the tender is closed.
-Global styles (design
-tokens and the shared table, form, and button styles) live in
-`src/styles.scss`.
 
 ```bash
 cd frontend
@@ -88,50 +66,4 @@ cd backend && mvn spring-boot:run
 cd frontend && npm start
 ```
 
-Open `http://localhost:4200`: the page shows the tender overview, empty on a
-fresh start. A tender is closed from its detail page; the equivalent API call is:
-
-```bash
-curl -X POST http://localhost:8080/api/tenders/1/close
-```
-
-If the backend isn't running, each page shows a German error message instead
-of an unhandled failure.
-
-## Walkthrough: one story through the light-factory pipeline
-
-The "Ausschreibung schließen" button on the tender detail page was not written
-by hand. It was built by light-factory's pipeline
-(`.github/workflows/light-factory.yml`) from a story file, with a person
-approving at two gates. This section follows that run from story to merge.
-
-| Step | What happened | Where to look |
-|---|---|---|
-| 1. Story | A short Markdown file states the problem, what to build, and the acceptance criteria. Nothing else is given to the pipeline. | [`stories/close-tender-from-detail-page.md`](../stories/close-tender-from-detail-page.md) |
-| 2. Analysis | An agent judged the story complete and in scope, proposed a frontend-only solution with subtasks and tests, raised no question, and opened a pull request holding only the plan. | [`plan.md`](../.factory/close-tender-from-detail-page/run-38295852809/plan.md), [plan comment on PR #15](https://github.com/senacor3/software-factory-demo/pull/15#issuecomment-6130875881) |
-| 3. Gate: `plan-approval` | The run paused. A person read the plan and approved it; no code had been written yet. | [run 38295852809](https://github.com/senacor3/software-factory-demo/actions/runs/38295852809) (review history at the top of the run page) |
-| 4. Implementation | A second agent implemented the plan on the pull request's branch: a `close(id)` method on `TenderApiService`, the button and its error message on the detail page, six new tests, and this README's passages on closing. | [PR #15, Files changed](https://github.com/senacor3/software-factory-demo/pull/15/files) |
-| 5. Checks | Deterministic steps, no agent: the build, test, and lint commands of the backend, the frontend, and the pipeline's own code, as listed in `.github/post-implementation-checks.yml`. All three passed on the first try, so the checks fix loop did not run. | [`evidence/checks/`](../.factory/close-tender-from-detail-page/run-38295852809/evidence/checks/) |
-| 6. Review | A third agent, independent of the implementer and read-only, reviewed the change against the plan and this repo's conventions. It raised no findings, so the review fix loop ran zero cycles. | [`review.md`](../.factory/close-tender-from-detail-page/run-38295852809/review.md) |
-| 7. Gate: `evidence-approval` | The run paused again with a summary of the checks and the review posted on the pull request. A person approved it. | [evidence summary on PR #15](https://github.com/senacor3/software-factory-demo/pull/15#issuecomment-6130924286), [run 38295852809](https://github.com/senacor3/software-factory-demo/actions/runs/38295852809) |
-| 8. Merge | A script squash-merged the pull request into `main`. | [commit `f0d1ad5`](https://github.com/senacor3/software-factory-demo/commit/f0d1ad56585932b444c87512b69c8a19e8b0da32) |
-
-Two things the evidence does not show:
-
-- **Security is not checked.** The `security` check is a placeholder: no
-  command is configured for it, and its evidence file and the summary both
-  record it as `skipped`. It is not a passed check.
-- **This was the second attempt.** The first run
-  ([38294064076](https://github.com/senacor3/software-factory-demo/actions/runs/38294064076),
-  [PR #14](https://github.com/senacor3/software-factory-demo/pull/14), closed
-  unmerged) passed analysis, implementation, checks, and review, but never
-  reached the `evidence-approval` gate: a bug in the workflow skipped the merge
-  job whenever the checks passed on the first try. The workflow was fixed by
-  hand in commit
-  [`9817eba`](https://github.com/senacor3/software-factory-demo/commit/9817eba)
-  and the same story was dispatched again unchanged.
-
-To see the result, start both parts as described above, create a tender, open
-it, and select "Ausschreibung schließen": the status pill turns to
-"Geschlossen", both forms are disabled, and the tender moves to "Geschlossene
-Ausschreibungen" on the overview.
+Then open `http://localhost:4200`.
