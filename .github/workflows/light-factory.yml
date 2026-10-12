@@ -32,7 +32,7 @@ concurrency:
 jobs:
   analysis:
     name: "Analysis"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # AD-5/AD-12: contents:write + pull-requests:write scope the new deterministic
     # open_implementation_pr.py script's git push + gh pr create, nothing else -- the
     # analysis agent's own tool-allowlist stays read-only (Read Grep Glob) regardless.
@@ -98,7 +98,7 @@ jobs:
     # purpose: an empty or unknown status skips the gate rather than opening it.
     if: ${{ needs.analysis.outputs.status == 'ready-for-review' }}
     environment: plan-approval
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # AD-5/AD-6: contents:write scopes checkout_branch.py's git fetch/checkout and
     # commit_push_implementation.py's git add/commit/push, nothing else -- the
     # implementation agent's own tool-allowlist stays Read/Write/Edit/Grep/Glob
@@ -168,7 +168,7 @@ jobs:
   checks:
     name: "Checks"
     needs: [analysis, implementation]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # AD-5/AD-6: contents:write scopes checkout_branch.py's git fetch/checkout and
     # commit_push_implementation.py's git add/commit/push, nothing else -- this job
     # runs no agent and opens/closes no PR.
@@ -308,7 +308,7 @@ jobs:
     # on that path. `!cancelled()` keeps it off a concurrency-cancelled run, same as
     # `close-rejected-pr` below.
     if: ${{ !cancelled() && needs.checks.result == 'failure' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # AD-5/AD-6: contents:write scopes checkout_branch.py's git fetch/checkout and
     # implementation_graph.py's/commit_push_implementation.py's git calls, nothing
     # else -- no PR is opened/closed/commented on here.
@@ -374,7 +374,7 @@ jobs:
     # dot notation, because GitHub Actions expressions parse a bare `-` in a
     # property name as the subtraction operator.
     if: ${{ !cancelled() && (needs.checks.result == 'success' || needs['checks-fix-loop'].result == 'success') }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # AD-5: contents:write scopes checkout_branch.py/commit_push_implementation.py's
     # git calls (including fix_loop_graph.py's own fix-cycle commits);
     # pull-requests:write scopes the evidence-approval summary's `gh pr comment` call
@@ -450,7 +450,7 @@ jobs:
     name: "Merge"
     needs: [analysis, implementation, review]
     environment: evidence-approval
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # AD-5/AD-14: contents:write + pull-requests:write scope merge_story.py's `gh pr
     # merge --squash --delete-branch` call -- a deterministic script, never an agent
     # (no `claude` CLI invocation anywhere in this job).
@@ -487,7 +487,7 @@ jobs:
     # concurrency-cancelled (superseded, AD-15) run, whose PR the superseding run
     # closes itself; a successful run has no `failure` result and never gets here.
     if: ${{ !cancelled() && (needs.implementation.result == 'failure' || needs.merge.result == 'failure') }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # AD-5: actions:read scopes the review-history call (`gh api
     # .../actions/runs/<id>/approvals`), pull-requests:write the `gh pr list` + `gh pr
     # close --comment` calls, contents:read the checkout -- no push, no merge, no
