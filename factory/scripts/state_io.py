@@ -15,9 +15,10 @@ and a thin `argparse` CLI.
 Scope, deliberately narrow (see story-shared-state-library-plan.md Design Notes):
 
   - Only the per-stage status enums AD-10 actually defines are enforced: `analysis`
-    (governs `plan.md`/`decisions.md`) and `review` (governs `review.md`). AD-10 defines
-    no `implementation`-stage state file in v1, so `write_state(stage="implementation",
-    ...)` accepts any non-empty status with no closed-enum check -- don't invent one.
+    (governs `plan.md`/`decisions.md`), `review` (governs `review.md`), and `checks`
+    (governs `checks.md`). AD-10 defines no `implementation`-stage state file in v1, so
+    `write_state(stage="implementation", ...)` accepts any non-empty status with no
+    closed-enum check -- don't invent one.
   - `evidence/checks/` and `evidence/review/`'s file *format* is NOT decided here --
     only that the directories exist (`ensure_layout`). Later entries own their contents.
   - No `plan.md`/`decisions.md`/`review.md` content is written here -- only the generic
@@ -62,13 +63,17 @@ SCHEMA_VERSION = 1
 # AD-10's canonical per-stage stages and status enums. `implementation` deliberately has
 # no entry here -- no AD-10-defined implementation-stage state file exists in v1, so any
 # non-empty status is accepted for it (see module docstring / plan Design Notes).
-STAGES = ("analysis", "implementation", "review")
+STAGES = ("analysis", "implementation", "review", "checks")
 STATUS_BY_STAGE = {
     "analysis": frozenset(
         {"drafted", "awaiting-clarification", "clarification-cap-reached", "ready-for-review"}
     ),
     "review": frozenset(
         {"in-review", "findings-open", "fix-in-progress", "resolved", "unresolved-after-cap"}
+    ),
+    # AD-10's checks-fix-loop stage (checks_fix_loop_graph.py), mirroring review's enum.
+    "checks": frozenset(
+        {"checking", "findings-open", "fix-in-progress", "resolved", "unresolved-after-cap"}
     ),
 }
 

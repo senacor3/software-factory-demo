@@ -224,29 +224,43 @@ jobs:
       # agent tool call. Each step runs the commands the repo configures for that
       # check in .github/post-implementation-checks.yml, read as it is on origin/main
       # so a story cannot change them by editing the config (run_checks.py itself
-      # still comes from the story branch) -- a failing command exits
-      # non-zero and stops the job; a check with no command records status: skipped
-      # (never pass) and exits 0, which is `security` in this repo. See
+      # still comes from the story branch); a check with no command records status:
+      # skipped (never pass) and exits 0, which is `security` in this repo. See
       # factory/scripts/run_checks.py and AD-6's addendum.
+      #
+      # AD-10 addendum: each step has `continue-on-error: true` so all 4 always run
+      # and leave evidence, regardless of an earlier one failing -- a failing step's
+      # own outcome is still recorded (`steps.<id>.outcome`), and "Fail job if any
+      # check failed" below explicitly fails the job from that, preserving today's
+      # "any check failure fails the job" outcome while making every check's
+      # evidence durable for the new `checks-fix-loop` job to read, even on failure.
       - name: Build check
+        id: build
+        continue-on-error: true
         run: |
           uv run factory/scripts/run_checks.py build \
             --story-slug "${{ needs.analysis.outputs.story-slug }}" \
             --run-id "${{ needs.analysis.outputs.run-id }}"
 
       - name: Test check
+        id: test
+        continue-on-error: true
         run: |
           uv run factory/scripts/run_checks.py test \
             --story-slug "${{ needs.analysis.outputs.story-slug }}" \
             --run-id "${{ needs.analysis.outputs.run-id }}"
 
       - name: Lint check
+        id: lint
+        continue-on-error: true
         run: |
           uv run factory/scripts/run_checks.py lint \
             --story-slug "${{ needs.analysis.outputs.story-slug }}" \
             --run-id "${{ needs.analysis.outputs.run-id }}"
 
       - name: Security check
+        id: security
+        continue-on-error: true
         run: |
           uv run factory/scripts/run_checks.py security \
             --story-slug "${{ needs.analysis.outputs.story-slug }}" \
@@ -254,18 +268,112 @@ jobs:
 
       # Always commits this job's evidence (AD-10), extending the existing
       # git-based state mechanism rather than adding a second one (e.g. workflow
-      # artifacts) -- so the `review` job's checkout always has it, regardless of
-      # whether a fix cycle later also commits.
+      # artifacts) -- so the `review`/`checks-fix-loop` jobs' checkout always has
+      # it, regardless of whether any of the 4 checks above failed or whether a fix
+      # cycle later also commits. `if: always()` -- the step above's
+      # `continue-on-error: true` already keeps the job going on a failing check,
+      # but without this the job would still skip straight past a *crashing* step
+      # (e.g. an uncaught non-check error) the same way it did before this addendum.
       - name: Commit checks evidence
+        if: always()
         run: |
           uv run factory/scripts/commit_push_implementation.py \
             --story-slug "${{ needs.analysis.outputs.story-slug }}" \
             --run-id "${{ needs.analysis.outputs.run-id }}" \
             --label Checks
 
+      # Explicitly fails the job if any check above failed -- `continue-on-error:
+      # true` on those steps means their own failure no longer fails the job by
+      # itself, so this step restores that outcome from each step's recorded
+      # `outcome` after evidence has already been committed durably above.
+      - name: Fail job if any check failed
+        if: always()
+        run: |
+          for outcome in \
+            "${{ steps.build.outcome }}" \
+            "${{ steps.test.outcome }}" \
+            "${{ steps.lint.outcome }}" \
+            "${{ steps.security.outcome }}"; do
+            if [ "$outcome" = "failure" ]; then
+              echo "at least one check failed" >&2
+              exit 1
+            fi
+          done
+
+  checks-fix-loop:
+    name: "Checks fix loop"
+    needs: [analysis, implementation, checks]
+    # AD-10: runs only when `checks` actually failed -- `checks` keeps its
+    # documented "runs no agent" invariant and this job only pays agent-setup cost
+    # on that path. `!cancelled()` keeps it off a concurrency-cancelled run, same as
+    # `close-rejected-pr` below.
+    if: ${{ !cancelled() && needs.checks.result == 'failure' }}
+    runs-on: ubuntu-latest
+    # AD-5/AD-6: contents:write scopes checkout_branch.py's git fetch/checkout and
+    # implementation_graph.py's/commit_push_implementation.py's git calls, nothing
+    # else -- no PR is opened/closed/commented on here.
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+
+      - name: Checkout implementation branch
+        run: |
+          uv run factory/scripts/checkout_branch.py \
+            --story-slug "${{ needs.analysis.outputs.story-slug }}" \
+            --run-id "${{ needs.analysis.outputs.run-id }}"
+
+      - name: Install Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code@latest
+
+      # AD-10's bounded checks fix loop (mirrors AD-11): reads the evidence `checks`
+      # already committed to learn which check(s) failed, re-engages the
+      # implementation skill with that as context, re-runs only those check(s), and
+      # repeats up to the same cap of 2 cycles. Still failing at the cap fails this
+      # step (and so this job) -- `review` below only proceeds on a `success` result
+      # from either `checks` or this job. CLAUDE_CODE_OAUTH_TOKEN is read
+      # automatically by the `claude` CLI from the environment (AD-9).
+      - name: Run checks fix loop
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          uv run factory/graph/checks_fix_loop_graph.py \
+            --story-slug "${{ needs.analysis.outputs.story-slug }}" \
+            --run-id "${{ needs.analysis.outputs.run-id }}"
+
+      # Always commits this job's evidence (AD-10), same rationale as the `checks`
+      # job's own commit step -- `checks_fix_loop_graph.py`'s own fix-cycle commits
+      # (via implementation_graph.py) are conditional on a cycle running; this step
+      # guarantees checks.md and any rechecked evidence/checks/ are persisted
+      # regardless of the outcome, including the capped-out failing case.
+      - name: Commit checks-fix-loop evidence
+        if: always()
+        run: |
+          uv run factory/scripts/commit_push_implementation.py \
+            --story-slug "${{ needs.analysis.outputs.story-slug }}" \
+            --run-id "${{ needs.analysis.outputs.run-id }}" \
+            --label Checks-fix-loop
+
   review:
     name: "Review & fix loop"
-    needs: [analysis, implementation, checks]
+    needs: [analysis, implementation, checks, checks-fix-loop]
+    # AD-10: proceeds when `checks` passed outright, or when `checks-fix-loop` ran
+    # and resolved it -- `checks-fix-loop` is `skipped` (not `success`) on the
+    # all-pass-first-try path, so this `if:` only ever has one of the two sides
+    # true. `!cancelled()` preserves this job's prior behavior on a
+    # concurrency-cancelled run. Bracket notation (`needs['checks-fix-loop']`), not
+    # dot notation, because GitHub Actions expressions parse a bare `-` in a
+    # property name as the subtraction operator.
+    if: ${{ !cancelled() && (needs.checks.result == 'success' || needs['checks-fix-loop'].result == 'success') }}
     runs-on: ubuntu-latest
     # AD-5: contents:write scopes checkout_branch.py/commit_push_implementation.py's
     # git calls (including fix_loop_graph.py's own fix-cycle commits);

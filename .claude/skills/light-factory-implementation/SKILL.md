@@ -1,6 +1,6 @@
 ---
 name: light-factory-implementation
-description: Implements plan.md's subtasks against the checked-out branch via Write/Edit only. Invoked by factory/graph/implementation_graph.py as the pipeline's implementation stage (CAP-4 scoped implementation). Never touches plan.md, decisions.md, or review.md.
+description: Implements plan.md's subtasks against the checked-out branch via Write/Edit only. Invoked by factory/graph/implementation_graph.py as the pipeline's implementation stage (CAP-4 scoped implementation). Never touches plan.md, decisions.md, review.md, or checks.md.
 ---
 
 # light-factory-implementation
@@ -21,11 +21,14 @@ If a subtask turns out to be impossible or inapplicable given what you find in t
 
 ## Fix cycle (optional third argument)
 
-When invoked as `/light-factory-implementation <plan-path> <decisions-path> <review-path>` -- a third argument -- you are being re-engaged by `factory/graph/fix_loop_graph.py`'s bounded fix loop (AD-11) after the review stage found issues with your prior work. Read `<review-path>` (`review.md`) for its findings and address them specifically, in addition to (not instead of) `plan.md`'s subtasks, which you've already implemented in an earlier pass on this same branch. Treat the findings as the priority: they describe concrete gaps between what you built and what the plan/acceptance criteria require.
+When invoked as `/light-factory-implementation <plan-path> <decisions-path> <findings-path>` -- a third argument -- you are being re-engaged after an earlier pass on this same branch found issues with your prior work. Read `<findings-path>` for its findings and address them specifically, in addition to (not instead of) `plan.md`'s subtasks, which you've already implemented. Treat the findings as the priority: they describe concrete gaps between what you built and what's required. There are two callers that can re-engage you this way:
+
+- `factory/graph/fix_loop_graph.py`'s bounded review fix loop (AD-11): `<findings-path>` is `review.md`, naming findings the independent review stage raised against the plan/acceptance criteria.
+- `factory/graph/checks_fix_loop_graph.py`'s bounded checks fix loop (AD-10): `<findings-path>` is `checks.md`, naming which mechanical check(s) (`build`/`test`/`lint`/`security`) failed and their output. Fix the failing check(s) specifically -- do not re-derive or second-guess `plan.md`'s subtasks because of this.
 
 ## Never touch these files
 
-You must never `Write` or `Edit` `plan.md`, `decisions.md`, or `review.md` anywhere under `.factory/` — those belong to the analysis and review stages (AD-10's append-only per-stage ownership). A `--settings` deny rule enforces this independently of this instruction (AD-5's two-layer model) — but don't attempt it regardless.
+You must never `Write` or `Edit` `plan.md`, `decisions.md`, `review.md`, or `checks.md` anywhere under `.factory/` — those belong to the analysis, review, and checks stages (AD-10's append-only per-stage ownership). A `--settings` deny rule enforces this independently of this instruction (AD-5's two-layer model) — but don't attempt it regardless.
 
 ## Output
 

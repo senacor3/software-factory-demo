@@ -43,16 +43,17 @@ import commit_push_implementation
 import state_io
 
 # AD-5's second enforcement layer: even though the implementation agent's branch
-# checkout holds plan.md/decisions.md/review.md alongside the files it may edit, it
-# must never Edit those three -- they are owned by the analysis/review stages
-# (AD-10). Scoped per-invocation via `--settings`, not a committed project-wide
-# .claude/settings.json (see the plan's Design Notes).
+# checkout holds plan.md/decisions.md/review.md/checks.md alongside the files it may
+# edit, it must never Edit those four -- they are owned by the analysis/review/checks
+# stages (AD-10). Scoped per-invocation via `--settings`, not a committed
+# project-wide .claude/settings.json (see the plan's Design Notes).
 DENY_SETTINGS = {
     "permissions": {
         "deny": [
             "Edit(.factory/**/plan.md)",
             "Edit(.factory/**/decisions.md)",
             "Edit(.factory/**/review.md)",
+            "Edit(.factory/**/checks.md)",
         ]
     }
 }
