@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.1.1</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.senacor.freighttenders</groupId>
+    <artifactId>freight-tenders-backend</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>freight-tenders-backend</name>
+    <description>Freight tender management backend (Spring Boot)</description>
+
+    <properties>
+        <java.version>25</java.version>
+    </properties>
+
+    <dependencies>
+        <!-- Spring Boot 4 split the old "web" starter by stack; spring-boot-starter-web
+             is deprecated in 4.1.1 in favor of this Servlet/MVC-specific starter. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc</artifactId>
+        </dependency>
+
+        <!-- Likewise, @WebMvcTest/MockMvc moved out of the generic
+             spring-boot-starter-test into this MVC-specific test starter (which still
+             pulls in spring-boot-starter-test transitively for JUnit/AssertJ/Mockito). -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+
+            <!-- Not bound to a lifecycle phase on purpose: CI (and the Verification
+                 section below) invoke `mvn spotless:check` as its own step, kept
+                 separate from `mvn -B verify` so a build/test failure and a
+                 formatting violation show up as distinct CI steps. -->
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>3.10.4</version>
+                <configuration>
+                    <java>
+                        <googleJavaFormat/>
+                    </java>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
