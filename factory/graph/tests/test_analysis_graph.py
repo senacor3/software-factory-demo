@@ -65,7 +65,7 @@ def test_complete_no_open_questions_writes_ready_for_review(tmp_path):
          patch("analysis_graph.open_implementation_pr.close_for_clarification") as mock_close, \
          patch("analysis_graph.post_summary.post_comment") as mock_post_summary:
         outcome = analysis_graph.run_analysis(
-            "stories/foo.md", "foo", "run-1", state_base=tmp_path
+            "stories/light-factory/foo.md", "foo", "run-1", state_base=tmp_path
         )
 
     assert outcome["status"] == "ready-for-review"
@@ -106,7 +106,7 @@ def test_complete_with_open_questions_writes_awaiting_clarification(tmp_path):
          patch("analysis_graph.open_implementation_pr.post_clarification_cap_notice") as mock_cap_notice, \
          patch("analysis_graph.post_summary.post_comment") as mock_post_summary:
         outcome = analysis_graph.run_analysis(
-            "stories/foo.md", "foo", "run-1", state_base=tmp_path
+            "stories/light-factory/foo.md", "foo", "run-1", state_base=tmp_path
         )
 
     assert outcome["status"] == "awaiting-clarification"
@@ -142,7 +142,7 @@ def test_complete_with_open_questions_at_cap_writes_clarification_cap_reached(tm
          patch("analysis_graph.open_implementation_pr.post_clarification_cap_notice") as mock_cap_notice, \
          patch("analysis_graph.post_summary.post_comment") as mock_post_summary:
         outcome = analysis_graph.run_analysis(
-            "stories/foo.md", "foo", "run-1", state_base=tmp_path
+            "stories/light-factory/foo.md", "foo", "run-1", state_base=tmp_path
         )
 
     assert outcome["status"] == "clarification-cap-reached"
@@ -172,7 +172,7 @@ def test_clarification_status_failure_raises_analysis_pr_open_error_with_no_stat
          ), \
          patch("analysis_graph.open_implementation_pr.open_pr_for_story") as mock_open_pr:
         with pytest.raises(analysis_graph.AnalysisPROpenError, match="rate limited"):
-            analysis_graph.run_analysis("stories/foo.md", "foo", "run-1", state_base=tmp_path)
+            analysis_graph.run_analysis("stories/light-factory/foo.md", "foo", "run-1", state_base=tmp_path)
 
     # this is the new, earlier failure point: it runs before the state write, so -- unlike
     # every other AnalysisPROpenError case -- no state files exist at all.
@@ -195,7 +195,7 @@ def test_incomplete_halts_with_reason_and_writes_nothing(tmp_path):
     with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))), \
          patch("analysis_graph.open_implementation_pr.open_pr_for_story") as mock_open_pr:
         with pytest.raises(analysis_graph.AnalysisHalted) as exc_info:
-            analysis_graph.run_analysis("stories/foo.md", "foo", "run-1", state_base=tmp_path)
+            analysis_graph.run_analysis("stories/light-factory/foo.md", "foo", "run-1", state_base=tmp_path)
 
     assert "too vague" in exc_info.value.reason
     assert not (tmp_path / "foo").exists()
@@ -214,7 +214,7 @@ def test_out_of_scope_halts_with_reason_and_writes_nothing(tmp_path):
     with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))), \
          patch("analysis_graph.open_implementation_pr.open_pr_for_story") as mock_open_pr:
         with pytest.raises(analysis_graph.AnalysisHalted) as exc_info:
-            analysis_graph.run_analysis("stories/foo.md", "foo", "run-1", state_base=tmp_path)
+            analysis_graph.run_analysis("stories/light-factory/foo.md", "foo", "run-1", state_base=tmp_path)
 
     assert "not something this codebase builds" in exc_info.value.reason
     assert not (tmp_path / "foo").exists()
@@ -230,7 +230,7 @@ def test_cli_nonzero_exit_raises_invocation_error_not_halted(tmp_path):
         return_value=_fake_proc(returncode=1, stderr="boom"),
     ):
         with pytest.raises(analysis_graph.AnalysisInvocationError, match="boom"):
-            analysis_graph.run_analysis("stories/foo.md", "foo", "run-1", state_base=tmp_path)
+            analysis_graph.run_analysis("stories/light-factory/foo.md", "foo", "run-1", state_base=tmp_path)
 
     assert not (tmp_path / "foo").exists()
 
@@ -238,7 +238,7 @@ def test_cli_nonzero_exit_raises_invocation_error_not_halted(tmp_path):
 def test_cli_malformed_json_raises_invocation_error(tmp_path):
     with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout="not json")):
         with pytest.raises(analysis_graph.AnalysisInvocationError, match="not valid JSON"):
-            analysis_graph.run_analysis("stories/foo.md", "foo", "run-1", state_base=tmp_path)
+            analysis_graph.run_analysis("stories/light-factory/foo.md", "foo", "run-1", state_base=tmp_path)
 
     assert not (tmp_path / "foo").exists()
 
@@ -249,7 +249,7 @@ def test_cli_missing_structured_output_raises_invocation_error(tmp_path):
         return_value=_fake_proc(stdout=json.dumps({"result": "no structured_output here"})),
     ):
         with pytest.raises(analysis_graph.AnalysisInvocationError, match="structured_output"):
-            analysis_graph.run_analysis("stories/foo.md", "foo", "run-1", state_base=tmp_path)
+            analysis_graph.run_analysis("stories/light-factory/foo.md", "foo", "run-1", state_base=tmp_path)
 
     assert not (tmp_path / "foo").exists()
 
@@ -262,7 +262,7 @@ def test_cli_missing_required_field_raises_invocation_error(tmp_path):
         return_value=_fake_proc(stdout=_cli_output(incomplete_result)),
     ):
         with pytest.raises(analysis_graph.AnalysisInvocationError, match="missing required field"):
-            analysis_graph.run_analysis("stories/foo.md", "foo", "run-1", state_base=tmp_path)
+            analysis_graph.run_analysis("stories/light-factory/foo.md", "foo", "run-1", state_base=tmp_path)
 
     assert not (tmp_path / "foo").exists()
 
@@ -270,7 +270,7 @@ def test_cli_missing_required_field_raises_invocation_error(tmp_path):
 def test_subprocess_oserror_raises_invocation_error(tmp_path):
     with patch("analysis_graph.subprocess.run", side_effect=OSError("no such file")):
         with pytest.raises(analysis_graph.AnalysisInvocationError, match="no such file"):
-            analysis_graph.run_analysis("stories/foo.md", "foo", "run-1", state_base=tmp_path)
+            analysis_graph.run_analysis("stories/light-factory/foo.md", "foo", "run-1", state_base=tmp_path)
 
     assert not (tmp_path / "foo").exists()
 
@@ -286,7 +286,7 @@ def test_pr_open_failure_raises_analysis_pr_open_error_but_state_files_remain(tm
              side_effect=open_implementation_pr.PROpenError("gh pr create failed: auth error"),
          ):
         with pytest.raises(analysis_graph.AnalysisPROpenError, match="auth error"):
-            analysis_graph.run_analysis("stories/foo.md", "foo", "run-1", state_base=tmp_path)
+            analysis_graph.run_analysis("stories/light-factory/foo.md", "foo", "run-1", state_base=tmp_path)
 
     # plan.md/decisions.md were written before the PR-open step ran -- they stay on disk.
     meta, _ = state_io.read_state(tmp_path / "foo" / "run-1" / "plan.md")
@@ -310,7 +310,7 @@ def test_close_for_clarification_failure_raises_analysis_pr_open_error_but_state
              side_effect=open_implementation_pr.PROpenError("gh pr close failed: not found"),
          ):
         with pytest.raises(analysis_graph.AnalysisPROpenError, match="not found"):
-            analysis_graph.run_analysis("stories/foo.md", "foo", "run-1", state_base=tmp_path)
+            analysis_graph.run_analysis("stories/light-factory/foo.md", "foo", "run-1", state_base=tmp_path)
 
     # plan.md/decisions.md and the PR (per the mock) remain exactly as entry 3 left them --
     # only the comment/close step itself failed.
@@ -330,7 +330,7 @@ def test_post_summary_failure_raises_analysis_pr_open_error_but_state_files_rema
              side_effect=post_summary.PostCommentError("gh pr comment failed: rate limited"),
          ):
         with pytest.raises(analysis_graph.AnalysisPROpenError, match="rate limited"):
-            analysis_graph.run_analysis("stories/foo.md", "foo", "run-1", state_base=tmp_path)
+            analysis_graph.run_analysis("stories/light-factory/foo.md", "foo", "run-1", state_base=tmp_path)
 
     # plan.md/decisions.md and the PR remain exactly as entry 3 left them -- only the
     # gate-summary comment step itself failed.
@@ -345,16 +345,16 @@ def test_post_summary_failure_raises_analysis_pr_open_error_but_state_files_rema
 
 def test_build_command_never_uses_bare():
     schema_text = analysis_graph.SCHEMA_PATH.read_text(encoding="utf-8")
-    cmd = analysis_graph._build_command("stories/foo.md", schema_text, "claude")
+    cmd = analysis_graph._build_command("stories/light-factory/foo.md", schema_text, "claude")
     assert "--bare" not in cmd
     assert cmd[0] == "claude"
-    assert "/light-factory-analysis stories/foo.md" in cmd
+    assert "/light-factory-analysis stories/light-factory/foo.md" in cmd
     assert "Read Grep Glob" in cmd
 
 
 def test_build_command_passes_schema_and_json_output():
     schema_text = analysis_graph.SCHEMA_PATH.read_text(encoding="utf-8")
-    cmd = analysis_graph._build_command("stories/foo.md", schema_text, "claude")
+    cmd = analysis_graph._build_command("stories/light-factory/foo.md", schema_text, "claude")
     assert "--output-format" in cmd
     assert "json" in cmd
     assert "--json-schema" in cmd
@@ -369,7 +369,7 @@ def test_cli_main_halted_exits_1(tmp_path, capsys, monkeypatch):
     result = _result(complete=False, reason="nope", proposal=None, subtasks=[], tests=[])
     with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))):
         rc = analysis_graph.main(
-            ["--story-file", "stories/foo.md", "--story-slug", "foo", "--run-id", "run-1"]
+            ["--story-file", "stories/light-factory/foo.md", "--story-slug", "foo", "--run-id", "run-1"]
         )
     captured = capsys.readouterr()
     assert rc == 1
@@ -380,7 +380,7 @@ def test_cli_main_invocation_error_exits_3(tmp_path, capsys, monkeypatch):
     monkeypatch.chdir(tmp_path)
     with patch("analysis_graph.subprocess.run", return_value=_fake_proc(returncode=2, stderr="tool broke")):
         rc = analysis_graph.main(
-            ["--story-file", "stories/foo.md", "--story-slug", "foo", "--run-id", "run-1"]
+            ["--story-file", "stories/light-factory/foo.md", "--story-slug", "foo", "--run-id", "run-1"]
         )
     captured = capsys.readouterr()
     assert rc == 3
@@ -395,7 +395,7 @@ def test_cli_main_success_exits_0(tmp_path, capsys, monkeypatch):
          patch("analysis_graph.open_implementation_pr.open_pr_for_story", return_value=fake_pr), \
          patch("analysis_graph.post_summary.post_comment"):
         rc = analysis_graph.main(
-            ["--story-file", "stories/foo.md", "--story-slug", "foo", "--run-id", "run-1"]
+            ["--story-file", "stories/light-factory/foo.md", "--story-slug", "foo", "--run-id", "run-1"]
         )
     captured = capsys.readouterr()
     assert rc == 0
@@ -413,7 +413,7 @@ def test_cli_main_pr_open_error_exits_4(tmp_path, capsys, monkeypatch):
              side_effect=open_implementation_pr.PROpenError("gh pr create failed: auth error"),
          ):
         rc = analysis_graph.main(
-            ["--story-file", "stories/foo.md", "--story-slug", "foo", "--run-id", "run-1"]
+            ["--story-file", "stories/light-factory/foo.md", "--story-slug", "foo", "--run-id", "run-1"]
         )
     captured = capsys.readouterr()
     assert rc == 4
@@ -422,7 +422,7 @@ def test_cli_main_pr_open_error_exits_4(tmp_path, capsys, monkeypatch):
 
 # --- CLI: status step output (AD-13) --------------------------------------------------------
 
-_MAIN_ARGS = ["--story-file", "stories/foo.md", "--story-slug", "foo", "--run-id", "run-1"]
+_MAIN_ARGS = ["--story-file", "stories/light-factory/foo.md", "--story-slug", "foo", "--run-id", "run-1"]
 
 
 @pytest.fixture(autouse=True)

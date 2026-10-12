@@ -7,7 +7,7 @@ request body. A remark can be blank; an offer can have a blank supplier name, or
 a missing, zero, or negative amount. The Angular forms block these cases, but
 the API is the boundary, and anything that calls it directly can store them.
 `CreateTenderRequest` was given Bean Validation in an earlier story
-(`stories/validate-tender-creation-input.md`); `AddRemarkRequest` and
+(`stories/freight-tenders/validate-tender-creation-input.md`); `AddRemarkRequest` and
 `AddOfferRequest` were not, and the backend's own `AGENTS.md` notes validation
 is "wired for `CreateTenderRequest` only".
 

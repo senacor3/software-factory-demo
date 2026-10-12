@@ -89,17 +89,26 @@ def now() -> str:
 # --- AD-8 / AD-15: slug and run-id derivation -------------------------------
 
 
+# The sub-folders of `stories/` a story file may live in, one per project (AD-15).
+STORY_PROJECTS = ("light-factory", "freight-tenders")
+
+
 def derive_story_slug(story_file: str | os.PathLike) -> str:
     """Derive the story-slug from the triggering story file's name (AD-8).
 
-    Expects `stories/<story-slug>.md` relative to the repository root (the current
-    working directory), with the slug itself kebab-case. The path is resolved first,
-    so `./stories/foo.md`, `stories//foo.md` and an absolute path to the same file
-    all yield the same slug. Raises ValueError if the file has no `.md` extension,
-    the slug isn't kebab-case, or the resolved path isn't exactly
-    `stories/<name>.md` under the repository root (including paths outside it) --
-    AD-8 requires kebab-case on the input file, with no fallback normalization.
-    The file need not exist.
+    Expects `stories/<project>/<story-slug>.md` relative to the repository root (the
+    current working directory), with `<project>` one of STORY_PROJECTS and the slug
+    itself kebab-case. The path is resolved first, so `./stories/<project>/foo.md`,
+    `stories//<project>/foo.md` and an absolute path to the same file all yield the
+    same slug. Raises ValueError if the file has no `.md` extension, the slug isn't
+    kebab-case, or the resolved path isn't exactly `stories/<project>/<name>.md`
+    under the repository root (including paths outside it) -- AD-8 requires
+    kebab-case on the input file, with no fallback normalization. The file need not
+    exist.
+
+    The slug carries no project, so it also raises when a file of the same name
+    exists in another project folder -- two such files would share one state
+    directory, branch prefix and PR chain (AD-15).
     """
     name = Path(story_file).name
     if not name.endswith(".md"):
@@ -110,15 +119,29 @@ def derive_story_slug(story_file: str | os.PathLike) -> str:
             f"story file name {name!r} is not kebab-case "
             "(expected lowercase letters/digits/hyphens only, e.g. 'my-story-name.md')"
         )
+    root = Path.cwd().resolve()
     try:
-        parts = Path(story_file).resolve().relative_to(Path.cwd().resolve()).parts
+        parts = Path(story_file).resolve().relative_to(root).parts
     except ValueError:
         parts = ()
-    if parts != ("stories", name):
+    if (
+        len(parts) != 3
+        or parts[0] != "stories"
+        or parts[1] not in STORY_PROJECTS
+        or parts[2] != name
+    ):
         raise ValueError(
-            f"story file {str(story_file)!r} must be 'stories/<slug>.md' "
-            "relative to the repository root"
+            f"story file {str(story_file)!r} must be 'stories/<project>/<slug>.md' "
+            "relative to the repository root, with <project> one of "
+            f"{', '.join(STORY_PROJECTS)}"
         )
+    for project in STORY_PROJECTS:
+        if project != parts[1] and (root / "stories" / project / name).exists():
+            raise ValueError(
+                f"story file name {name!r} exists in more than one project folder "
+                f"('stories/{parts[1]}/{name}' and 'stories/{project}/{name}'); "
+                "a story-slug must name one story file"
+            )
     return slug
 
 

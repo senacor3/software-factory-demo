@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       story_file:
-        description: "Path to the triggering story file (e.g. stories/trivial-test-story.md)"
+        description: "Path to the triggering story file (stories/<project>/<story-slug>.md, project light-factory or freight-tenders, e.g. stories/light-factory/trivial-test-story.md)"
         required: true
         type: string
 
