@@ -1,62 +1,140 @@
-<main>
+<main class="page">
   @if (loading()) {
-    <p data-testid="loading">Ausschreibung wird geladen…</p>
+    <p class="state-message" data-testid="loading">Ausschreibung wird geladen…</p>
   } @else if (loadError()) {
-    <p data-testid="load-error">{{ loadError() }}</p>
+    <p class="state-message state-message-error" data-testid="load-error">{{ loadError() }}</p>
   } @else if (tender(); as currentTender) {
-    <h2>{{ currentTender.origin }} → {{ currentTender.destination }}</h2>
-    <p data-testid="status">Status: {{ statusLabel() }}</p>
+    <header class="page-header">
+      <h1 data-testid="page-title">{{ currentTender.origin }} → {{ currentTender.destination }}</h1>
+      <span [class]="isClosed() ? 'pill-closed' : 'pill-open'" data-testid="status">{{
+        statusLabel()
+      }}</span>
+    </header>
 
     @if (isClosed()) {
-      <p data-testid="closed-explanation">{{ closedExplanation }}</p>
+      <p class="notice" data-testid="closed-explanation">{{ closedExplanation }}</p>
     }
 
-    <section>
-      <h3>Bemerkungen</h3>
-      @if (currentTender.remarks.length > 0) {
-        <ul data-testid="remarks">
-          @for (remark of currentTender.remarks; track remark.id) {
-            <li>{{ remark.text }}</li>
+    <section class="page-section">
+      <h2>Bemerkungen</h2>
+      <table class="data-table" data-testid="remarks">
+        <thead>
+          <tr>
+            <th
+              scope="col"
+              class="sortable"
+              [attr.aria-sort]="ariaSort(remarkSort(), 'text')"
+              data-testid="remarks-header-text"
+            >
+              <button
+                type="button"
+                class="sort-button"
+                data-testid="remarks-sort-text"
+                (click)="onSortRemarks('text')"
+              >
+                Bemerkung
+                @if (sortIndicator(remarkSort(), 'text'); as indicator) {
+                  <span class="sort-indicator" aria-hidden="true">{{ indicator }}</span>
+                }
+              </button>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (remark of sortedRemarks(); track remark.id) {
+            <tr data-testid="remarks-row">
+              <td>{{ remark.text }}</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="empty-cell" data-testid="remarks-empty">Keine Bemerkungen vorhanden.</td>
+            </tr>
           }
-        </ul>
-      } @else {
-        <p data-testid="remarks-empty">Keine Bemerkungen vorhanden.</p>
-      }
+        </tbody>
+      </table>
 
-      <form [formGroup]="remarkForm" (ngSubmit)="onAddRemark()">
-        <div>
+      <form class="form-card" [formGroup]="remarkForm" (ngSubmit)="onAddRemark()">
+        <div class="form-field">
           <label for="remark-text">Bemerkung</label>
           <input id="remark-text" type="text" formControlName="text" data-testid="remark-input" />
         </div>
 
         @if (remarkError()) {
-          <p data-testid="remark-error">{{ remarkError() }}</p>
+          <p class="form-error" data-testid="remark-error">{{ remarkError() }}</p>
         }
 
         <button
           type="submit"
+          class="btn-secondary"
           data-testid="remark-submit"
-          [disabled]="remarkForm.invalid || remarkForm.disabled"
+          [disabled]="remarkForm.invalid || remarkForm.disabled || remarkSubmitting()"
         >
           Bemerkung hinzufügen
         </button>
       </form>
     </section>
 
-    <section>
-      <h3>Angebote</h3>
-      @if (currentTender.offers.length > 0) {
-        <ul data-testid="offers">
-          @for (offer of currentTender.offers; track offer.id) {
-            <li>{{ offer.supplierName }}: {{ offer.amount }}</li>
+    <section class="page-section">
+      <h2>Angebote</h2>
+      <table class="data-table" data-testid="offers">
+        <thead>
+          <tr>
+            <th
+              scope="col"
+              class="sortable"
+              [attr.aria-sort]="ariaSort(offerSort(), 'supplierName')"
+              data-testid="offers-header-supplierName"
+            >
+              <button
+                type="button"
+                class="sort-button"
+                data-testid="offers-sort-supplierName"
+                (click)="onSortOffers('supplierName')"
+              >
+                Anbieter
+                @if (sortIndicator(offerSort(), 'supplierName'); as indicator) {
+                  <span class="sort-indicator" aria-hidden="true">{{ indicator }}</span>
+                }
+              </button>
+            </th>
+            <th
+              scope="col"
+              class="sortable numeric"
+              [attr.aria-sort]="ariaSort(offerSort(), 'amount')"
+              data-testid="offers-header-amount"
+            >
+              <button
+                type="button"
+                class="sort-button"
+                data-testid="offers-sort-amount"
+                (click)="onSortOffers('amount')"
+              >
+                Betrag
+                @if (sortIndicator(offerSort(), 'amount'); as indicator) {
+                  <span class="sort-indicator" aria-hidden="true">{{ indicator }}</span>
+                }
+              </button>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (offer of sortedOffers(); track offer.id) {
+            <tr data-testid="offers-row">
+              <td>{{ offer.supplierName }}</td>
+              <td class="numeric" data-testid="offer-amount">{{ formatAmount(offer.amount) }}</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="empty-cell" colspan="2" data-testid="offers-empty">
+                Keine Angebote vorhanden.
+              </td>
+            </tr>
           }
-        </ul>
-      } @else {
-        <p data-testid="offers-empty">Keine Angebote vorhanden.</p>
-      }
+        </tbody>
+      </table>
 
-      <form [formGroup]="offerForm" (ngSubmit)="onAddOffer()">
-        <div>
+      <form class="form-card" [formGroup]="offerForm" (ngSubmit)="onAddOffer()">
+        <div class="form-field">
           <label for="offer-supplier">Anbieter</label>
           <input
             id="offer-supplier"
@@ -66,7 +144,7 @@
           />
         </div>
 
-        <div>
+        <div class="form-field">
           <label for="offer-amount">Betrag</label>
           <input
             id="offer-amount"
@@ -77,13 +155,14 @@
         </div>
 
         @if (offerError()) {
-          <p data-testid="offer-error">{{ offerError() }}</p>
+          <p class="form-error" data-testid="offer-error">{{ offerError() }}</p>
         }
 
         <button
           type="submit"
+          class="btn-primary"
           data-testid="offer-submit"
-          [disabled]="offerForm.invalid || offerForm.disabled"
+          [disabled]="offerForm.invalid || offerForm.disabled || offerSubmitting()"
         >
           Angebot hinzufügen
         </button>

@@ -2,7 +2,14 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { catchError, of } from 'rxjs';
-import { TenderApiService, TenderDetail as TenderDetailModel, TenderStatus } from '../tender-api';
+import { SortState, UNSORTED, ariaSort, sortIndicator, sortRows, toggleSort } from '../table-sort';
+import {
+  OfferSummary,
+  RemarkSummary,
+  STATUS_LABELS,
+  TenderApiService,
+  TenderDetail as TenderDetailModel,
+} from '../tender-api';
 
 const LOAD_ERROR_MESSAGE =
   'Die Ausschreibung wurde nicht gefunden oder konnte nicht geladen werden.';
@@ -13,10 +20,8 @@ const OFFER_ERROR_MESSAGE =
 const CLOSED_EXPLANATION =
   'Diese Ausschreibung ist geschlossen, daher können keine weiteren Bemerkungen oder Angebote hinzugefügt werden.';
 
-const STATUS_LABELS: Record<TenderStatus, string> = {
-  OPEN: 'Offen',
-  CLOSED: 'Geschlossen',
-};
+// UI-only: the domain's offer amount is a bare number without a currency.
+const AMOUNT_FORMAT = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
 
 @Component({
   selector: 'app-tender-detail',
@@ -40,11 +45,24 @@ export class TenderDetail implements OnInit {
   });
 
   protected readonly closedExplanation = CLOSED_EXPLANATION;
+  protected readonly ariaSort = ariaSort;
+  protected readonly sortIndicator = sortIndicator;
+
+  protected readonly remarkSort = signal<SortState<RemarkSummary>>(UNSORTED);
+  protected readonly sortedRemarks = computed(() =>
+    sortRows(this.tender()?.remarks ?? [], this.remarkSort()),
+  );
+
+  protected readonly offerSort = signal<SortState<OfferSummary>>(UNSORTED);
+  protected readonly sortedOffers = computed(() =>
+    sortRows(this.tender()?.offers ?? [], this.offerSort()),
+  );
 
   protected readonly remarkForm = this.formBuilder.nonNullable.group({
     text: ['', Validators.required],
   });
   protected readonly remarkError = signal<string | null>(null);
+  protected readonly remarkSubmitting = signal(false);
 
   protected readonly offerForm = this.formBuilder.group({
     supplierName: this.formBuilder.nonNullable.control('', Validators.required),
@@ -54,6 +72,7 @@ export class TenderDetail implements OnInit {
     ]),
   });
   protected readonly offerError = signal<string | null>(null);
+  protected readonly offerSubmitting = signal(false);
 
   ngOnInit(): void {
     const idParam = this.route.snapshot.paramMap.get('id');
@@ -85,12 +104,25 @@ export class TenderDetail implements OnInit {
       });
   }
 
+  protected onSortRemarks(column: keyof RemarkSummary): void {
+    this.remarkSort.update((state) => toggleSort(state, column));
+  }
+
+  protected onSortOffers(column: keyof OfferSummary): void {
+    this.offerSort.update((state) => toggleSort(state, column));
+  }
+
+  protected formatAmount(amount: number): string {
+    return AMOUNT_FORMAT.format(amount);
+  }
+
   protected onAddRemark(): void {
     const current = this.tender();
-    if (this.remarkForm.invalid || current === null) {
+    if (this.remarkForm.invalid || current === null || this.remarkSubmitting()) {
       return;
     }
 
+    this.remarkSubmitting.set(true);
     this.remarkError.set(null);
     const { text } = this.remarkForm.getRawValue();
 
@@ -98,6 +130,8 @@ export class TenderDetail implements OnInit {
       .addRemark(current.id, text)
       .pipe(catchError(() => of(null)))
       .subscribe((remark) => {
+        this.remarkSubmitting.set(false);
+
         if (remark === null) {
           this.remarkError.set(REMARK_ERROR_MESSAGE);
           return;
@@ -112,10 +146,11 @@ export class TenderDetail implements OnInit {
 
   protected onAddOffer(): void {
     const current = this.tender();
-    if (this.offerForm.invalid || current === null) {
+    if (this.offerForm.invalid || current === null || this.offerSubmitting()) {
       return;
     }
 
+    this.offerSubmitting.set(true);
     this.offerError.set(null);
     const { supplierName, amount } = this.offerForm.getRawValue();
 
@@ -125,6 +160,8 @@ export class TenderDetail implements OnInit {
       .addOffer(current.id, supplierName, amount as number)
       .pipe(catchError(() => of(null)))
       .subscribe((offer) => {
+        this.offerSubmitting.set(false);
+
         if (offer === null) {
           this.offerError.set(OFFER_ERROR_MESSAGE);
           return;

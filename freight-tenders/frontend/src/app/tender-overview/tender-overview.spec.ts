@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { TenderSummary } from '../tender-api';
 import { TenderOverview } from './tender-overview';
 
@@ -24,6 +24,47 @@ describe('TenderOverview', () => {
   afterEach(() => {
     httpMock.verify();
   });
+
+  const SORTABLE_TENDERS: TenderSummary[] = [
+    { id: 1, origin: 'Hamburg', destination: 'Rotterdam', status: 'OPEN' },
+    { id: 2, origin: 'Aachen', destination: 'Zürich', status: 'OPEN' },
+    { id: 3, origin: 'Köln', destination: 'Antwerpen', status: 'OPEN' },
+    { id: 4, origin: 'Stuttgart', destination: 'Frankfurt', status: 'CLOSED' },
+    { id: 5, origin: 'Bremen', destination: 'Mailand', status: 'CLOSED' },
+  ];
+
+  function load(tenders: TenderSummary[]): HTMLElement {
+    fixture.detectChanges();
+    httpMock.expectOne('/api/tenders').flush(tenders);
+    fixture.detectChanges();
+
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  function origins(compiled: HTMLElement, table: string): string[] {
+    return Array.from(compiled.querySelectorAll(`[data-testid="${table}-link"]`)).map(
+      (link) => link.textContent?.trim() ?? '',
+    );
+  }
+
+  function sortBy(compiled: HTMLElement, table: string, column: string): void {
+    compiled.querySelector<HTMLButtonElement>(`[data-testid="${table}-sort-${column}"]`)!.click();
+    fixture.detectChanges();
+  }
+
+  function ariaSortOf(compiled: HTMLElement, table: string, column: string): string | null {
+    return (
+      compiled
+        .querySelector(`[data-testid="${table}-header-${column}"]`)
+        ?.getAttribute('aria-sort') ?? null
+    );
+  }
+
+  function sortButtonText(compiled: HTMLElement, table: string, column: string): string {
+    return (
+      compiled.querySelector(`[data-testid="${table}-sort-${column}"]`)?.textContent?.trim() ?? ''
+    );
+  }
 
   it('should create', () => {
     fixture.detectChanges();
@@ -93,7 +134,7 @@ describe('TenderOverview', () => {
     expect(createLink?.getAttribute('href')).toBe('/tenders/new');
 
     const tenderLink = compiled.querySelector<HTMLAnchorElement>(
-      '[data-testid="open-tenders"] a',
+      '[data-testid="open-tenders-link"]',
     );
     expect(tenderLink?.getAttribute('href')).toBe('/tenders/1');
   });
@@ -107,5 +148,155 @@ describe('TenderOverview', () => {
     expect(compiled.querySelector('[data-testid="load-error"]')?.textContent).toContain(
       'konnten nicht geladen werden',
     );
+  });
+
+  it("shows the page heading and each tender's status as a German pill, never the raw enum", () => {
+    const compiled = load(SORTABLE_TENDERS);
+
+    expect(compiled.querySelector('[data-testid="page-title"]')?.textContent).toContain('Ausschreibungen');
+
+    const openRow = compiled.querySelector('[data-testid="open-tenders-row"]');
+    const closedRow = compiled.querySelector('[data-testid="closed-tenders-row"]');
+    expect(openRow?.textContent).toContain('Offen');
+    expect(openRow?.textContent).not.toContain('OPEN');
+    expect(closedRow?.textContent).toContain('Geschlossen');
+    expect(closedRow?.textContent).not.toContain('CLOSED');
+  });
+
+  it('orders both tables newest-first with no sort indicator until a column is selected', () => {
+    const compiled = load(SORTABLE_TENDERS);
+
+    expect(origins(compiled, 'open-tenders')).toEqual(['Köln', 'Aachen', 'Hamburg']);
+    expect(origins(compiled, 'closed-tenders')).toEqual(['Bremen', 'Stuttgart']);
+
+    for (const table of ['open-tenders', 'closed-tenders']) {
+      for (const column of ['origin', 'destination']) {
+        expect(ariaSortOf(compiled, table, column)).toBe('none');
+      }
+    }
+    expect(sortButtonText(compiled, 'open-tenders', 'origin')).toBe('Von');
+    expect(sortButtonText(compiled, 'open-tenders', 'destination')).toBe('Nach');
+  });
+
+  it('sorts ascending when a column header is selected and shows the indicator on that column only', () => {
+    const compiled = load(SORTABLE_TENDERS);
+
+    sortBy(compiled, 'open-tenders', 'origin');
+
+    expect(origins(compiled, 'open-tenders')).toEqual(['Aachen', 'Hamburg', 'Köln']);
+    expect(ariaSortOf(compiled, 'open-tenders', 'origin')).toBe('ascending');
+    expect(sortButtonText(compiled, 'open-tenders', 'origin')).toContain('▲');
+    expect(ariaSortOf(compiled, 'open-tenders', 'destination')).toBe('none');
+    expect(sortButtonText(compiled, 'open-tenders', 'destination')).toBe('Nach');
+  });
+
+  it('reverses to descending when the active column header is selected again', () => {
+    const compiled = load(SORTABLE_TENDERS);
+
+    sortBy(compiled, 'open-tenders', 'origin');
+    sortBy(compiled, 'open-tenders', 'origin');
+
+    expect(origins(compiled, 'open-tenders')).toEqual(['Köln', 'Hamburg', 'Aachen']);
+    expect(ariaSortOf(compiled, 'open-tenders', 'origin')).toBe('descending');
+    expect(sortButtonText(compiled, 'open-tenders', 'origin')).toContain('▼');
+  });
+
+  it('switches to the newly selected column ascending and clears the previous header', () => {
+    const compiled = load(SORTABLE_TENDERS);
+
+    sortBy(compiled, 'open-tenders', 'origin');
+    sortBy(compiled, 'open-tenders', 'origin');
+    sortBy(compiled, 'open-tenders', 'destination');
+
+    // Antwerpen (Köln), Rotterdam (Hamburg), Zürich (Aachen)
+    expect(origins(compiled, 'open-tenders')).toEqual(['Köln', 'Hamburg', 'Aachen']);
+    expect(ariaSortOf(compiled, 'open-tenders', 'destination')).toBe('ascending');
+    expect(sortButtonText(compiled, 'open-tenders', 'destination')).toContain('▲');
+    expect(ariaSortOf(compiled, 'open-tenders', 'origin')).toBe('none');
+    expect(sortButtonText(compiled, 'open-tenders', 'origin')).toBe('Von');
+  });
+
+  it('sorts each table independently of the other', () => {
+    const compiled = load(SORTABLE_TENDERS);
+
+    sortBy(compiled, 'open-tenders', 'origin');
+
+    expect(origins(compiled, 'closed-tenders')).toEqual(['Bremen', 'Stuttgart']);
+    expect(ariaSortOf(compiled, 'closed-tenders', 'origin')).toBe('none');
+    expect(sortButtonText(compiled, 'closed-tenders', 'origin')).toBe('Von');
+  });
+
+  it('makes every sort header a real button, so Tab + Enter/Space trigger it like a click', () => {
+    const compiled = load(SORTABLE_TENDERS);
+
+    for (const table of ['open-tenders', 'closed-tenders']) {
+      for (const column of ['origin', 'destination']) {
+        const header = compiled.querySelector(`[data-testid="${table}-header-${column}"]`);
+        const button = compiled.querySelector<HTMLButtonElement>(
+          `[data-testid="${table}-sort-${column}"]`,
+        );
+        expect(header?.tagName).toBe('TH');
+        expect(button?.tagName).toBe('BUTTON');
+        expect(button?.type).toBe('button');
+        expect(button?.disabled).toBe(false);
+        expect(button?.tabIndex).toBe(0);
+        expect(header?.contains(button ?? null)).toBe(true);
+      }
+    }
+  });
+
+  it('still renders the sortable header row when a table is empty, with the empty message in its body', () => {
+    const compiled = load([]);
+
+    for (const table of ['open-tenders', 'closed-tenders']) {
+      expect(sortButtonText(compiled, table, 'origin')).toBe('Von');
+      expect(sortButtonText(compiled, table, 'destination')).toBe('Nach');
+      expect(ariaSortOf(compiled, table, 'origin')).toBe('none');
+    }
+
+    const openEmpty = compiled.querySelector('[data-testid="open-tenders-empty"]');
+    expect(openEmpty?.tagName).toBe('TD');
+    expect(openEmpty?.getAttribute('colspan')).toBe('3');
+    expect(openEmpty?.textContent).toContain('Keine offenen Ausschreibungen vorhanden.');
+    expect(
+      compiled.querySelector('[data-testid="open-tenders"]')?.contains(openEmpty ?? null),
+    ).toBe(true);
+    expect(compiled.querySelector('[data-testid="closed-tenders-empty"]')?.textContent).toContain(
+      'Keine geschlossenen Ausschreibungen vorhanden.',
+    );
+  });
+
+  it("navigates to the tender's detail page when its row is selected anywhere", () => {
+    const router = TestBed.inject(Router);
+    const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    const compiled = load(SORTABLE_TENDERS);
+
+    compiled.querySelector<HTMLElement>('[data-testid="open-tenders-row"]')!.click();
+
+    expect(navigateSpy).toHaveBeenCalledWith(['/tenders', 3]);
+  });
+
+  it('does not navigate in place when a row is selected with a modifier key held', () => {
+    const router = TestBed.inject(Router);
+    const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    const compiled = load(SORTABLE_TENDERS);
+
+    compiled
+      .querySelector<HTMLElement>('[data-testid="open-tenders-row"]')!
+      .dispatchEvent(new MouseEvent('click', { bubbles: true, metaKey: true }));
+
+    expect(navigateSpy).not.toHaveBeenCalled();
+  });
+
+  it("leaves a click on the row's own link to that link, without navigating a second time", () => {
+    const router = TestBed.inject(Router);
+    const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    const navigateByUrlSpy = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+    const compiled = load(SORTABLE_TENDERS);
+
+    compiled.querySelector<HTMLElement>('[data-testid="open-tenders-link"]')!.click();
+
+    expect(navigateByUrlSpy).toHaveBeenCalledTimes(1);
+    expect(navigateSpy).not.toHaveBeenCalled();
   });
 });

@@ -1,39 +1,75 @@
-<main>
-  <a routerLink="/tenders/new" data-testid="create-link">Neue Ausschreibung erstellen</a>
+<main class="page">
+  <h1 data-testid="page-title">Ausschreibungen</h1>
+  <a routerLink="/tenders/new" class="btn-primary" data-testid="create-link"
+    >Neue Ausschreibung erstellen</a
+  >
 
   @if (loading()) {
-    <p data-testid="loading">Ausschreibungen werden geladen…</p>
+    <p class="state-message" data-testid="loading">Ausschreibungen werden geladen…</p>
   } @else if (loadError()) {
-    <p data-testid="load-error">{{ loadError() }}</p>
+    <p class="state-message state-message-error" data-testid="load-error">{{ loadError() }}</p>
   } @else {
-    <section>
-      <h2>Offene Ausschreibungen</h2>
-      @if (openTenders().length > 0) {
-        <ul data-testid="open-tenders">
-          @for (tender of openTenders(); track tender.id) {
-            <li>
-              <a [routerLink]="['/tenders', tender.id]">{{ tender.origin }} → {{ tender.destination }}</a>
-            </li>
-          }
-        </ul>
-      } @else {
-        <p data-testid="open-tenders-empty">Keine offenen Ausschreibungen vorhanden.</p>
-      }
-    </section>
-
-    <section>
-      <h2>Geschlossene Ausschreibungen</h2>
-      @if (closedTenders().length > 0) {
-        <ul data-testid="closed-tenders">
-          @for (tender of closedTenders(); track tender.id) {
-            <li>
-              <a [routerLink]="['/tenders', tender.id]">{{ tender.origin }} → {{ tender.destination }}</a>
-            </li>
-          }
-        </ul>
-      } @else {
-        <p data-testid="closed-tenders-empty">Keine geschlossenen Ausschreibungen vorhanden.</p>
-      }
-    </section>
+    @for (table of tables; track table.testId) {
+      <section class="page-section">
+        <h2>{{ table.heading }}</h2>
+        <table class="data-table" [attr.data-testid]="table.testId">
+          <thead>
+            <tr>
+              @for (column of sortableColumns; track column.key) {
+                <th
+                  scope="col"
+                  class="sortable"
+                  [attr.aria-sort]="ariaSort(table.sort(), column.key)"
+                  [attr.data-testid]="table.testId + '-header-' + column.key"
+                >
+                  <button
+                    type="button"
+                    class="sort-button"
+                    [attr.data-testid]="table.testId + '-sort-' + column.key"
+                    (click)="onSort(table.sort, column.key)"
+                  >
+                    {{ column.label }}
+                    @if (sortIndicator(table.sort(), column.key); as indicator) {
+                      <span class="sort-indicator" aria-hidden="true">{{ indicator }}</span>
+                    }
+                  </button>
+                </th>
+              }
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (tender of table.rows(); track tender.id) {
+              <tr
+                class="clickable"
+                [attr.data-testid]="table.testId + '-row'"
+                (click)="openTender(tender.id, $event)"
+              >
+                <td>
+                  <a
+                    class="row-link"
+                    [routerLink]="['/tenders', tender.id]"
+                    [attr.data-testid]="table.testId + '-link'"
+                    >{{ tender.origin }}</a
+                  >
+                </td>
+                <td>{{ tender.destination }}</td>
+                <td>
+                  <span [class]="tender.status === 'OPEN' ? 'pill-open' : 'pill-closed'">{{
+                    statusLabels[tender.status]
+                  }}</span>
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td class="empty-cell" colspan="3" [attr.data-testid]="table.testId + '-empty'">
+                  {{ table.emptyMessage }}
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </section>
+    }
   }
 </main>

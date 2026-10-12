@@ -1,1 +1,348 @@
-/* You can add global styles to this file, and also import other style files */
+/* Global styles: the DESIGN.md tokens and the components all three pages share. */
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/700.css';
+
+:root {
+  --color-primary: #003478;
+  --color-primary-container: #d6e2f0;
+  --color-on-primary: #ffffff;
+  --color-on-primary-container: #00264f;
+  --color-surface: #ffffff;
+  --color-surface-dim: #f2f2f2;
+  --color-surface-container: #f7f8fa;
+  --color-surface-container-high: #e9ecf1;
+  --color-on-surface: #1a1a1a;
+  --color-on-surface-variant: #4a4a4a;
+  --color-outline: #c7ccd4;
+  --color-outline-variant: #e0e3e8;
+  --color-status-open: #1e7a34;
+  --color-status-open-container: #e3f3e6;
+  --color-status-closed: #6b6b6b;
+  --color-status-closed-container: #ededed;
+  --color-error: #b3261e;
+  --color-error-container: #fbe9e7;
+
+  --radius-sm: 0.125rem;
+  --radius-full: 9999px;
+
+  --space-unit: 8px;
+  --space-gutter: 24px;
+  --space-margin-mobile: 16px;
+  --space-margin-desktop: 48px;
+  --space-section-gap: 40px;
+
+  --content-max-width: 960px;
+
+  --font-family: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--color-surface);
+  color: var(--color-on-surface);
+  font-family: var(--font-family);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+/* Page container */
+
+.page {
+  max-width: calc(var(--content-max-width) + 2 * var(--space-margin-desktop));
+  margin: 0 auto;
+  padding: var(--space-margin-desktop);
+}
+
+.page-section {
+  margin-top: var(--space-section-gap);
+}
+
+/* Type scale */
+
+h1 {
+  margin: 0 0 var(--space-gutter);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+h2 {
+  margin: 0 0 calc(2 * var(--space-unit));
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+/* Buttons */
+
+.btn-primary,
+.btn-secondary {
+  display: inline-block;
+  padding: 12px 24px;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-weight: 600;
+  line-height: 1.4;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.btn-primary {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--color-primary);
+}
+
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  border-color: var(--color-outline);
+  background: var(--color-outline);
+  color: var(--color-on-surface-variant);
+  cursor: not-allowed;
+}
+
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible,
+.sort-button:focus-visible,
+.row-link:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Tables */
+
+.data-table {
+  width: 100%;
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-sm);
+  border-collapse: separate;
+  border-spacing: 0;
+  /* Equal column widths, so stacked tables line up whatever their content. */
+  table-layout: fixed;
+  overflow: hidden;
+}
+
+.data-table th,
+.data-table td {
+  padding: 12px var(--space-gutter);
+  text-align: left;
+}
+
+.data-table th {
+  border-bottom: 1px solid var(--color-outline-variant);
+  background: var(--color-surface-container-high);
+  color: var(--color-on-surface);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+/* The sort button fills its header cell, so the cell's own padding moves onto the button. */
+.data-table th.sortable {
+  padding: 0;
+}
+
+.sort-button {
+  display: block;
+  width: 100%;
+  padding: 12px var(--space-gutter);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.sort-button:focus-visible {
+  outline-offset: -2px;
+}
+
+.sort-indicator {
+  margin-left: 4px;
+  color: var(--color-primary);
+  font-size: 11px;
+}
+
+.data-table tbody tr:not(:last-child) td {
+  border-bottom: 1px solid var(--color-outline-variant);
+}
+
+.data-table tbody tr:hover {
+  background: var(--color-surface-dim);
+}
+
+.data-table tr.clickable {
+  cursor: pointer;
+}
+
+.data-table th.numeric,
+.data-table td.numeric {
+  text-align: right;
+}
+
+.data-table td.numeric {
+  font-variant-numeric: tabular-nums;
+}
+
+.data-table td.empty-cell {
+  padding: 20px var(--space-gutter);
+  background: var(--color-surface);
+  color: var(--color-on-surface-variant);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.row-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Status pills */
+
+.pill-open,
+.pill-closed {
+  display: inline-block;
+  padding: 3px 12px;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+}
+
+.pill-open {
+  background: var(--color-status-open-container);
+  color: var(--color-status-open);
+}
+
+.pill-closed {
+  background: var(--color-status-closed-container);
+  color: var(--color-status-closed);
+}
+
+/* Forms */
+
+.form-card {
+  max-width: 560px;
+  padding: var(--space-gutter);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-sm);
+}
+
+.data-table + .form-card {
+  margin-top: calc(2 * var(--space-unit));
+}
+
+.form-field {
+  margin-bottom: calc(2 * var(--space-unit));
+}
+
+label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+}
+
+input {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-on-surface);
+  font: inherit;
+}
+
+input:focus-visible {
+  border-color: var(--color-primary);
+  outline: 2px solid var(--color-primary);
+  outline-offset: 0;
+}
+
+input:disabled {
+  background: var(--color-surface-dim);
+  color: var(--color-on-surface-variant);
+  cursor: not-allowed;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(2 * var(--space-unit));
+}
+
+.form-error {
+  margin: 0 0 calc(2 * var(--space-unit));
+  color: var(--color-error);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+/* Section-level states */
+
+.state-message {
+  margin: var(--space-section-gap) 0;
+  color: var(--color-on-surface-variant);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.state-message-error {
+  color: var(--color-error);
+}
+
+.notice {
+  margin: var(--space-gutter) 0 0;
+  padding: 12px calc(2 * var(--space-unit));
+  border-radius: var(--radius-sm);
+  background: var(--color-status-closed-container);
+  color: var(--color-on-surface-variant);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+/* Detail page header: the status pill sits directly under the route title. */
+.page-header h1 {
+  margin-bottom: var(--space-unit);
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding: var(--space-margin-mobile);
+  }
+
+  .data-table th:not(.sortable),
+  .data-table td,
+  .data-table td.empty-cell,
+  .sort-button {
+    padding-right: var(--space-margin-mobile);
+    padding-left: var(--space-margin-mobile);
+  }
+}

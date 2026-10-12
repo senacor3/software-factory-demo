@@ -4,6 +4,11 @@ import { Observable } from 'rxjs';
 
 export type TenderStatus = 'OPEN' | 'CLOSED';
 
+export const STATUS_LABELS: Record<TenderStatus, string> = {
+  OPEN: 'Offen',
+  CLOSED: 'Geschlossen',
+};
+
 export interface TenderSummary {
   id: number;
   origin: string;

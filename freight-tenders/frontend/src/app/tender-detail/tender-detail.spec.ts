@@ -20,8 +20,84 @@ const CLOSED_TENDER: TenderDetailModel = {
   status: 'CLOSED',
 };
 
+const SORTABLE_TENDER: TenderDetailModel = {
+  id: 1,
+  origin: 'Hamburg',
+  destination: 'Rotterdam',
+  status: 'OPEN',
+  remarks: [
+    { id: 10, text: 'Bitte schnell liefern' },
+    { id: 11, text: 'Angebot angenommen' },
+    { id: 12, text: 'Zoll beachten' },
+  ],
+  offers: [
+    { id: 20, supplierName: 'Spedition Muster', amount: 980 },
+    { id: 21, supplierName: 'Acme Logistics', amount: 1234.56 },
+    { id: 22, supplierName: 'Nordfracht', amount: 99 },
+  ],
+};
+
+const EMPTY_TENDER: TenderDetailModel = {
+  ...OPEN_TENDER,
+  remarks: [],
+  offers: [],
+};
+
 describe('TenderDetail', () => {
   let httpMock: HttpTestingController;
+  let harness: RouterTestingHarness;
+
+  async function render(tender: TenderDetailModel): Promise<HTMLElement> {
+    harness = await RouterTestingHarness.create('/tenders/1');
+    httpMock.expectOne('/api/tenders/1').flush(tender);
+    harness.detectChanges();
+
+    return harness.routeNativeElement as HTMLElement;
+  }
+
+  function texts(element: HTMLElement, testId: string): string[] {
+    return Array.from(element.querySelectorAll(`[data-testid="${testId}"]`)).map(
+      (node) => node.textContent?.trim() ?? '',
+    );
+  }
+
+  function sortBy(element: HTMLElement, table: string, column: string): void {
+    element.querySelector<HTMLButtonElement>(`[data-testid="${table}-sort-${column}"]`)!.click();
+    harness.detectChanges();
+  }
+
+  function ariaSortOf(element: HTMLElement, table: string, column: string): string | null {
+    return (
+      element
+        .querySelector(`[data-testid="${table}-header-${column}"]`)
+        ?.getAttribute('aria-sort') ?? null
+    );
+  }
+
+  function sortButtonText(element: HTMLElement, table: string, column: string): string {
+    return (
+      element.querySelector(`[data-testid="${table}-sort-${column}"]`)?.textContent?.trim() ?? ''
+    );
+  }
+
+  function fill(element: HTMLElement, testId: string, value: string): void {
+    const input = element.querySelector<HTMLInputElement>(`[data-testid="${testId}"]`)!;
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+    harness.detectChanges();
+  }
+
+  function submitFormOf(element: HTMLElement, testId: string): void {
+    element
+      .querySelector(`[data-testid="${testId}"]`)!
+      .closest('form')!
+      .dispatchEvent(new Event('submit'));
+    harness.detectChanges();
+  }
+
+  function isBefore(first: Element, second: Element): boolean {
+    return (first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+  }
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -156,5 +232,291 @@ describe('TenderDetail', () => {
     expect(element.querySelector('[data-testid="load-error"]')?.textContent).toContain(
       'nicht gefunden',
     );
+  });
+
+  it('shows the route as the page heading and the status as a German pill, never the raw enum', async () => {
+    const element = await render(SORTABLE_TENDER);
+
+    expect(element.querySelector('[data-testid="page-title"]')?.textContent).toContain('Hamburg → Rotterdam');
+    expect(texts(element, 'status')).toEqual(['Offen']);
+  });
+
+  it('orders remarks and offers newest-first with no sort indicator until a column is selected', async () => {
+    const element = await render(SORTABLE_TENDER);
+
+    expect(texts(element, 'remarks-row')).toEqual([
+      'Zoll beachten',
+      'Angebot angenommen',
+      'Bitte schnell liefern',
+    ]);
+    expect(texts(element, 'offer-amount')).toEqual([
+      '99,00\u00a0€',
+      '1.234,56\u00a0€',
+      '980,00\u00a0€',
+    ]);
+
+    expect(ariaSortOf(element, 'remarks', 'text')).toBe('none');
+    expect(ariaSortOf(element, 'offers', 'supplierName')).toBe('none');
+    expect(ariaSortOf(element, 'offers', 'amount')).toBe('none');
+    expect(sortButtonText(element, 'remarks', 'text')).toBe('Bemerkung');
+    expect(sortButtonText(element, 'offers', 'supplierName')).toBe('Anbieter');
+    expect(sortButtonText(element, 'offers', 'amount')).toBe('Betrag');
+  });
+
+  it('sorts remarks ascending when the header is selected, and descending when selected again', async () => {
+    const element = await render(SORTABLE_TENDER);
+
+    sortBy(element, 'remarks', 'text');
+
+    expect(texts(element, 'remarks-row')).toEqual([
+      'Angebot angenommen',
+      'Bitte schnell liefern',
+      'Zoll beachten',
+    ]);
+    expect(ariaSortOf(element, 'remarks', 'text')).toBe('ascending');
+    expect(sortButtonText(element, 'remarks', 'text')).toContain('▲');
+
+    sortBy(element, 'remarks', 'text');
+
+    expect(texts(element, 'remarks-row')).toEqual([
+      'Zoll beachten',
+      'Bitte schnell liefern',
+      'Angebot angenommen',
+    ]);
+    expect(ariaSortOf(element, 'remarks', 'text')).toBe('descending');
+    expect(sortButtonText(element, 'remarks', 'text')).toContain('▼');
+  });
+
+  it('sorts offers by amount numerically, not as strings, showing German euro amounts', async () => {
+    const element = await render(SORTABLE_TENDER);
+
+    sortBy(element, 'offers', 'amount');
+
+    expect(texts(element, 'offer-amount')).toEqual([
+      '99,00\u00a0€',
+      '980,00\u00a0€',
+      '1.234,56\u00a0€',
+    ]);
+    expect(ariaSortOf(element, 'offers', 'amount')).toBe('ascending');
+    expect(sortButtonText(element, 'offers', 'amount')).toContain('▲');
+    expect(ariaSortOf(element, 'offers', 'supplierName')).toBe('none');
+    expect(sortButtonText(element, 'offers', 'supplierName')).toBe('Anbieter');
+
+    sortBy(element, 'offers', 'amount');
+
+    expect(texts(element, 'offer-amount')).toEqual([
+      '1.234,56\u00a0€',
+      '980,00\u00a0€',
+      '99,00\u00a0€',
+    ]);
+    expect(ariaSortOf(element, 'offers', 'amount')).toBe('descending');
+    expect(sortButtonText(element, 'offers', 'amount')).toContain('▼');
+  });
+
+  it('switches the offers sort to a newly selected column ascending and clears the previous header', async () => {
+    const element = await render(SORTABLE_TENDER);
+
+    sortBy(element, 'offers', 'amount');
+    sortBy(element, 'offers', 'amount');
+    sortBy(element, 'offers', 'supplierName');
+
+    // Acme Logistics, Nordfracht, Spedition Muster
+    expect(texts(element, 'offer-amount')).toEqual([
+      '1.234,56\u00a0€',
+      '99,00\u00a0€',
+      '980,00\u00a0€',
+    ]);
+    expect(ariaSortOf(element, 'offers', 'supplierName')).toBe('ascending');
+    expect(sortButtonText(element, 'offers', 'supplierName')).toContain('▲');
+    expect(ariaSortOf(element, 'offers', 'amount')).toBe('none');
+    expect(sortButtonText(element, 'offers', 'amount')).toBe('Betrag');
+  });
+
+  it('sorts the remarks and offers tables independently of each other', async () => {
+    const element = await render(SORTABLE_TENDER);
+
+    sortBy(element, 'offers', 'amount');
+
+    expect(ariaSortOf(element, 'remarks', 'text')).toBe('none');
+    expect(texts(element, 'remarks-row')[0]).toBe('Zoll beachten');
+  });
+
+  it('makes every sort header a real button, so Tab + Enter/Space trigger it like a click', async () => {
+    const element = await render(SORTABLE_TENDER);
+
+    for (const [table, column] of [
+      ['remarks', 'text'],
+      ['offers', 'supplierName'],
+      ['offers', 'amount'],
+    ]) {
+      const button = element.querySelector<HTMLButtonElement>(
+        `[data-testid="${table}-sort-${column}"]`,
+      );
+      expect(button?.tagName).toBe('BUTTON');
+      expect(button?.type).toBe('button');
+      expect(button?.disabled).toBe(false);
+      expect(button?.tabIndex).toBe(0);
+      expect(ariaSortOf(element, table, column)).toBe('none');
+    }
+  });
+
+  it('still renders the sortable header rows when a tender has no remarks or offers, with the empty messages in the table bodies', async () => {
+    const element = await render(EMPTY_TENDER);
+
+    expect(sortButtonText(element, 'remarks', 'text')).toBe('Bemerkung');
+    expect(sortButtonText(element, 'offers', 'supplierName')).toBe('Anbieter');
+    expect(sortButtonText(element, 'offers', 'amount')).toBe('Betrag');
+
+    const remarksEmpty = element.querySelector('[data-testid="remarks-empty"]');
+    const offersEmpty = element.querySelector('[data-testid="offers-empty"]');
+    expect(remarksEmpty?.tagName).toBe('TD');
+    expect(remarksEmpty?.textContent).toContain('Keine Bemerkungen vorhanden.');
+    expect(element.querySelector('[data-testid="remarks"]')?.contains(remarksEmpty ?? null)).toBe(
+      true,
+    );
+    expect(offersEmpty?.getAttribute('colspan')).toBe('2');
+    expect(offersEmpty?.textContent).toContain('Keine Angebote vorhanden.');
+  });
+
+  it('puts a newly added remark and offer at the top while no column is sorted', async () => {
+    const element = await render(SORTABLE_TENDER);
+
+    fill(element, 'remark-input', 'Mittlere Bemerkung');
+    submitFormOf(element, 'remark-input');
+    httpMock.expectOne('/api/tenders/1/remarks').flush({ id: 13, text: 'Mittlere Bemerkung' });
+    harness.detectChanges();
+
+    expect(texts(element, 'remarks-row')[0]).toBe('Mittlere Bemerkung');
+    expect(element.querySelector('[data-testid="remarks-empty"]')).toBeFalsy();
+
+    fill(element, 'offer-supplier-input', 'Neuer Anbieter');
+    fill(element, 'offer-amount-input', '500');
+    submitFormOf(element, 'offer-supplier-input');
+    httpMock
+      .expectOne('/api/tenders/1/offers')
+      .flush({ id: 23, supplierName: 'Neuer Anbieter', amount: 500 });
+    harness.detectChanges();
+
+    expect(texts(element, 'offer-amount')[0]).toBe('500,00\u00a0€');
+  });
+
+  it('puts a newly added remark and offer at their sorted position while a column is sorted', async () => {
+    const element = await render(SORTABLE_TENDER);
+    sortBy(element, 'remarks', 'text');
+    sortBy(element, 'offers', 'amount');
+
+    fill(element, 'remark-input', 'Mittlere Bemerkung');
+    submitFormOf(element, 'remark-input');
+    httpMock.expectOne('/api/tenders/1/remarks').flush({ id: 13, text: 'Mittlere Bemerkung' });
+    harness.detectChanges();
+
+    expect(texts(element, 'remarks-row')).toEqual([
+      'Angebot angenommen',
+      'Bitte schnell liefern',
+      'Mittlere Bemerkung',
+      'Zoll beachten',
+    ]);
+
+    fill(element, 'offer-supplier-input', 'Neuer Anbieter');
+    fill(element, 'offer-amount-input', '500');
+    submitFormOf(element, 'offer-supplier-input');
+    httpMock
+      .expectOne('/api/tenders/1/offers')
+      .flush({ id: 23, supplierName: 'Neuer Anbieter', amount: 500 });
+    harness.detectChanges();
+
+    expect(texts(element, 'offer-amount')).toEqual([
+      '99,00\u00a0€',
+      '500,00\u00a0€',
+      '980,00\u00a0€',
+      '1.234,56\u00a0€',
+    ]);
+  });
+
+  it('shows the remark error below the field and above the submit button, keeping the typed text', async () => {
+    const element = await render(OPEN_TENDER);
+
+    fill(element, 'remark-input', 'Neue Bemerkung');
+    submitFormOf(element, 'remark-input');
+    httpMock.expectOne('/api/tenders/1/remarks').error(new ProgressEvent('error'));
+    harness.detectChanges();
+
+    const input = element.querySelector<HTMLInputElement>('[data-testid="remark-input"]')!;
+    const error = element.querySelector('[data-testid="remark-error"]')!;
+    const submit = element.querySelector<HTMLButtonElement>('[data-testid="remark-submit"]')!;
+    expect(error.textContent).toContain('Die Bemerkung konnte nicht gespeichert werden.');
+    expect(isBefore(input, error)).toBe(true);
+    expect(isBefore(error, submit)).toBe(true);
+    expect(input.value).toBe('Neue Bemerkung');
+    expect(submit.disabled).toBe(false);
+    expect(texts(element, 'remarks-row')).toEqual(['Bestehende Bemerkung']);
+  });
+
+  it('shows the offer error below the fields and above the submit button, keeping the entered values', async () => {
+    const element = await render(OPEN_TENDER);
+
+    fill(element, 'offer-supplier-input', 'Neuer Anbieter');
+    fill(element, 'offer-amount-input', '750');
+    submitFormOf(element, 'offer-supplier-input');
+    httpMock.expectOne('/api/tenders/1/offers').error(new ProgressEvent('error'));
+    harness.detectChanges();
+
+    const supplier = element.querySelector<HTMLInputElement>(
+      '[data-testid="offer-supplier-input"]',
+    )!;
+    const amount = element.querySelector<HTMLInputElement>('[data-testid="offer-amount-input"]')!;
+    const error = element.querySelector('[data-testid="offer-error"]')!;
+    const submit = element.querySelector<HTMLButtonElement>('[data-testid="offer-submit"]')!;
+    expect(error.textContent).toContain('Das Angebot konnte nicht gespeichert werden.');
+    expect(isBefore(amount, error)).toBe(true);
+    expect(isBefore(error, submit)).toBe(true);
+    expect(supplier.value).toBe('Neuer Anbieter');
+    expect(amount.value).toBe('750');
+    expect(submit.disabled).toBe(false);
+  });
+
+  it('disables each submit button while its request is in flight and ignores a second submit', async () => {
+    const element = await render(OPEN_TENDER);
+    const remarkSubmit = element.querySelector<HTMLButtonElement>('[data-testid="remark-submit"]')!;
+    const offerSubmit = element.querySelector<HTMLButtonElement>('[data-testid="offer-submit"]')!;
+
+    fill(element, 'remark-input', 'Neue Bemerkung');
+    expect(remarkSubmit.disabled).toBe(false);
+    submitFormOf(element, 'remark-input');
+    expect(remarkSubmit.disabled).toBe(true);
+    submitFormOf(element, 'remark-input');
+
+    httpMock.expectOne('/api/tenders/1/remarks').flush({ id: 11, text: 'Neue Bemerkung' });
+    harness.detectChanges();
+
+    fill(element, 'remark-input', 'Noch eine Bemerkung');
+    expect(remarkSubmit.disabled).toBe(false);
+
+    fill(element, 'offer-supplier-input', 'Neuer Anbieter');
+    fill(element, 'offer-amount-input', '750');
+    expect(offerSubmit.disabled).toBe(false);
+    submitFormOf(element, 'offer-supplier-input');
+    expect(offerSubmit.disabled).toBe(true);
+    submitFormOf(element, 'offer-supplier-input');
+
+    httpMock
+      .expectOne('/api/tenders/1/offers')
+      .flush({ id: 21, supplierName: 'Neuer Anbieter', amount: 750 });
+  });
+
+  it('places the single closed explanation before both add-forms in DOM order', async () => {
+    const element = await render(CLOSED_TENDER);
+
+    const explanations = element.querySelectorAll('[data-testid="closed-explanation"]');
+    expect(explanations.length).toBe(1);
+    expect(isBefore(explanations[0], element.querySelector('[data-testid="remark-input"]')!)).toBe(
+      true,
+    );
+    expect(
+      isBefore(explanations[0], element.querySelector('[data-testid="offer-supplier-input"]')!),
+    ).toBe(true);
+    expect(
+      element.querySelector<HTMLInputElement>('[data-testid="offer-amount-input"]')?.disabled,
+    ).toBe(true);
   });
 });
