@@ -3,18 +3,42 @@ name: freight-tenders
 # CI for the freight-tenders demo app, independent of light-factory's own
 # workflow (.github/workflows/light-factory.yml) and tooling. Two jobs, each
 # building/testing/linting its own project -- see freight-tenders/README.md.
+#
+# No `on.push.paths`/`on.pull_request.paths` filter: GitHub's native path
+# filter is evaluated from the push event's own before/after compare, which is
+# unreliable in practice (observed 2026-10-12: several pushes to main that
+# touched zero files under freight-tenders/** still ran the full Backend +
+# Frontend build, even though the filter was in place from the very first
+# commit). The `changes` job below re-derives the changed paths itself via
+# dorny/paths-filter (a real git diff against the correct base for both push
+# and pull_request), and backend/frontend are gated on that instead.
 
 on:
   push:
-    paths:
-      - 'freight-tenders/**'
   pull_request:
-    paths:
-      - 'freight-tenders/**'
 
 jobs:
+  changes:
+    name: "Detect changes"
+    runs-on: ubuntu-latest
+    outputs:
+      freight-tenders: ${{ steps.filter.outputs.freight-tenders }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Filter changed paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            freight-tenders:
+              - 'freight-tenders/**'
+
   backend:
     name: "Backend"
+    needs: changes
+    if: needs.changes.outputs.freight-tenders == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -38,6 +62,8 @@ jobs:
 
   frontend:
     name: "Frontend"
+    needs: changes
+    if: needs.changes.outputs.freight-tenders == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
