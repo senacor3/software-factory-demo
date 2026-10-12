@@ -1,0 +1,29 @@
+<main>
+  <h2>Neue Ausschreibung erstellen</h2>
+
+  <form [formGroup]="form" (ngSubmit)="onSubmit()">
+    <div>
+      <label for="origin">Von</label>
+      <input id="origin" type="text" formControlName="origin" data-testid="origin-input" />
+    </div>
+
+    <div>
+      <label for="destination">Nach</label>
+      <input
+        id="destination"
+        type="text"
+        formControlName="destination"
+        data-testid="destination-input"
+      />
+    </div>
+
+    @if (submitError()) {
+      <p data-testid="submit-error">{{ submitError() }}</p>
+    }
+
+    <button type="submit" data-testid="submit" [disabled]="form.invalid || submitting()">
+      Erstellen
+    </button>
+    <a routerLink="/" data-testid="cancel">Abbrechen</a>
+  </form>
+</main>

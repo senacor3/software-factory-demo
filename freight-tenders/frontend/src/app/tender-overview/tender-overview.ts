@@ -1,4 +1,5 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { catchError, of } from 'rxjs';
 import { TenderApiService, TenderSummary } from '../tender-api';
 
@@ -7,7 +8,7 @@ const LOAD_ERROR_MESSAGE =
 
 @Component({
   selector: 'app-tender-overview',
-  imports: [],
+  imports: [RouterLink],
   templateUrl: './tender-overview.html',
   styleUrl: './tender-overview.scss',
 })

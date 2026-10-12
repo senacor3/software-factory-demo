@@ -1,4 +1,6 @@
 <main>
+  <a routerLink="/tenders/new" data-testid="create-link">Neue Ausschreibung erstellen</a>
+
   @if (loading()) {
     <p data-testid="loading">Ausschreibungen werden geladen…</p>
   } @else if (loadError()) {
@@ -9,7 +11,9 @@
       @if (openTenders().length > 0) {
         <ul data-testid="open-tenders">
           @for (tender of openTenders(); track tender.id) {
-            <li>{{ tender.origin }} → {{ tender.destination }}</li>
+            <li>
+              <a [routerLink]="['/tenders', tender.id]">{{ tender.origin }} → {{ tender.destination }}</a>
+            </li>
           }
         </ul>
       } @else {
@@ -22,7 +26,9 @@
       @if (closedTenders().length > 0) {
         <ul data-testid="closed-tenders">
           @for (tender of closedTenders(); track tender.id) {
-            <li>{{ tender.origin }} → {{ tender.destination }}</li>
+            <li>
+              <a [routerLink]="['/tenders', tender.id]">{{ tender.origin }} → {{ tender.destination }}</a>
+            </li>
           }
         </ul>
       } @else {

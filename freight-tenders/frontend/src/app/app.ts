@@ -1,9 +1,9 @@
 import { Component } from '@angular/core';
-import { TenderOverview } from './tender-overview/tender-overview';
+import { RouterOutlet } from '@angular/router';
 
 @Component({
   selector: 'app-root',
-  imports: [TenderOverview],
+  imports: [RouterOutlet],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })

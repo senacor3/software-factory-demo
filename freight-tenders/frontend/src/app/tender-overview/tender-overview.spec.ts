@@ -1,6 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { TenderSummary } from '../tender-api';
 import { TenderOverview } from './tender-overview';
 
@@ -12,7 +13,7 @@ describe('TenderOverview', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [TenderOverview],
-      providers: [provideHttpClient(), provideHttpClientTesting()],
+      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
     }).compileComponents();
 
     fixture = TestBed.createComponent(TenderOverview);
@@ -76,6 +77,25 @@ describe('TenderOverview', () => {
     expect(compiled.querySelector('[data-testid="closed-tenders-empty"]')?.textContent).toContain(
       'Keine geschlossenen Ausschreibungen vorhanden.',
     );
+  });
+
+  it('links to the create-tender page and to each tender\'s detail page', () => {
+    const tenders: TenderSummary[] = [
+      { id: 1, origin: 'Hamburg', destination: 'Berlin', status: 'OPEN' },
+    ];
+
+    fixture.detectChanges();
+    httpMock.expectOne('/api/tenders').flush(tenders);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    const createLink = compiled.querySelector<HTMLAnchorElement>('[data-testid="create-link"]');
+    expect(createLink?.getAttribute('href')).toBe('/tenders/new');
+
+    const tenderLink = compiled.querySelector<HTMLAnchorElement>(
+      '[data-testid="open-tenders"] a',
+    );
+    expect(tenderLink?.getAttribute('href')).toBe('/tenders/1');
   });
 
   it('shows a German error message when the backend is unreachable', () => {

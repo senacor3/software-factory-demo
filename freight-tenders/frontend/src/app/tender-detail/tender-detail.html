@@ -1,0 +1,93 @@
+<main>
+  @if (loading()) {
+    <p data-testid="loading">Ausschreibung wird geladen…</p>
+  } @else if (loadError()) {
+    <p data-testid="load-error">{{ loadError() }}</p>
+  } @else if (tender(); as currentTender) {
+    <h2>{{ currentTender.origin }} → {{ currentTender.destination }}</h2>
+    <p data-testid="status">Status: {{ statusLabel() }}</p>
+
+    @if (isClosed()) {
+      <p data-testid="closed-explanation">{{ closedExplanation }}</p>
+    }
+
+    <section>
+      <h3>Bemerkungen</h3>
+      @if (currentTender.remarks.length > 0) {
+        <ul data-testid="remarks">
+          @for (remark of currentTender.remarks; track remark.id) {
+            <li>{{ remark.text }}</li>
+          }
+        </ul>
+      } @else {
+        <p data-testid="remarks-empty">Keine Bemerkungen vorhanden.</p>
+      }
+
+      <form [formGroup]="remarkForm" (ngSubmit)="onAddRemark()">
+        <div>
+          <label for="remark-text">Bemerkung</label>
+          <input id="remark-text" type="text" formControlName="text" data-testid="remark-input" />
+        </div>
+
+        @if (remarkError()) {
+          <p data-testid="remark-error">{{ remarkError() }}</p>
+        }
+
+        <button
+          type="submit"
+          data-testid="remark-submit"
+          [disabled]="remarkForm.invalid || remarkForm.disabled"
+        >
+          Bemerkung hinzufügen
+        </button>
+      </form>
+    </section>
+
+    <section>
+      <h3>Angebote</h3>
+      @if (currentTender.offers.length > 0) {
+        <ul data-testid="offers">
+          @for (offer of currentTender.offers; track offer.id) {
+            <li>{{ offer.supplierName }}: {{ offer.amount }}</li>
+          }
+        </ul>
+      } @else {
+        <p data-testid="offers-empty">Keine Angebote vorhanden.</p>
+      }
+
+      <form [formGroup]="offerForm" (ngSubmit)="onAddOffer()">
+        <div>
+          <label for="offer-supplier">Anbieter</label>
+          <input
+            id="offer-supplier"
+            type="text"
+            formControlName="supplierName"
+            data-testid="offer-supplier-input"
+          />
+        </div>
+
+        <div>
+          <label for="offer-amount">Betrag</label>
+          <input
+            id="offer-amount"
+            type="number"
+            formControlName="amount"
+            data-testid="offer-amount-input"
+          />
+        </div>
+
+        @if (offerError()) {
+          <p data-testid="offer-error">{{ offerError() }}</p>
+        }
+
+        <button
+          type="submit"
+          data-testid="offer-submit"
+          [disabled]="offerForm.invalid || offerForm.disabled"
+        >
+          Angebot hinzufügen
+        </button>
+      </form>
+    </section>
+  }
+</main>
