@@ -19,35 +19,16 @@ describe('App', () => {
     httpMock.verify();
   });
 
-  it('should create the app', () => {
+  it('should create the app and render the tender overview', () => {
     const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+
+    httpMock.expectOne('/api/tenders').flush([]);
+
     const app = fixture.componentInstance;
-    httpMock.expectOne('/api/health').flush({ status: 'UP' });
     expect(app).toBeTruthy();
-  });
-
-  it('renders the German label with the live status when the backend is reachable', async () => {
-    const fixture = TestBed.createComponent(App);
-    fixture.detectChanges();
-
-    httpMock.expectOne('/api/health').flush({ status: 'UP' });
-    fixture.detectChanges();
 
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('h1')?.textContent).toContain('Systemstatus');
-    expect(compiled.querySelector('[data-testid="system-status"]')?.textContent).toContain('UP');
-  });
-
-  it('renders the fallback text when the backend is unreachable', async () => {
-    const fixture = TestBed.createComponent(App);
-    fixture.detectChanges();
-
-    httpMock.expectOne('/api/health').error(new ProgressEvent('error'));
-    fixture.detectChanges();
-
-    const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('[data-testid="system-status"]')?.textContent).toContain(
-      'nicht verfügbar',
-    );
+    expect(compiled.querySelector('app-tender-overview')).toBeTruthy();
   });
 });

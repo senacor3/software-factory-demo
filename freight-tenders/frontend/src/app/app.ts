@@ -1,31 +1,10 @@
-import { HttpClient } from '@angular/common/http';
-import { Component, inject, signal } from '@angular/core';
-import { catchError, map, of } from 'rxjs';
-
-interface HealthResponse {
-  status: string;
-}
-
-const UNAVAILABLE_LABEL = 'nicht verfügbar';
+import { Component } from '@angular/core';
+import { TenderOverview } from './tender-overview/tender-overview';
 
 @Component({
   selector: 'app-root',
-  imports: [],
+  imports: [TenderOverview],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
-export class App {
-  private readonly http = inject(HttpClient);
-
-  protected readonly systemStatus = signal<string>('…');
-
-  constructor() {
-    this.http
-      .get<HealthResponse>('/api/health')
-      .pipe(
-        map((response) => response.status),
-        catchError(() => of(UNAVAILABLE_LABEL)),
-      )
-      .subscribe((status) => this.systemStatus.set(status));
-  }
-}
+export class App {}

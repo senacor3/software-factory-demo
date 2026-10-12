@@ -1,9 +1,9 @@
 # freight-tenders
 
 A minimal full-stack scaffold for the freight tender demo app: a Spring Boot
-backend and an Angular frontend, each independently buildable/testable/lintable,
-connected by one trivial end-to-end path -- a backend health check rendered on
-the frontend's home page under the German label "Systemstatus".
+backend and an Angular frontend, each independently buildable/testable/lintable.
+The frontend's home page is a tender overview that fetches the backend's
+tender list endpoint and renders it under German headings.
 
 This directory is independent of light-factory's own Python tooling: nothing
 here is built, tested, or linted with `uv`/pytest/ruff, and light-factory's CI
@@ -26,9 +26,13 @@ mvn spring-boot:run  # run locally on :8080
 
 ## Frontend (`frontend/`)
 
-Angular (standalone components, SCSS, Vitest for unit tests), calling the
-backend's health endpoint and rendering it under the "Systemstatus" label,
-with a "nicht verfügbar" fallback if the backend is unreachable.
+Angular (standalone components, SCSS, Vitest for unit tests). The home page
+(`TenderOverview`) fetches `GET /api/tenders` once and splits the results
+into two sections, "Offene Ausschreibungen" (open) and "Geschlossene
+Ausschreibungen" (closed). While the request is in flight it shows a German
+loading message; an empty section shows a German empty-state message instead
+of nothing; if the backend is unreachable, a German error message is shown
+instead of the sections.
 
 ```bash
 cd frontend
@@ -49,6 +53,7 @@ cd backend && mvn spring-boot:run
 cd frontend && npm start
 ```
 
-Open `http://localhost:4200`: the page shows "Systemstatus" with the live
-"UP" status proxied from the backend. If the backend isn't running, the page
-shows "nicht verfügbar" instead of an unhandled error.
+Open `http://localhost:4200`: the page shows the tender overview, grouping
+any tenders created via the backend API under "Offene Ausschreibungen" or
+"Geschlossene Ausschreibungen". If the backend isn't running, the page shows
+a German error message instead of an unhandled failure.
