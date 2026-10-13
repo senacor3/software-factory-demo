@@ -8,3 +8,29 @@
     text-align: left;
   }
 }
+
+.summary-line {
+  margin: calc(-1 * var(--space-unit)) 0 var(--space-gutter);
+  color: var(--color-on-surface-variant);
+}
+
+.data-card dl {
+  margin: 0;
+}
+
+.data-row {
+  display: flex;
+  justify-content: space-between;
+  gap: calc(2 * var(--space-unit));
+  padding: var(--space-unit) 0;
+}
+
+.data-row dt {
+  color: var(--color-on-surface-variant);
+}
+
+.data-row dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+}

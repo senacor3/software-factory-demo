@@ -43,7 +43,14 @@ button:disabled{background:var(--outline);color:var(--on-surface-variant);cursor
 input:disabled{background:var(--surface-dim);color:var(--on-surface-variant);}
 .explanation{background:var(--status-closed-bg);color:var(--on-surface-variant);font-size:13px;padding:10px 14px;border-radius:2px;margin-bottom:16px;}
 .error{color:var(--error);font-size:13px;margin:-6px 0 12px;}
-</style>
+    .summary { color: #4a4a4a; }
+    .cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; }
+    .card { padding: 24px; border: 1px solid #e0e3e8; }
+    .card h3 { margin: 0 0 8px; font-size: 16px; }
+    .card dl { display: grid; grid-template-columns: auto auto; gap: 8px; margin: 0; }
+    .card dd { margin: 0; text-align: right; font-weight: 600; }
+    @media (max-width: 600px) { .cards { grid-template-columns: 1fr; } }
+  </style>
 </head>
 <body>
 <div class="cols">
@@ -55,6 +62,38 @@ input:disabled{background:var(--surface-dim);color:var(--on-surface-variant);}
         <h1>Hamburg → Rotterdam</h1>
         <span class="pill pill-open">Offen</span>
 
+        <p class="summary">20.10.2026 · 22.10.2026 · Planenauflieger · 12.000 kg</p>
+
+        <section>
+          <h2>Sendungsdaten</h2>
+          <div class="cards">
+            <div class="card"><h3>Strecke</h3><dl><dt>Abholland</dt><dd>Deutschland</dd><dt>Abholort</dt><dd>20095 Hamburg</dd><dt>Zielland</dt><dd>Niederlande</dd><dt>Zielort</dt><dd>3011 Rotterdam</dd></dl></div>
+            <div class="card"><h3>Termine</h3><dl><dt>Abholung</dt><dd>20.10.2026</dd><dt>Lieferung</dt><dd>22.10.2026</dd><dt>Angebotsfrist</dt><dd>18.10.2026</dd></dl></div>
+            <div class="card"><h3>Ladung</h3><dl><dt>Ware</dt><dd>Maschinenteile</dd><dt>Gewicht</dt><dd>12.000 kg</dd><dt>Lademeter</dt><dd>13,6 ldm</dd><dt>Paletten</dt><dd>Keine Angabe</dd></dl></div>
+            <div class="card"><h3>Fahrzeug und Konditionen</h3><dl><dt>Fahrzeugtyp</dt><dd>Planenauflieger</dd><dt>Gefahrgut</dt><dd>Nein</dd><dt>Temperatur</dt><dd>Keine Vorgabe</dd><dt>Währung</dt><dd>EUR</dd></dl></div>
+          </div>
+        </section>
+
+
+        <section>
+          <h2>Angebote</h2>
+          <table>
+            <thead><tr><th>Anbieter</th><th class="amount">Betrag (EUR)<span class="sort-arrow">▼</span></th></tr></thead>
+            <tbody>
+              <tr><td>Spedition Muster</td><td class="amount">1.234,56 €</td></tr>
+              <tr><td>Acme Logistics</td><td class="amount">980,00 €</td></tr>
+            </tbody>
+          </table>
+          <form>
+            <label for="supplier">Anbieter</label>
+            <input id="supplier" type="text">
+            <label for="amount">Betrag (EUR)</label>
+            <input id="amount" type="number">
+            <div class="error">Das Angebot konnte nicht gespeichert werden. Bitte versuchen Sie es später erneut.</div>
+            <button type="submit">Angebot hinzufügen</button>
+          </form>
+        </section>
+
         <section>
           <h2>Bemerkungen</h2>
           <table>
@@ -65,25 +104,6 @@ input:disabled{background:var(--surface-dim);color:var(--on-surface-variant);}
             <label for="remark">Bemerkung</label>
             <input id="remark" type="text" placeholder="">
             <button type="submit">Bemerkung hinzufügen</button>
-          </form>
-        </section>
-
-        <section>
-          <h2>Angebote</h2>
-          <table>
-            <thead><tr><th>Anbieter</th><th class="amount">Betrag<span class="sort-arrow">▼</span></th></tr></thead>
-            <tbody>
-              <tr><td>Spedition Muster</td><td class="amount">1.234,56 €</td></tr>
-              <tr><td>Acme Logistics</td><td class="amount">980,00 €</td></tr>
-            </tbody>
-          </table>
-          <form>
-            <label for="supplier">Anbieter</label>
-            <input id="supplier" type="text">
-            <label for="amount">Betrag</label>
-            <input id="amount" type="number">
-            <div class="error">Das Angebot konnte nicht gespeichert werden. Bitte versuchen Sie es später erneut.</div>
-            <button type="submit">Angebot hinzufügen</button>
           </form>
         </section>
       </div>
@@ -98,20 +118,20 @@ input:disabled{background:var(--surface-dim);color:var(--on-surface-variant);}
         <h1>Stuttgart → Frankfurt</h1>
         <span class="pill pill-closed">Geschlossen</span>
 
-        <div class="explanation">Diese Ausschreibung ist geschlossen, daher können keine weiteren Bemerkungen oder Angebote hinzugefügt werden.</div>
+        <p class="summary">20.10.2026 · 22.10.2026 · Planenauflieger · 12.000 kg</p>
 
         <section>
-          <h2>Bemerkungen</h2>
-          <table>
-            <thead><tr><th>Bemerkung</th></tr></thead>
-            <tbody><tr><td>Angebot angenommen</td></tr></tbody>
-          </table>
-          <form>
-            <label for="remark2">Bemerkung</label>
-            <input id="remark2" type="text" disabled>
-            <button type="submit" disabled>Bemerkung hinzufügen</button>
-          </form>
+          <h2>Sendungsdaten</h2>
+          <div class="cards">
+            <div class="card"><h3>Strecke</h3><dl><dt>Abholland</dt><dd>Deutschland</dd><dt>Abholort</dt><dd>20095 Hamburg</dd><dt>Zielland</dt><dd>Niederlande</dd><dt>Zielort</dt><dd>3011 Rotterdam</dd></dl></div>
+            <div class="card"><h3>Termine</h3><dl><dt>Abholung</dt><dd>20.10.2026</dd><dt>Lieferung</dt><dd>22.10.2026</dd><dt>Angebotsfrist</dt><dd>18.10.2026</dd></dl></div>
+            <div class="card"><h3>Ladung</h3><dl><dt>Ware</dt><dd>Maschinenteile</dd><dt>Gewicht</dt><dd>12.000 kg</dd><dt>Lademeter</dt><dd>13,6 ldm</dd><dt>Paletten</dt><dd>Keine Angabe</dd></dl></div>
+            <div class="card"><h3>Fahrzeug und Konditionen</h3><dl><dt>Fahrzeugtyp</dt><dd>Planenauflieger</dd><dt>Gefahrgut</dt><dd>Nein</dd><dt>Temperatur</dt><dd>Keine Vorgabe</dd><dt>Währung</dt><dd>EUR</dd></dl></div>
+          </div>
         </section>
+
+
+        <div class="explanation">Diese Ausschreibung ist geschlossen, daher können keine weiteren Bemerkungen oder Angebote hinzugefügt werden.</div>
 
         <section>
           <h2>Angebote</h2>
@@ -125,6 +145,19 @@ input:disabled{background:var(--surface-dim);color:var(--on-surface-variant);}
             <label for="amount2">Betrag</label>
             <input id="amount2" type="number" disabled>
             <button type="submit" disabled>Angebot hinzufügen</button>
+          </form>
+        </section>
+
+        <section>
+          <h2>Bemerkungen</h2>
+          <table>
+            <thead><tr><th>Bemerkung</th></tr></thead>
+            <tbody><tr><td>Angebot angenommen</td></tr></tbody>
+          </table>
+          <form>
+            <label for="remark2">Bemerkung</label>
+            <input id="remark2" type="text" disabled>
+            <button type="submit" disabled>Bemerkung hinzufügen</button>
           </form>
         </section>
       </div>

@@ -29,6 +29,8 @@
       }
     </header>
 
+    <p class="summary-line" data-testid="tender-summary">{{ summaryLine() }}</p>
+
     @if (closeError()) {
       <p class="form-error close-error" role="alert" data-testid="close-error">
         {{ closeError() }}
@@ -39,6 +41,186 @@
       <p #closedExplanationRef class="notice" tabindex="-1" data-testid="closed-explanation">{{ closedExplanation }}</p>
     }
 
+    <section class="page-section" data-testid="shipment-data">
+      <h2>Sendungsdaten</h2>
+      <div class="data-card-grid">
+        <div class="data-card" data-testid="card-route">
+          <h3>Strecke</h3>
+          <dl>
+            <div class="data-row">
+              <dt>Abholland</dt>
+              <dd data-testid="origin-country">{{ originCountry() }}</dd>
+            </div>
+            <div class="data-row">
+              <dt>Abholort</dt>
+              <dd data-testid="origin-postal-city">{{ currentTender.origin.postalCode + ' ' + currentTender.origin.city }}</dd>
+            </div>
+            <div class="data-row">
+              <dt>Zielland</dt>
+              <dd data-testid="destination-country">{{ destinationCountry() }}</dd>
+            </div>
+            <div class="data-row">
+              <dt>Zielort</dt>
+              <dd data-testid="destination-postal-city">{{ currentTender.destination.postalCode + ' ' + currentTender.destination.city }}</dd>
+            </div>
+          </dl>
+        </div>
+        <div class="data-card" data-testid="card-dates">
+          <h3>Termine</h3>
+          <dl>
+            <div class="data-row">
+              <dt>Abholung</dt>
+              <dd data-testid="pickup-date">{{ formatDate(currentTender.pickupDate) }}</dd>
+            </div>
+            <div class="data-row">
+              <dt>Lieferung</dt>
+              <dd data-testid="delivery-date">{{ formatDate(currentTender.deliveryDate) }}</dd>
+            </div>
+            <div class="data-row">
+              <dt>Angebotsfrist</dt>
+              <dd data-testid="bid-deadline">{{ bidDeadlineText() }}</dd>
+            </div>
+          </dl>
+        </div>
+        <div class="data-card" data-testid="card-cargo">
+          <h3>Ladung</h3>
+          <dl>
+            <div class="data-row">
+              <dt>Ware</dt>
+              <dd data-testid="commodity">{{ currentTender.commodity }}</dd>
+            </div>
+            <div class="data-row">
+              <dt>Gewicht</dt>
+              <dd data-testid="weight">{{ weightText() }}</dd>
+            </div>
+            <div class="data-row">
+              <dt>Lademeter</dt>
+              <dd data-testid="loading-meters">{{ loadingMetersText() }}</dd>
+            </div>
+            <div class="data-row">
+              <dt>Paletten</dt>
+              <dd data-testid="pallet-count">{{ palletText() }}</dd>
+            </div>
+          </dl>
+        </div>
+        <div class="data-card" data-testid="card-vehicle">
+          <h3>Fahrzeug und Konditionen</h3>
+          <dl>
+            <div class="data-row">
+              <dt>Fahrzeugtyp</dt>
+              <dd data-testid="equipment">{{ equipmentLabel() }}</dd>
+            </div>
+            <div class="data-row">
+              <dt>Gefahrgut</dt>
+              <dd data-testid="dangerous-goods">{{ dangerousGoodsText() }}</dd>
+            </div>
+            <div class="data-row">
+              <dt>Temperatur</dt>
+              <dd data-testid="temperature">{{ temperatureText() }}</dd>
+            </div>
+            <div class="data-row">
+              <dt>Währung</dt>
+              <dd data-testid="currency">{{ currentTender.currency }}</dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+    </section>
+
+    <section class="page-section">
+      <h2>Angebote</h2>
+      <table class="data-table" data-testid="offers">
+        <thead>
+          <tr>
+            <th
+              scope="col"
+              class="sortable"
+              [attr.aria-sort]="ariaSort(offerSort(), 'supplierName')"
+              data-testid="offers-header-supplierName"
+            >
+              <button
+                type="button"
+                class="sort-button"
+                data-testid="offers-sort-supplierName"
+                (click)="onSortOffers('supplierName')"
+              >
+                Anbieter
+                @if (sortIndicator(offerSort(), 'supplierName'); as indicator) {
+                  <span class="sort-indicator" aria-hidden="true">{{ indicator }}</span>
+                }
+              </button>
+            </th>
+            <th
+              scope="col"
+              class="sortable numeric"
+              [attr.aria-sort]="ariaSort(offerSort(), 'amount')"
+              data-testid="offers-header-amount"
+            >
+              <button
+                type="button"
+                class="sort-button"
+                data-testid="offers-sort-amount"
+                (click)="onSortOffers('amount')"
+              >
+                Betrag ({{ currentTender.currency }})
+                @if (sortIndicator(offerSort(), 'amount'); as indicator) {
+                  <span class="sort-indicator" aria-hidden="true">{{ indicator }}</span>
+                }
+              </button>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (offer of sortedOffers(); track offer.id) {
+            <tr data-testid="offers-row">
+              <td>{{ offer.supplierName }}</td>
+              <td class="numeric" data-testid="offer-amount">{{ formatAmount(offer.amount) }}</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="empty-cell" colspan="2" data-testid="offers-empty">
+                Keine Angebote vorhanden.
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      <form class="form-card" [formGroup]="offerForm" (ngSubmit)="onAddOffer()">
+        <div class="form-field">
+          <label for="offer-supplier">Anbieter</label>
+          <input
+            id="offer-supplier"
+            type="text"
+            formControlName="supplierName"
+            data-testid="offer-supplier-input"
+          />
+        </div>
+
+        <div class="form-field">
+          <label for="offer-amount">Betrag ({{ currentTender.currency }})</label>
+          <input
+            id="offer-amount"
+            type="number"
+            formControlName="amount"
+            data-testid="offer-amount-input"
+          />
+        </div>
+
+        @if (offerError()) {
+          <p class="form-error" data-testid="offer-error">{{ offerError() }}</p>
+        }
+
+        <button
+          type="submit"
+          class="btn-primary"
+          data-testid="offer-submit"
+          [disabled]="offerForm.invalid || offerForm.disabled || offerSubmitting()"
+        >
+          Angebot hinzufügen
+        </button>
+      </form>
+    </section>
     <section class="page-section">
       <h2>Bemerkungen</h2>
       <table class="data-table" data-testid="remarks">
@@ -98,99 +280,5 @@
       </form>
     </section>
 
-    <section class="page-section">
-      <h2>Angebote</h2>
-      <table class="data-table" data-testid="offers">
-        <thead>
-          <tr>
-            <th
-              scope="col"
-              class="sortable"
-              [attr.aria-sort]="ariaSort(offerSort(), 'supplierName')"
-              data-testid="offers-header-supplierName"
-            >
-              <button
-                type="button"
-                class="sort-button"
-                data-testid="offers-sort-supplierName"
-                (click)="onSortOffers('supplierName')"
-              >
-                Anbieter
-                @if (sortIndicator(offerSort(), 'supplierName'); as indicator) {
-                  <span class="sort-indicator" aria-hidden="true">{{ indicator }}</span>
-                }
-              </button>
-            </th>
-            <th
-              scope="col"
-              class="sortable numeric"
-              [attr.aria-sort]="ariaSort(offerSort(), 'amount')"
-              data-testid="offers-header-amount"
-            >
-              <button
-                type="button"
-                class="sort-button"
-                data-testid="offers-sort-amount"
-                (click)="onSortOffers('amount')"
-              >
-                Betrag
-                @if (sortIndicator(offerSort(), 'amount'); as indicator) {
-                  <span class="sort-indicator" aria-hidden="true">{{ indicator }}</span>
-                }
-              </button>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (offer of sortedOffers(); track offer.id) {
-            <tr data-testid="offers-row">
-              <td>{{ offer.supplierName }}</td>
-              <td class="numeric" data-testid="offer-amount">{{ formatAmount(offer.amount) }}</td>
-            </tr>
-          } @empty {
-            <tr>
-              <td class="empty-cell" colspan="2" data-testid="offers-empty">
-                Keine Angebote vorhanden.
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
-
-      <form class="form-card" [formGroup]="offerForm" (ngSubmit)="onAddOffer()">
-        <div class="form-field">
-          <label for="offer-supplier">Anbieter</label>
-          <input
-            id="offer-supplier"
-            type="text"
-            formControlName="supplierName"
-            data-testid="offer-supplier-input"
-          />
-        </div>
-
-        <div class="form-field">
-          <label for="offer-amount">Betrag</label>
-          <input
-            id="offer-amount"
-            type="number"
-            formControlName="amount"
-            data-testid="offer-amount-input"
-          />
-        </div>
-
-        @if (offerError()) {
-          <p class="form-error" data-testid="offer-error">{{ offerError() }}</p>
-        }
-
-        <button
-          type="submit"
-          class="btn-primary"
-          data-testid="offer-submit"
-          [disabled]="offerForm.invalid || offerForm.disabled || offerSubmitting()"
-        >
-          Angebot hinzufügen
-        </button>
-      </form>
-    </section>
   }
 </main>
