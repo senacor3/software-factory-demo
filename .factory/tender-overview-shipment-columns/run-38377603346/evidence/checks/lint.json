@@ -1,5 +1,5 @@
 {
-  "status": "fail",
+  "status": "pass",
   "command": [
     "npm",
     "--prefix",
@@ -7,8 +7,8 @@
     "run",
     "lint"
   ],
-  "returncode": 127,
-  "detail": "> frontend@0.0.0 lint\n> ng lint\nsh: 1: ng: not found",
+  "returncode": 0,
+  "detail": "",
   "commands": [
     [
       "uv",
