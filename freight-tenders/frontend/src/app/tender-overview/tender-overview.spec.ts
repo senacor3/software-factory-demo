@@ -309,9 +309,7 @@ describe('TenderOverview', () => {
     it('has no sort button on the Fahrzeug header', () => {
       const compiled = load(TENDERS);
 
-      expect(
-        compiled.querySelector('[data-testid="open-tenders-sort-equipmentType"]'),
-      ).toBeFalsy();
+      expect(compiled.querySelector('[data-testid="open-tenders-sort-equipmentType"]')).toBeFalsy();
       expect(
         compiled.querySelector('[data-testid="open-tenders-header-equipmentType"]')?.textContent,
       ).toContain('Fahrzeug');

@@ -121,12 +121,19 @@ describe('TenderApiService', () => {
     req.flush({ id: 1, text: 'Bitte schnell liefern' });
   });
 
-  it('calls POST /api/tenders/:id/offers with supplierName and amount', () => {
-    service.addOffer(42, 'Spedition Muster', 1234.56).subscribe();
+  it('calls POST /api/tenders/:id/offers with all offer fields', () => {
+    const request = {
+      supplierName: 'Spedition Muster',
+      amount: 1234.56,
+      deliveryDate: '2099-10-21',
+      validUntil: '2099-10-30',
+      note: 'Inkl. Maut',
+    };
+    service.addOffer(42, request).subscribe();
 
     const req = httpMock.expectOne('/api/tenders/42/offers');
     expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ supplierName: 'Spedition Muster', amount: 1234.56 });
-    req.flush({ id: 1, supplierName: 'Spedition Muster', amount: 1234.56 });
+    expect(req.request.body).toEqual(request);
+    req.flush({ id: 1, ...request });
   });
 });

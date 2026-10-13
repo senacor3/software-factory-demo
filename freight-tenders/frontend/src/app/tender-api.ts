@@ -113,6 +113,17 @@ export interface OfferSummary {
   id: number;
   supplierName: string;
   amount: number;
+  deliveryDate: string;
+  validUntil: string;
+  note: string | null;
+}
+
+export interface AddOfferRequest {
+  supplierName: string;
+  amount: number;
+  deliveryDate: string;
+  validUntil: string;
+  note?: string;
 }
 
 // The detail response lists the offers themselves instead of summarising them.
@@ -147,7 +158,7 @@ export class TenderApiService {
     return this.http.post<RemarkSummary>(`/api/tenders/${id}/remarks`, { text });
   }
 
-  addOffer(id: number, supplierName: string, amount: number): Observable<OfferSummary> {
-    return this.http.post<OfferSummary>(`/api/tenders/${id}/offers`, { supplierName, amount });
+  addOffer(id: number, request: AddOfferRequest): Observable<OfferSummary> {
+    return this.http.post<OfferSummary>(`/api/tenders/${id}/offers`, request);
   }
 }

@@ -6,6 +6,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.ManyToOne;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 /** A supplier's offer submitted against a {@link Tender}. */
 @Entity
@@ -19,15 +20,29 @@ public class Offer {
 
   private BigDecimal amount;
 
+  private LocalDate deliveryDate;
+
+  private LocalDate validUntil;
+
+  private String note;
+
   @ManyToOne private Tender tender;
 
   protected Offer() {
     // required by JPA
   }
 
-  public Offer(String supplierName, BigDecimal amount) {
+  public Offer(
+      String supplierName,
+      BigDecimal amount,
+      LocalDate deliveryDate,
+      LocalDate validUntil,
+      String note) {
     this.supplierName = supplierName;
     this.amount = amount;
+    this.deliveryDate = deliveryDate;
+    this.validUntil = validUntil;
+    this.note = note == null || note.isBlank() ? null : note;
   }
 
   public Long getId() {
@@ -40,6 +55,18 @@ public class Offer {
 
   public BigDecimal getAmount() {
     return amount;
+  }
+
+  public LocalDate getDeliveryDate() {
+    return deliveryDate;
+  }
+
+  public LocalDate getValidUntil() {
+    return validUntil;
+  }
+
+  public String getNote() {
+    return note;
   }
 
   public Tender getTender() {

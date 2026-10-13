@@ -42,6 +42,17 @@ final class TenderFixtures {
         Currency.EUR);
   }
 
+  /** An offer that satisfies the offer rules of {@link #tender()} under the fixed test clock. */
+  static Offer offer(String supplierName, BigDecimal amount) {
+    return new Offer(
+        supplierName, amount, LocalDate.of(2026, 10, 21), LocalDate.of(2026, 10, 30), null);
+  }
+
+  /** A valid add-offer request body for {@link #tender()} under the fixed test clock. */
+  static final String VALID_OFFER_JSON =
+      "{\"supplierName\":\"Acme Logistics\",\"amount\":1234.56,"
+          + "\"deliveryDate\":\"2026-10-21\",\"validUntil\":\"2026-10-30\"}";
+
   /** A request equal to {@link #VALID_REQUEST_JSON}, for service-level tests. */
   static CreateTenderRequest request() {
     return new CreateTenderRequest(

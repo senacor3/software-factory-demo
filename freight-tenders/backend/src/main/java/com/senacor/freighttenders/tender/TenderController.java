@@ -61,7 +61,14 @@ public class TenderController {
   @PostMapping("/{id}/offers")
   public ResponseEntity<OfferResponse> addOffer(
       @PathVariable Long id, @Valid @RequestBody AddOfferRequest request) {
-    Tender tender = tenderService.addOffer(id, request.supplierName(), request.amount());
+    Tender tender =
+        tenderService.addOffer(
+            id,
+            request.supplierName(),
+            request.amount(),
+            request.deliveryDate(),
+            request.validUntil(),
+            request.note());
     Offer createdOffer = tender.getOffers().get(tender.getOffers().size() - 1);
     return ResponseEntity.status(HttpStatus.CREATED).body(OfferResponse.from(createdOffer));
   }

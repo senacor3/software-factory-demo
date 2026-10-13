@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import org.hibernate.SessionFactory;
@@ -22,7 +23,7 @@ import org.springframework.context.annotation.Import;
  * one persistence context, since {@link TenderService} has no {@code @Transactional} of its own.
  */
 @DataJpaTest(properties = "spring.jpa.properties.hibernate.generate_statistics=true")
-@Import(TenderService.class)
+@Import({TenderService.class, FixedClockConfiguration.class})
 class TenderServicePersistenceTest {
 
   @Autowired private EntityManager entityManager;
@@ -48,8 +49,8 @@ class TenderServicePersistenceTest {
   void listingTendersFetchesOffersWithAConstantNumberOfQueries() {
     for (int i = 0; i < 5; i++) {
       Tender tender = TenderFixtures.tender();
-      tender.addOffer(new Offer("Supplier " + i, new BigDecimal("100.00")));
-      tender.addOffer(new Offer("Other Supplier " + i, new BigDecimal("200.00")));
+      tender.addOffer(TenderFixtures.offer("Supplier " + i, new BigDecimal("100.00")));
+      tender.addOffer(TenderFixtures.offer("Other Supplier " + i, new BigDecimal("200.00")));
       tenderRepository.save(tender);
     }
     entityManager.flush();
@@ -69,10 +70,17 @@ class TenderServicePersistenceTest {
   @Test
   void addOfferAppendsTheNewOfferAsTheLastElementAfterRealPersistence() {
     Tender tender = TenderFixtures.tender();
-    tender.addOffer(new Offer("First Supplier", new BigDecimal("100.00")));
+    tender.addOffer(TenderFixtures.offer("First Supplier", new BigDecimal("100.00")));
     Long id = tenderRepository.save(tender).getId();
 
-    Tender result = tenderService.addOffer(id, "Second Supplier", new BigDecimal("200.00"));
+    Tender result =
+        tenderService.addOffer(
+            id,
+            "Second Supplier",
+            new BigDecimal("200.00"),
+            LocalDate.of(2026, 10, 21),
+            LocalDate.of(2026, 10, 30),
+            "Note");
 
     assertThat(result.getOffers()).hasSize(2);
     assertThat(result.getOffers().get(result.getOffers().size() - 1).getSupplierName())

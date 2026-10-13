@@ -65,3 +65,23 @@ export function deadlineHint(bidDeadline: string, status: TenderStatus, today: s
 
   return bidDeadline < today ? 'abgelaufen' : '';
 }
+
+// An offer whose validity ended before today can no longer be accepted.
+export function isOfferExpired(validUntil: string, today: string): boolean {
+  return validUntil < today;
+}
+
+// The supplier offers delivery later than the tender asked for.
+export function isDeliveryLate(offerDeliveryDate: string, tenderDeliveryDate: string): boolean {
+  return offerDeliveryDate > tenderDeliveryDate;
+}
+
+// Only an open tender can still reject offers because of its deadline; a closed one has its own
+// explanation.
+export function isBidDeadlinePassed(
+  bidDeadline: string,
+  status: TenderStatus,
+  today: string,
+): boolean {
+  return status === 'OPEN' && bidDeadline < today;
+}
