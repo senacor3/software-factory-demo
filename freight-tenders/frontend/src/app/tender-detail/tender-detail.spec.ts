@@ -5,6 +5,7 @@ import { Router, provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { TenderDetail as TenderDetailModel } from '../tender-api';
 import { tenderDetail, tenderSummary } from '../tender-test-data';
+import { formatDate, localToday } from '../tender-format';
 import { TenderDetail } from './tender-detail';
 
 const BERLIN = { country: 'DE', postalCode: '10115', city: 'Berlin' };
@@ -660,5 +661,129 @@ describe('TenderDetail', () => {
     expect(
       element.querySelector<HTMLButtonElement>('[data-testid="remark-submit"]')!.disabled,
     ).toBe(false);
+  });
+
+  function text(element: HTMLElement, testId: string): string {
+    return element.querySelector(`[data-testid="${testId}"]`)?.textContent?.trim() ?? '';
+  }
+
+  it('shows the summary line with pickup, delivery, vehicle and weight', async () => {
+    const element = await render(OPEN_TENDER);
+
+    expect(text(element, 'tender-summary')).toBe(
+      '20.10.2099 · 22.10.2099 · Planenauflieger · 18.500 kg',
+    );
+  });
+
+  it('renders the four shipment data cards in order with every row', async () => {
+    const element = await render(
+      tenderDetail({
+        dangerousGoods: true,
+        adrClass: '3',
+        temperatureControlled: true,
+        temperatureMinC: 2,
+        temperatureMaxC: 8,
+      }),
+    );
+
+    const cards = ['card-route', 'card-dates', 'card-cargo', 'card-vehicle'].map(
+      (id) => element.querySelector(`[data-testid="${id}"]`)!,
+    );
+    expect(cards.every((card) => card !== null)).toBe(true);
+    expect(isBefore(cards[0], cards[1])).toBe(true);
+    expect(isBefore(cards[1], cards[2])).toBe(true);
+    expect(isBefore(cards[2], cards[3])).toBe(true);
+
+    expect(text(element, 'origin-country')).toBe('Deutschland');
+    expect(text(element, 'origin-postal-city')).toBe('20457 Hamburg');
+    expect(text(element, 'destination-country')).toBe('Niederlande');
+    expect(text(element, 'destination-postal-city')).toBe('3011 AA Rotterdam');
+    expect(text(element, 'pickup-date')).toBe('20.10.2099');
+    expect(text(element, 'delivery-date')).toBe('22.10.2099');
+    expect(text(element, 'bid-deadline')).toBe('16.10.2099');
+    expect(text(element, 'commodity')).toBe('Maschinenteile auf Europaletten');
+    expect(text(element, 'weight')).toBe('18.500 kg');
+    expect(text(element, 'loading-meters')).toContain('ldm');
+    expect(text(element, 'pallet-count')).toBe('33');
+    expect(text(element, 'equipment')).toBe('Planenauflieger');
+    expect(text(element, 'dangerous-goods')).toBe('Ja, ADR-Klasse 3');
+    expect(text(element, 'temperature')).toBe('2 bis 8 °C');
+    expect(text(element, 'currency')).toBe('EUR');
+  });
+
+  it('shows fallback values for missing pallets, dangerous goods and temperature control', async () => {
+    const element = await render(tenderDetail({ palletCount: null }));
+
+    expect(text(element, 'pallet-count')).toBe('Keine Angabe');
+    expect(text(element, 'dangerous-goods')).toBe('Nein');
+    expect(text(element, 'temperature')).toBe('Keine Vorgabe');
+  });
+
+  it('marks an open tender with a past bid deadline as abgelaufen', async () => {
+    const element = await render(tenderDetail({ bidDeadline: '2000-01-01' }));
+
+    expect(text(element, 'bid-deadline')).toBe('01.01.2000 (abgelaufen)');
+  });
+
+  it('marks an open tender whose bid deadline is today as heute', async () => {
+    const today = localToday();
+    const element = await render(tenderDetail({ bidDeadline: today }));
+
+    expect(text(element, 'bid-deadline')).toBe(`${formatDate(today)} (heute)`);
+  });
+
+  it('shows no deadline hint for a closed tender with a past bid deadline', async () => {
+    const element = await render(tenderDetail({ bidDeadline: '2000-01-01', status: 'CLOSED' }));
+
+    expect(text(element, 'bid-deadline')).toBe('01.01.2000');
+  });
+
+  it('places the offers section before the remarks section', async () => {
+    const element = await render(OPEN_TENDER);
+
+    expect(
+      isBefore(
+        element.querySelector('[data-testid="offers"]')!,
+        element.querySelector('[data-testid="remarks"]')!,
+      ),
+    ).toBe(true);
+  });
+
+  it('formats offer amounts and names the amount label in the tender currency', async () => {
+    const element = await render(
+      tenderDetail({
+        currency: 'CHF',
+        offers: [{ id: 20, supplierName: 'Spedition Muster', amount: 500 }],
+      }),
+    );
+
+    expect(text(element, 'offer-amount')).toContain('CHF');
+    expect(text(element, 'offer-amount')).not.toContain('€');
+    expect(sortButtonText(element, 'offers', 'amount')).toBe('Betrag (CHF)');
+    expect(element.querySelector('label[for="offer-amount"]')?.textContent).toContain(
+      'Betrag (CHF)',
+    );
+  });
+
+  it('shows no summary line or data cards while loading', async () => {
+    const harness = await RouterTestingHarness.create('/tenders/1');
+    const element = harness.routeNativeElement as HTMLElement;
+
+    expect(element.querySelector('[data-testid="tender-summary"]')).toBeNull();
+    expect(element.querySelector('[data-testid="shipment-data"]')).toBeNull();
+    expect(element.querySelector('[data-testid="card-route"]')).toBeNull();
+
+    httpMock.expectOne('/api/tenders/1').flush(OPEN_TENDER);
+  });
+
+  it('shows no summary line or data cards when the tender cannot be loaded', async () => {
+    const harness = await RouterTestingHarness.create('/tenders/1');
+    httpMock.expectOne('/api/tenders/1').flush('nope', { status: 404, statusText: 'Not Found' });
+    harness.detectChanges();
+    const element = harness.routeNativeElement as HTMLElement;
+
+    expect(element.querySelector('[data-testid="tender-summary"]')).toBeNull();
+    expect(element.querySelector('[data-testid="shipment-data"]')).toBeNull();
+    expect(element.querySelector('[data-testid="card-vehicle"]')).toBeNull();
   });
 });
