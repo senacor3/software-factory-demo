@@ -1,8 +1,3 @@
 {
-  "findings": [
-    {
-      "location": "freight-tenders/frontend/src/app/tender-detail/tender-detail.spec.ts",
-      "description": "The plan's tests list requires the back link to be present in the invalid-id state (non-numeric route id, which takes the NaN early-return path in ngOnInit). No spec navigates to a non-numeric id, so that state has no back-link coverage. The load-error (404) state is covered."
-    }
-  ]
+  "findings": []
 }
