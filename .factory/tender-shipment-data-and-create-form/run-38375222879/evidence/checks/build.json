@@ -1,0 +1,40 @@
+{
+  "status": "fail",
+  "command": [
+    "npm",
+    "--prefix",
+    "freight-tenders/frontend",
+    "run",
+    "build"
+  ],
+  "returncode": 1,
+  "detail": "> frontend@0.0.0 build\n> ng build\n\n\u276f Building...\n\u2714 Building...\nApplication bundle generation failed. [1.647 seconds] - 2026-10-13T09:31:58.230Z\n\u001b[31m\u2718 \u001b[41;31m[\u001b[41;97mERROR\u001b[41;31m]\u001b[0m \u001b[1mTS2322: Type 'Currency | null' is not assignable to type 'Currency'.\n  Type 'null' is not assignable to type 'Currency'.\u001b[0m \u001b[1m\u001b[35m[plugin angular-compiler]\u001b[0m\n\n    /home/runner/work/software-factory-demo/software-factory-demo/freight-tenders/frontend/src/app/tender-create/tender-create.ts:248:6:\n\u001b[37m      248 \u2502       \u001b[32mcurrency\u001b[37m: value.currency,\n          \u2575       \u001b[32m~~~~~~~~\u001b[0m\n\n  The expected type comes from property 'currency' which is declared here on type 'CreateTenderRequest'\n\n    /home/runner/work/software-factory-demo/software-factory-demo/freight-tenders/frontend/src/app/tender-api.ts:81:2:\n\u001b[37m      81 \u2502   \u001b[32mcurrency\u001b[37m: Currency;\n         \u2575   \u001b[32m~~~~~~~~\u001b[0m",
+  "commands": [
+    [
+      "/home/runner/work/_temp/setup-uv-cache/environments-v2/run-checks-1dc39f426b31c2a4/bin/python",
+      "-m",
+      "compileall",
+      "factory",
+      "-q"
+    ],
+    [
+      "bash",
+      "-c",
+      "JAVA_HOME=\"$JAVA_HOME_25_X64\" mvn -B -f freight-tenders/backend/pom.xml compile"
+    ],
+    [
+      "npm",
+      "--prefix",
+      "freight-tenders/frontend",
+      "ci"
+    ],
+    [
+      "npm",
+      "--prefix",
+      "freight-tenders/frontend",
+      "run",
+      "build"
+    ]
+  ],
+  "config_source": "origin/main"
+}
