@@ -11,7 +11,7 @@
   "detail": "",
   "commands": [
     [
-      "/home/runner/work/_temp/setup-uv-cache/environments-v2/run-checks-1dc39f426b31c2a4/bin/python",
+      "/home/runner/work/_temp/setup-uv-cache/environments-v2/fix-loop-graph-b60255d460ef8966/bin/python",
       "-m",
       "compileall",
       "factory",
