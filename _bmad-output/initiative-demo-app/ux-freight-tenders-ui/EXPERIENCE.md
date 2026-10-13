@@ -16,7 +16,7 @@ Responsive web, desktop-primary. Angular (standalone components) on the existing
 |---|---|---|
 | Tender overview (`/`) | App open, "Abbrechen" from either other surface | Two sortable tables — open tenders, closed tenders — and the entry point to create a new one |
 | Create tender (`/tenders/new`) | "Neue Ausschreibung erstellen" link on overview | Form: origin, destination → creates an open tender, returns to overview |
-| Tender detail (`/tenders/:id`) | Selecting a row in either overview table | One tender's full picture: identity, status, a sortable remarks table with an add-form, a sortable offers table with an add-form — both forms disabled once closed |
+| Tender detail (`/tenders/:id`) | Selecting a row in either overview table; "Zurück zur Übersicht" back link returns to the overview | One tender's full picture: identity, status, a sortable remarks table with an add-form, a sortable offers table with an add-form — both forms disabled once closed |
 
 No surface beyond these three; this redesign changes how they look and how their lists are presented (table vs. plain list), not what they do. → Composition reference: `mockups/tender-overview.html`, `mockups/tender-detail.html`. Spine wins on conflict.
 
@@ -38,7 +38,8 @@ Behavioral. Visual specs live in `DESIGN.md.Components`.
 | Component | Use | Behavioral rules |
 |---|---|---|
 | Sortable table | Overview (open/closed tender lists), detail page (remarks, offers) | Select a column header to sort ascending by that column; select the same header again to reverse to descending; select a different header to switch the sort column (always single-column, per the recorded decision). Default sort: newest-first by id until a user sorts, so a newly added row appears at the top. Sort state is page-local — not persisted across navigation. |
-| Status pill | Overview table row, detail-page header | `status-pill-open`/`status-pill-closed` per `DESIGN.md`; label is "Offen"/"Geschlossen", never the raw backend value. |
+| Back link | Detail page, first element in `<main>`, in every state (loading, error, loaded) | "← Zurück zur Übersicht" navigates to `/`; the arrow is decorative (`aria-hidden`), the German text is the accessible name. |
+| Status pill | Overview table row, detail-page header (inline right of the title, on the same row as the close button) | `status-pill-open`/`status-pill-closed` per `DESIGN.md`; label is "Offen"/"Geschlossen", never the raw backend value. |
 | Create-tender form | `/tenders/new` | Origin/destination required; submit disabled until both are filled. Success navigates to `/`; failure handled per State Patterns → Form submit failed, form state preserved so the user can retry without retyping. |
 | Add-remark / add-offer form | Detail page, inside each table's own section | One field-set per table (remark: free text; offer: supplier + amount). Submitting adds the new row to that table without a full page reload — at the top by default, or at its sorted position when a column is active. Both forms disable (fields + submit) together when the tender is closed, replaced by one shared explanation line above both — not duplicated per form. |
 | Empty state | Any table with no rows | Centered `{typography.caption}` text inside the table's body area (not a full-page takeover), for example "Keine Bemerkungen vorhanden." |
@@ -51,7 +52,7 @@ Behavioral. Visual specs live in `DESIGN.md.Components`.
 | Empty table | Overview (one or both lists), detail (remarks/offers) | Caption-styled message inside that table's body; the table header row still renders so the user sees what *would* be sortable once rows exist. |
 | Backend unreachable | Overview, detail | One caption-styled error message replacing the affected content; existing German copy is reused as-is. |
 | Unknown tender id | Detail | Same error treatment as backend-unreachable, German not-found message, no crash. |
-| Closed tender | Detail | Status pill shows "Geschlossen"; both add-forms disabled; one explanation line shown above them. |
+| Closed tender | Detail | Status pill shows "Geschlossen"; both add-forms disabled; one explanation line shown above them. After a successful close, focus moves to that explanation line (the close button it replaces is removed). |
 | Form submit in flight | Create, add-remark, add-offer | Submit button disabled for the duration (prevents double-submit); no spinner needed at this scale — the round trip is local and fast. |
 | Form submit failed | Create, add-remark, add-offer | Inline error message in `{colors.error}` directly below that form, above its submit button; fields keep their entered values. This is the canonical error-placement rule — see `DESIGN.md`'s Components → Forms for the visual spec. |
 

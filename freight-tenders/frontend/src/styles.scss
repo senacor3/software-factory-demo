@@ -118,9 +118,28 @@ h2 {
 .btn-primary:focus-visible,
 .btn-secondary:focus-visible,
 .sort-button:focus-visible,
-.row-link:focus-visible {
+.row-link:focus-visible,
+.back-link:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
+}
+
+/* Back link */
+
+.back-link {
+  display: inline-block;
+  margin-bottom: var(--space-gutter);
+  padding: 4px 0;
+  color: var(--color-on-surface-variant);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-decoration: none;
+}
+
+.back-link:hover {
+  color: var(--color-on-surface);
+  text-decoration: underline;
 }
 
 /* Tables */
@@ -328,14 +347,38 @@ input:disabled {
   line-height: 1.4;
 }
 
-/* Detail page header: the status pill sits directly under the route title. */
-.page-header h1 {
-  margin-bottom: var(--space-unit);
+/* Detail page header: title and status pill on the left, the close action on the right. */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-gutter);
+}
+
+.page-header-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(2 * var(--space-unit));
+}
+
+.page-header-title h1 {
+  margin: 0;
+}
+
+.page-header .btn-secondary {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 @media (max-width: 600px) {
   .page {
     padding: var(--space-margin-mobile);
+  }
+
+  .page-header {
+    flex-wrap: wrap;
+    align-items: flex-start;
   }
 
   .data-table th:not(.sortable),

@@ -1,18 +1,22 @@
 <main class="page">
+  <a class="back-link" routerLink="/" data-testid="back-link"
+    ><span aria-hidden="true">←</span> Zurück zur Übersicht</a
+  >
+
   @if (loading()) {
     <p class="state-message" data-testid="loading">Ausschreibung wird geladen…</p>
   } @else if (loadError()) {
     <p class="state-message state-message-error" data-testid="load-error">{{ loadError() }}</p>
   } @else if (tender(); as currentTender) {
     <header class="page-header">
-      <h1 data-testid="page-title">{{ currentTender.origin }} → {{ currentTender.destination }}</h1>
-      <span [class]="isClosed() ? 'pill-closed' : 'pill-open'" data-testid="status">{{
-        statusLabel()
-      }}</span>
-    </header>
+      <div class="page-header-title">
+        <h1 data-testid="page-title">{{ currentTender.origin }} → {{ currentTender.destination }}</h1>
+        <span [class]="isClosed() ? 'pill-closed' : 'pill-open'" data-testid="status">{{
+          statusLabel()
+        }}</span>
+      </div>
 
-    @if (!isClosed()) {
-      <div class="page-actions">
+      @if (!isClosed()) {
         <button
           type="button"
           class="btn-secondary"
@@ -22,15 +26,17 @@
         >
           Ausschreibung schließen
         </button>
+      }
+    </header>
 
-        @if (closeError()) {
-          <p class="form-error" data-testid="close-error">{{ closeError() }}</p>
-        }
-      </div>
+    @if (closeError()) {
+      <p class="form-error close-error" role="alert" data-testid="close-error">
+        {{ closeError() }}
+      </p>
     }
 
     @if (isClosed()) {
-      <p class="notice" data-testid="closed-explanation">{{ closedExplanation }}</p>
+      <p #closedExplanationRef class="notice" tabindex="-1" data-testid="closed-explanation">{{ closedExplanation }}</p>
     }
 
     <section class="page-section">

@@ -1,6 +1,16 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  Injector,
+  OnInit,
+  afterNextRender,
+  computed,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { catchError, of } from 'rxjs';
 import { SortState, UNSORTED, ariaSort, sortIndicator, sortRows, toggleSort } from '../table-sort';
 import {
@@ -27,7 +37,7 @@ const AMOUNT_FORMAT = new Intl.NumberFormat('de-DE', { style: 'currency', curren
 
 @Component({
   selector: 'app-tender-detail',
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, RouterLink],
   templateUrl: './tender-detail.html',
   styleUrl: './tender-detail.scss',
 })
@@ -35,6 +45,10 @@ export class TenderDetail implements OnInit {
   private readonly tenderApi = inject(TenderApiService);
   private readonly route = inject(ActivatedRoute);
   private readonly formBuilder = inject(FormBuilder);
+  private readonly injector = inject(Injector);
+
+  private readonly closedExplanationRef =
+    viewChild<ElementRef<HTMLElement>>('closedExplanationRef');
 
   protected readonly tender = signal<TenderDetailModel | null>(null);
   protected readonly loading = signal<boolean>(true);
@@ -145,6 +159,12 @@ export class TenderDetail implements OnInit {
         this.tender.update((value) => value && { ...value, status: result.status });
         this.remarkForm.disable();
         this.offerForm.disable();
+
+        // The close button (the focused element) is removed on this change; the explanation
+        // only exists after the next render, so focus it then.
+        afterNextRender(() => this.closedExplanationRef()?.nativeElement.focus(), {
+          injector: this.injector,
+        });
       });
   }
 
