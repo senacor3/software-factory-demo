@@ -47,4 +47,12 @@
     <Method name="&lt;init&gt;" />
     <Bug pattern="EI_EXPOSE_REP2" />
   </Match>
+
+  <!-- Spring constructor injection of the singleton TenderService into the demo-profile seeder,
+       same rationale as TenderController above. -->
+  <Match>
+    <Class name="com.senacor.freighttenders.tender.DemoDataSeeder" />
+    <Method name="&lt;init&gt;" />
+    <Bug pattern="EI_EXPOSE_REP2" />
+  </Match>
 </FindBugsFilter>
