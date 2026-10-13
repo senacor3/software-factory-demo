@@ -30,6 +30,8 @@ gone on restart.
 | `POST /api/tenders/{id}/offers` | Adds an offer (`supplierName`, `amount`) | `201` |
 | `GET /api/health` | Liveness check, `{"status":"UP"}` | `200` |
 
+The three `POST` endpoints that take a body (create tender, add remark, add offer) return `400` with `{error, message, path, timestamp, violations}` on invalid input (blank `origin`/`destination`/`text`/`supplierName`, or a missing or non-positive `amount` below `0.01`); `violations` lists each offending `field` with a `message`. Other errors use the same shape without `violations`: `404` for an unknown tender and `409` for a closed tender. Validation runs first, so an invalid request to a closed tender returns `400`, not `409`.
+
 ```bash
 cd backend
 mvn -B verify        # build + test

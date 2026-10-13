@@ -27,7 +27,7 @@ Angular 22 (standalone, signals, Vitest) frontend for the freight tender domain.
 - Functional DI via `inject()` everywhere (services, components, `Router`/`ActivatedRoute`/`FormBuilder`) — never constructor injection (the backend's own convention is the opposite; each stack follows its own idiom).
 - State is `signal()`/`computed()`; RxJS is used only at the `HttpClient` boundary inside `tender-api.ts` and collapsed into signals immediately after `subscribe` — never expose an `Observable` to a template.
 - HTTP errors: `.pipe(catchError(() => of(null)))`, then check `=== null` to set a German error-message signal — no `HttpInterceptor`, no central error service.
-- Forms use `ReactiveFormsModule` + `FormBuilder.nonNullable.group(...)` with per-field `Validators` — client-side validation already covers what the backend does not yet (see backend's Known pitfalls).
+- Forms use `ReactiveFormsModule` + `FormBuilder.nonNullable.group(...)` with per-field `Validators` — client-side validation mirrors the backend's Bean Validation rules.
 - No `.component.ts`/`Component`/`Service` suffix on file or class names (one exception: `TenderApiService` keeps `Service`) — Angular 22 schematic default, not a local override.
 - No `environment.ts`/`environment.prod.ts` — relative `/api/...` URLs only, differentiated by the dev-only `proxy.conf.json`.
 - Tests mock HTTP exclusively via `provideHttpClientTesting()` + `HttpTestingController`, always paired with `afterEach(() => httpMock.verify())`.
