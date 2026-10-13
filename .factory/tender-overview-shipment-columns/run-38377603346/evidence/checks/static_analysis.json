@@ -7,8 +7,8 @@
     "run",
     "static-analysis"
   ],
-  "returncode": 1,
-  "detail": "> frontend@0.0.0 static-analysis\n> eslint -c eslint.static-analysis.config.js .\n\n\n/home/runner/work/software-factory-demo/software-factory-demo/freight-tenders/frontend/src/app/tender-test-data.ts\n  31:23  error  '_count' is assigned a value but never used              @typescript-eslint/no-unused-vars\n  31:23  error  Remove the declaration of the unused '_count' variable   sonarjs/no-unused-vars\n  31:50  error  '_lowest' is assigned a value but never used             @typescript-eslint/no-unused-vars\n  31:50  error  Remove the declaration of the unused '_lowest' variable  sonarjs/no-unused-vars\n\n\u2716 4 problems (4 errors, 0 warnings)",
+  "returncode": 127,
+  "detail": "> frontend@0.0.0 static-analysis\n> eslint -c eslint.static-analysis.config.js .\nsh: 1: eslint: not found",
   "commands": [
     [
       "bash",

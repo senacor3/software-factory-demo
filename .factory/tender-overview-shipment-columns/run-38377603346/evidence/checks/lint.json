@@ -7,8 +7,8 @@
     "run",
     "lint"
   ],
-  "returncode": 1,
-  "detail": "> frontend@0.0.0 lint\n> ng lint\n\n\nLinting \"frontend\"...\n\n/home/runner/work/software-factory-demo/software-factory-demo/freight-tenders/frontend/src/app/tender-test-data.ts\n  31:23  error  '_count' is assigned a value but never used   @typescript-eslint/no-unused-vars\n  31:50  error  '_lowest' is assigned a value but never used  @typescript-eslint/no-unused-vars\n\n\u2716 2 problems (2 errors, 0 warnings)\nLint errors found in the listed files.",
+  "returncode": 127,
+  "detail": "> frontend@0.0.0 lint\n> ng lint\nsh: 1: ng: not found",
   "commands": [
     [
       "uv",
