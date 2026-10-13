@@ -202,35 +202,29 @@ jobs:
             --story-slug "${{ needs.analysis.outputs.story-slug }}" \
             --run-id "${{ needs.analysis.outputs.run-id }}"
 
-      # Runner toolchain setup for the checks below (AD-6 addendum): the commands
-      # configured in .github/post-implementation-checks.yml may need a JDK and/or
-      # Node that this job's `ubuntu-latest` runner doesn't provide implicitly, so
-      # read the versions the repo names from that same config's `toolchains:`
-      # mapping, into $GITHUB_OUTPUT the same way "Derive story-slug and run-id"
-      # does (see run_checks.py's `toolchains` subcommand). Each setup step below is
-      # gated on its own output being non-empty, so a repo/config with no
-      # `toolchains:` entry runs exactly as before this addendum -- no setup step,
-      # no behavior change.
-      - name: Read toolchain versions
-        id: toolchain
+      # Runner toolchain setup for the checks below (AD-6 addendum): the Java/Node
+      # versions .github/post-implementation-checks.yml's `toolchains:` mapping
+      # names. Lives in a local composite action because the `checks-fix-loop` job
+      # needs the identical setup for its re-checks (backlog bug 5) -- see
+      # .github/actions/checks-toolchain/action.yml.
+      - name: Set up checks toolchain
+        uses: ./.github/actions/checks-toolchain
+
+      # Prepares the checkout for the checks below (AD-6 addendum, backlog bug 5):
+      # runs the config's `setup:` commands (e.g. a dependency install), so no check
+      # relies on an earlier check having run. The `checks-fix-loop` job re-runs only
+      # the failed check(s) and runs this same setup before each re-check, from
+      # checks_fix_loop_graph.py. `continue-on-error: true` like the checks, and
+      # counted in "Fail job if any check failed" -- its result is committed as
+      # evidence/checks/setup.json beside theirs, so the fix loop names a failed
+      # setup as a tooling failure instead of spending a fix cycle on it.
+      - name: Setup check workspace
+        id: setup
+        continue-on-error: true
         run: |
-          uv run factory/scripts/run_checks.py toolchains >> "$GITHUB_OUTPUT"
-
-      - name: Set up Java
-        if: steps.toolchain.outputs.java != ''
-        uses: actions/setup-java@v6
-        with:
-          distribution: 'temurin'
-          java-version: ${{ steps.toolchain.outputs.java }}
-          cache: 'maven'
-
-      - name: Set up Node
-        if: steps.toolchain.outputs.node != ''
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ steps.toolchain.outputs.node }}
-          cache: 'npm'
-          cache-dependency-path: freight-tenders/frontend/package-lock.json
+          uv run factory/scripts/run_checks.py setup \
+            --story-slug "${{ needs.analysis.outputs.story-slug }}" \
+            --run-id "${{ needs.analysis.outputs.run-id }}"
 
       # CAP-5 mechanical checks (AD-6): 5 direct pipeline steps, never a graph node or
       # agent tool call. Each step runs the commands the repo configures for that
@@ -286,6 +280,20 @@ jobs:
             --story-slug "${{ needs.analysis.outputs.story-slug }}" \
             --run-id "${{ needs.analysis.outputs.run-id }}"
 
+      # AD-10 addendum (backlog bug 5): `checks.md` is written by the fix loop, which
+      # only runs when this job failed -- so when a later attempt of this job goes
+      # green, nothing else would correct an `unresolved-after-cap` an earlier
+      # attempt's loop stamped. This resets it to `resolved` in exactly that case
+      # (the file exists, setup did not fail, and all 5 checks above passed or were
+      # skipped) and is a
+      # no-op in every other, including a first attempt, where no `checks.md` exists.
+      - name: Reconcile checks state
+        if: always()
+        run: |
+          uv run factory/scripts/run_checks.py reconcile \
+            --story-slug "${{ needs.analysis.outputs.story-slug }}" \
+            --run-id "${{ needs.analysis.outputs.run-id }}"
+
       # Always commits this job's evidence (AD-10), extending the existing
       # git-based state mechanism rather than adding a second one (e.g. workflow
       # artifacts) -- so the `review`/`checks-fix-loop` jobs' checkout always has
@@ -310,6 +318,7 @@ jobs:
         if: always()
         run: |
           for outcome in \
+            "${{ steps.setup.outcome }}" \
             "${{ steps.build.outcome }}" \
             "${{ steps.test.outcome }}" \
             "${{ steps.lint.outcome }}" \
@@ -352,7 +361,19 @@ jobs:
             --story-slug "${{ needs.analysis.outputs.story-slug }}" \
             --run-id "${{ needs.analysis.outputs.run-id }}"
 
+      # The same toolchain setup the `checks` job runs (backlog bug 5), so a
+      # re-check runs under the Java/Node versions the first check did. The
+      # dependency install the re-checks also need is not a step here: the fix loop
+      # runs the config's `setup:` commands itself before each re-check, after the
+      # agent's edits.
+      - name: Set up checks toolchain
+        id: toolchain
+        uses: ./.github/actions/checks-toolchain
+
+      # Node for the Claude Code CLI below -- only when the checks config names no
+      # Node version, so the checks' own Node is never replaced by this one.
       - name: Install Node
+        if: steps.toolchain.outputs.node == ''
         uses: actions/setup-node@v7
         with:
           node-version: '22'

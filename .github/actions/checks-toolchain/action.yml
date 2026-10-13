@@ -1,0 +1,46 @@
+# Runner toolchain setup for the mechanical checks (AD-6 addendum), shared by the
+# `checks` job and the `checks-fix-loop` job so a re-check runs under the same
+# toolchains the first check did -- one definition, so the two cannot drift apart
+# (backlog bug 5). The commands configured in .github/post-implementation-checks.yml
+# may need a JDK and/or Node the runner doesn't provide implicitly, so this reads the
+# versions the repo names in that config's `toolchains:` mapping (see run_checks.py's
+# `toolchains` subcommand) and sets each one up. Each setup step is gated on its own
+# version being non-empty, so a config with no `toolchains:` entry sets up nothing.
+#
+# Needs `uv` on PATH and the repo checked out: use it after "Install uv" and
+# "Checkout implementation branch".
+name: Checks toolchain
+description: Set up the Java and Node versions the checks config names.
+
+outputs:
+  java:
+    description: The configured Java version, or empty when the config names none.
+    value: ${{ steps.toolchain.outputs.java }}
+  node:
+    description: The configured Node version, or empty when the config names none.
+    value: ${{ steps.toolchain.outputs.node }}
+
+runs:
+  using: composite
+  steps:
+    - name: Read toolchain versions
+      id: toolchain
+      shell: bash
+      run: |
+        uv run factory/scripts/run_checks.py toolchains >> "$GITHUB_OUTPUT"
+
+    - name: Set up Java
+      if: steps.toolchain.outputs.java != ''
+      uses: actions/setup-java@v6
+      with:
+        distribution: 'temurin'
+        java-version: ${{ steps.toolchain.outputs.java }}
+        cache: 'maven'
+
+    - name: Set up Node
+      if: steps.toolchain.outputs.node != ''
+      uses: actions/setup-node@v7
+      with:
+        node-version: ${{ steps.toolchain.outputs.node }}
+        cache: 'npm'
+        cache-dependency-path: freight-tenders/frontend/package-lock.json

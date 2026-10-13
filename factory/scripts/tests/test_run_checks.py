@@ -280,8 +280,12 @@ def test_repo_config_holds_the_commands_the_script_used_to_hard_code():
     assert run_checks.load_commands("build", cwd=REPO_ROOT) == [
         [sys.executable, "-m", "compileall", "factory", "-q"],
         ["bash", "-c", 'JAVA_HOME="$JAVA_HOME_25_X64" mvn -B -f freight-tenders/backend/pom.xml compile'],
-        ["npm", "--prefix", "freight-tenders/frontend", "ci"],
         ["npm", "--prefix", "freight-tenders/frontend", "run", "build"],
+    ]
+    # The dependency install every frontend command relies on is setup, not part of
+    # `build` -- the checks fix loop re-runs only the failed checks (backlog bug 5).
+    assert run_checks.load_setup_commands(cwd=REPO_ROOT) == [
+        ["npm", "--prefix", "freight-tenders/frontend", "ci"],
     ]
     # Unchanged apart from `--with pyyaml`, which this module's own tests now need.
     assert run_checks.load_commands("test", cwd=REPO_ROOT) == [
@@ -503,3 +507,264 @@ def test_cmd_toolchains_exits_nonzero_on_malformed_config(tmp_path, monkeypatch,
 
     assert rc == 2
     assert "python" in capsys.readouterr().err
+
+
+# --- setup: commands that prepare the checkout for the checks (backlog bug 5) ----------
+
+
+SETUP_CONFIG = CONFIG + """\
+setup:
+  - ["install-deps", "backend"]
+  - ["{python}", "-m", "install", "frontend"]
+"""
+
+
+def test_load_setup_commands_returns_the_configured_commands(tmp_path):
+    _write_config(tmp_path, SETUP_CONFIG)
+    assert run_checks.load_setup_commands(cwd=tmp_path) == [
+        ["install-deps", "backend"],
+        [sys.executable, "-m", "install", "frontend"],
+    ]
+
+
+def test_load_setup_commands_absent_key_is_empty(repo):
+    assert run_checks.load_setup_commands(cwd=repo) == []
+
+
+def test_load_setup_commands_needs_no_checks_mapping(tmp_path):
+    _write_config(tmp_path, 'setup:\n  - ["install-deps"]\n')
+    assert run_checks.load_setup_commands(cwd=tmp_path) == [["install-deps"]]
+
+
+@pytest.mark.parametrize(
+    "config, expected",
+    [
+        ("setup: install-deps\n", "`setup` must be a list of commands"),
+        ("setup:\n  - install-deps\n", "every `setup` command must be a non-empty list of strings"),
+        ("setup:\n  - []\n", "every `setup` command must be a non-empty list of strings"),
+        ("setup: [unclosed\n", "is not valid YAML"),
+        # Not a mapping at the top level: never read as "no setup configured".
+        ("", "must hold a top-level mapping"),
+        ("- setup\n", "must hold a top-level mapping"),
+    ],
+)
+def test_load_setup_commands_rejects_a_malformed_value(tmp_path, config, expected):
+    _write_config(tmp_path, config)
+    with pytest.raises(run_checks.ChecksConfigError, match=expected) as excinfo:
+        run_checks.load_setup_commands(cwd=tmp_path)
+    assert excinfo.value.source == run_checks.SOURCE_WORKING_TREE
+
+
+def test_load_setup_commands_reads_from_target_branch(repo, no_target_config):
+    no_target_config.return_value = 'setup:\n  - ["target-install"]\n'
+    assert run_checks.load_setup_commands(cwd=repo) == [["target-install"]]
+
+
+def _setup(repo):
+    return run_checks.run_setup("foo-bar", "run-1", state_base=repo, cwd=repo)
+
+
+def test_run_setup_runs_every_command_in_order_and_records_the_result(tmp_path):
+    _write_config(tmp_path, SETUP_CONFIG)
+    with patch("subprocess.run", return_value=_ok()) as mock_run:
+        result = _setup(tmp_path)
+
+    assert result["status"] == "pass"
+    assert [c.args[0] for c in mock_run.call_args_list] == [
+        ["install-deps", "backend"],
+        [sys.executable, "-m", "install", "frontend"],
+    ]
+    assert result["commands"] == [c.args[0] for c in mock_run.call_args_list]
+    assert all(c.kwargs["cwd"] == tmp_path for c in mock_run.call_args_list)
+    # recorded beside the five checks' evidence, so the next job can read it
+    assert _evidence(tmp_path, "setup") == result
+    assert run_checks.read_setup_result("foo-bar", "run-1", state_base=tmp_path) == result
+
+
+def test_run_setup_stops_at_the_first_failing_command(tmp_path):
+    _write_config(tmp_path, SETUP_CONFIG)
+    with patch("subprocess.run", return_value=_fail(returncode=1, stderr="registry down")) as mock_run:
+        result = _setup(tmp_path)
+
+    assert result["status"] == "fail"
+    assert result["command"] == ["install-deps", "backend"]
+    assert "registry down" in result["detail"]
+    mock_run.assert_called_once()
+    assert _evidence(tmp_path, "setup")["status"] == "fail"
+
+
+def test_run_setup_with_no_command_is_skipped_and_runs_nothing(repo):
+    with patch("subprocess.run") as mock_run:
+        result = _setup(repo)
+
+    assert result["status"] == "skipped"
+    assert result["commands"] == []
+    mock_run.assert_not_called()
+    assert _evidence(repo, "setup")["status"] == "skipped"
+
+
+def test_run_setup_missing_config_is_a_fail_not_raised(tmp_path):
+    with patch("subprocess.run") as mock_run:
+        result = _setup(tmp_path)
+
+    assert result["status"] == "fail"
+    assert result["command"] is None
+    assert "checks config not found" in result["detail"]
+    mock_run.assert_not_called()
+    assert _evidence(tmp_path, "setup")["status"] == "fail"
+
+
+def test_read_setup_result_is_none_when_nothing_was_recorded(tmp_path):
+    assert run_checks.read_setup_result("foo-bar", "run-1", state_base=tmp_path) is None
+
+
+SETUP_ARGS = ["setup", "--story-slug", "foo-bar", "--run-id", "run-1"]
+
+
+def test_cli_setup_exits_zero_on_pass_and_on_skipped(tmp_path, repo, monkeypatch, capsys):
+    monkeypatch.chdir(repo)
+    assert run_checks.main(SETUP_ARGS) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "skipped"
+
+    _write_config(repo, SETUP_CONFIG)
+    with patch("subprocess.run", return_value=_ok()):
+        assert run_checks.main(SETUP_ARGS) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "pass"
+    assert _evidence(repo / state_io.FACTORY_DIR, "setup")["status"] == "pass"
+
+
+def test_cli_setup_exits_nonzero_when_a_command_fails(tmp_path, monkeypatch, capsys):
+    _write_config(tmp_path, SETUP_CONFIG)
+    monkeypatch.chdir(tmp_path)
+    with patch("subprocess.run", return_value=_fail(returncode=127, stderr="install-deps: not found")):
+        assert run_checks.main(SETUP_ARGS) == 1
+    assert json.loads(capsys.readouterr().out)["returncode"] == 127
+
+
+def test_cli_setup_requires_story_slug_and_run_id():
+    with pytest.raises(SystemExit):
+        run_checks.main(["setup"])
+
+
+# --- tooling failure: the command could not be started at all ---------------------------
+
+
+@pytest.mark.parametrize(
+    "result, expected",
+    [
+        ({"status": "fail", "command": ["npm", "run", "lint"], "returncode": 127, "detail": "ng: not found"}, True),
+        ({"status": "fail", "command": ["./gradlew"], "returncode": 126, "detail": "Permission denied"}, True),
+        # `_run_command`'s shape when spawning the command raised OSError.
+        ({"status": "fail", "command": ["mvn"], "returncode": None, "detail": "failed to run"}, True),
+        # A tool that ran and reported a finding.
+        ({"status": "fail", "command": ["npm", "run", "lint"], "returncode": 1, "detail": "1 error"}, False),
+        ({"status": "fail", "command": ["mvn"], "returncode": 2, "detail": "usage"}, False),
+        # No command named: missing evidence or an unreadable config, not a tool that would not start.
+        ({"status": "fail", "command": None, "returncode": None, "detail": "no evidence found"}, False),
+        ({"status": "pass", "command": ["x"], "returncode": 0, "detail": ""}, False),
+        ({"status": "skipped", "command": None, "returncode": None, "detail": ""}, False),
+    ],
+)
+def test_is_tooling_failure(result, expected):
+    assert run_checks.is_tooling_failure(result) is expected
+
+
+def test_command_not_on_path_result_is_a_tooling_failure(repo):
+    with patch("subprocess.run", side_effect=FileNotFoundError("run-lint")):
+        result = _run("lint", repo)
+    assert run_checks.is_tooling_failure(result)
+
+
+# --- reconcile: a later passing attempt corrects a stale checks.md ----------------------
+
+
+def _write_all_evidence(base, statuses=None):
+    statuses = statuses or {}
+    directory = state_io.state_dir("foo-bar", "run-1", base=base) / "evidence" / "checks"
+    directory.mkdir(parents=True, exist_ok=True)
+    for name in run_checks.CHECK_NAMES:
+        status = statuses.get(name, "skipped" if name == "security" else "pass")
+        (directory / f"{name}.json").write_text(json.dumps({"status": status, "command": ["x"], "returncode": 0, "detail": ""}))
+
+
+def _write_checks_md(base, status, fix_cycle=2, body="## Failing checks\n\n- **lint**: sh: 1: ng: not found"):
+    path = state_io.state_dir("foo-bar", "run-1", base=base) / "checks.md"
+    state_io.write_state(path, story_slug="foo-bar", stage="checks", status=status, body=body, extra={"fix_cycle": fix_cycle})
+    return path
+
+
+@pytest.mark.parametrize("stale_status", ["unresolved-after-cap", "tooling-failure", "findings-open"])
+def test_reconcile_resets_a_stale_checks_md_when_every_check_passed_or_skipped(tmp_path, stale_status):
+    _write_all_evidence(tmp_path)
+    path = _write_checks_md(tmp_path, stale_status, fix_cycle=2)
+
+    assert run_checks.reconcile_checks_state("foo-bar", "run-1", state_base=tmp_path) is True
+
+    meta, body = state_io.read_state(path)
+    assert meta["status"] == "resolved"
+    assert meta["stage"] == "checks"
+    assert meta["story_slug"] == "foo-bar"
+    assert meta["fix_cycle"] == "2"  # how many fix cycles the run used is kept, never reset
+    assert "_none_" in body
+    assert "lint" not in body and "ng: not found" not in body
+
+
+def test_reconcile_leaves_checks_md_alone_while_any_check_still_fails(tmp_path):
+    _write_all_evidence(tmp_path, {"lint": "fail"})
+    path = _write_checks_md(tmp_path, "unresolved-after-cap")
+    before = path.read_text()
+
+    assert run_checks.reconcile_checks_state("foo-bar", "run-1", state_base=tmp_path) is False
+    assert path.read_text() == before
+
+
+def test_reconcile_leaves_checks_md_alone_when_a_check_has_no_evidence(tmp_path):
+    _write_all_evidence(tmp_path)
+    (state_io.state_dir("foo-bar", "run-1", base=tmp_path) / "evidence" / "checks" / "test.json").unlink()
+    path = _write_checks_md(tmp_path, "unresolved-after-cap")
+    before = path.read_text()
+
+    assert run_checks.reconcile_checks_state("foo-bar", "run-1", state_base=tmp_path) is False
+    assert path.read_text() == before
+
+
+def test_reconcile_leaves_checks_md_alone_when_setup_failed_though_every_check_passed(tmp_path):
+    """Checks that pass on a checkout setup could not prepare do not make the attempt green."""
+    _write_all_evidence(tmp_path)
+    directory = state_io.state_dir("foo-bar", "run-1", base=tmp_path) / "evidence" / "checks"
+    (directory / "setup.json").write_text(json.dumps({"status": "fail", "command": ["install-deps"], "returncode": 1, "detail": "registry down"}))
+    path = _write_checks_md(tmp_path, "tooling-failure")
+    before = path.read_text()
+
+    assert run_checks.reconcile_checks_state("foo-bar", "run-1", state_base=tmp_path) is False
+    assert path.read_text() == before
+
+
+def test_reconcile_never_creates_checks_md(tmp_path):
+    _write_all_evidence(tmp_path)
+
+    assert run_checks.reconcile_checks_state("foo-bar", "run-1", state_base=tmp_path) is False
+    assert not (state_io.state_dir("foo-bar", "run-1", base=tmp_path) / "checks.md").exists()
+
+
+def test_reconcile_does_not_rewrite_an_already_resolved_checks_md(tmp_path):
+    _write_all_evidence(tmp_path)
+    path = _write_checks_md(tmp_path, "resolved", fix_cycle=1, body="## Failing checks\n\n_none_")
+    before = path.read_text()
+
+    assert run_checks.reconcile_checks_state("foo-bar", "run-1", state_base=tmp_path) is False
+    assert path.read_text() == before
+
+
+def test_cli_reconcile_exits_zero_and_reports_whether_it_wrote(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    args = ["reconcile", "--story-slug", "foo-bar", "--run-id", "run-1"]
+
+    assert run_checks.main(args) == 0  # nothing there at all
+    assert json.loads(capsys.readouterr().out) == {"ok": True, "reconciled": False}
+
+    _write_all_evidence(tmp_path / state_io.FACTORY_DIR)
+    path = _write_checks_md(tmp_path / state_io.FACTORY_DIR, "unresolved-after-cap")
+    assert run_checks.main(args) == 0
+    assert json.loads(capsys.readouterr().out) == {"ok": True, "reconciled": True}
+    assert state_io.read_state(path)[0]["status"] == "resolved"
