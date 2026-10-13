@@ -1,4 +1,4 @@
-<main class="page">
+<main class="page page-wide">
   <h1 data-testid="page-title">Ausschreibungen</h1>
   <a routerLink="/tenders/new" class="btn-primary" data-testid="create-link"
     >Neue Ausschreibung erstellen</a
@@ -12,63 +12,111 @@
     @for (table of tables; track table.testId) {
       <section class="page-section">
         <h2>{{ table.heading }}</h2>
-        <table class="data-table" [attr.data-testid]="table.testId">
-          <thead>
-            <tr>
-              @for (column of sortableColumns; track column.key) {
-                <th
-                  scope="col"
-                  class="sortable"
-                  [attr.aria-sort]="ariaSort(table.sort(), column.key)"
-                  [attr.data-testid]="table.testId + '-header-' + column.key"
-                >
-                  <button
-                    type="button"
-                    class="sort-button"
-                    [attr.data-testid]="table.testId + '-sort-' + column.key"
-                    (click)="onSort(table.sort, column.key)"
-                  >
-                    {{ column.label }}
-                    @if (sortIndicator(table.sort(), column.key); as indicator) {
-                      <span class="sort-indicator" aria-hidden="true">{{ indicator }}</span>
-                    }
-                  </button>
-                </th>
-              }
-              <th scope="col">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (tender of table.rows(); track tender.id) {
-              <tr
-                class="clickable"
-                [attr.data-testid]="table.testId + '-row'"
-                (click)="openTender(tender.id, $event)"
-              >
-                <td>
-                  <a
-                    class="row-link"
-                    [routerLink]="['/tenders', tender.id]"
-                    [attr.data-testid]="table.testId + '-link'"
-                    >{{ tender.origin.city }}</a
-                  >
-                </td>
-                <td>{{ tender.destination.city }}</td>
-                <td>
-                  <span [class]="tender.status === 'OPEN' ? 'pill-open' : 'pill-closed'">{{
-                    statusLabels[tender.status]
-                  }}</span>
-                </td>
-              </tr>
-            } @empty {
+        <div class="table-scroll">
+          <table class="data-table data-table-wide" [attr.data-testid]="table.testId">
+            <thead>
               <tr>
-                <td class="empty-cell" colspan="3" [attr.data-testid]="table.testId + '-empty'">
-                  {{ table.emptyMessage }}
-                </td>
+                @for (column of columns; track column.key) {
+                  @if (column.sortable) {
+                    <th
+                      scope="col"
+                      class="sortable"
+                      [class.numeric]="column.numeric"
+                      [attr.aria-sort]="ariaSort(table.sort(), column.key)"
+                      [attr.data-testid]="table.testId + '-header-' + column.key"
+                    >
+                      <button
+                        type="button"
+                        class="sort-button"
+                        [attr.data-testid]="table.testId + '-sort-' + column.key"
+                        (click)="onSort(table.sort, column.key)"
+                      >
+                        {{ column.label }}
+                        @if (sortIndicator(table.sort(), column.key); as indicator) {
+                          <span class="sort-indicator" aria-hidden="true">{{ indicator }}</span>
+                        }
+                      </button>
+                    </th>
+                  } @else {
+                    <th scope="col" [attr.data-testid]="table.testId + '-header-' + column.key">
+                      {{ column.label }}
+                    </th>
+                  }
+                }
               </tr>
-            }
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              @for (tender of table.rows(); track tender.id) {
+                <tr
+                  class="clickable"
+                  [attr.data-testid]="table.testId + '-row'"
+                  (click)="openTender(tender.id, $event)"
+                >
+                  <td>
+                    <a
+                      class="row-link cell-primary"
+                      [routerLink]="['/tenders', tender.id]"
+                      [attr.data-testid]="table.testId + '-link'"
+                      >{{ tender.origin.city }}</a
+                    >
+                    <span class="cell-caption" data-testid="origin-detail"
+                      >{{ tender.origin.country }}-{{ tender.origin.postalCode }}</span
+                    >
+                  </td>
+                  <td>
+                    <span class="cell-primary">{{ tender.destination.city }}</span>
+                    <span class="cell-caption" data-testid="destination-detail"
+                      >{{ tender.destination.country }}-{{ tender.destination.postalCode }}</span
+                    >
+                  </td>
+                  <td>
+                    <span class="cell-primary" data-testid="pickup-date">{{
+                      formatDate(tender.pickupDate)
+                    }}</span>
+                  </td>
+                  <td>
+                    <span class="cell-primary" data-testid="load"
+                      >{{ formatWeight(tender.weightKg) }} ·
+                      {{ formatLoadingMeters(tender.loadingMeters) }}</span
+                    >
+                    @if (cargoHint(tender); as hint) {
+                      <span class="cell-caption" data-testid="load-hint">{{ hint }}</span>
+                    }
+                  </td>
+                  <td>
+                    <span class="cell-primary" data-testid="equipment">{{
+                      equipmentLabels[tender.equipmentType]
+                    }}</span>
+                  </td>
+                  <td>
+                    <span class="cell-primary" data-testid="bid-deadline">{{
+                      formatDate(tender.bidDeadline)
+                    }}</span>
+                    @if (deadlineHint(tender.bidDeadline, tender.status, today()); as hint) {
+                      <span class="cell-caption" data-testid="deadline-hint">{{ hint }}</span>
+                    }
+                  </td>
+                  <td class="numeric">
+                    <span class="cell-primary" data-testid="offer-count">{{
+                      tender.offerCount
+                    }}</span>
+                    @if (tender.lowestOfferAmount !== null) {
+                      <span class="cell-caption" data-testid="lowest-offer"
+                        >ab {{ formatAmount(tender.lowestOfferAmount, tender.currency) }}</span
+                      >
+                    }
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td class="empty-cell" colspan="7" [attr.data-testid]="table.testId + '-empty'">
+                    {{ table.emptyMessage }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
       </section>
     }
   }

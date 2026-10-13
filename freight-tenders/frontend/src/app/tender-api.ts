@@ -100,6 +100,8 @@ export interface TenderSummary {
   temperatureMaxC: number | null;
   currency: Currency;
   status: TenderStatus;
+  offerCount: number;
+  lowestOfferAmount: number | null;
 }
 
 export interface RemarkSummary {
@@ -113,7 +115,8 @@ export interface OfferSummary {
   amount: number;
 }
 
-export interface TenderDetail extends TenderSummary {
+// The detail response lists the offers themselves instead of summarising them.
+export interface TenderDetail extends Omit<TenderSummary, 'offerCount' | 'lowestOfferAmount'> {
   remarks: RemarkSummary[];
   offers: OfferSummary[];
 }
