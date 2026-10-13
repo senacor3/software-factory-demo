@@ -8,7 +8,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,11 +26,14 @@ class TenderServiceTest {
 
   @Mock private TenderRepository tenderRepository;
 
+  private static final Clock CLOCK =
+      Clock.fixed(Instant.parse("2026-10-13T08:00:00Z"), ZoneId.of("Europe/Berlin"));
+
   private TenderService tenderService;
 
   @BeforeEach
   void setUp() {
-    tenderService = new TenderService(tenderRepository);
+    tenderService = new TenderService(tenderRepository, CLOCK);
   }
 
   @Test
@@ -95,7 +101,7 @@ class TenderServiceTest {
     given(tenderRepository.save(any(Tender.class)))
         .willAnswer(invocation -> invocation.getArgument(0));
 
-    Tender result = tenderService.addOffer(1L, "Acme Logistics", new BigDecimal("1234.56"));
+    Tender result = addOffer(1L, LocalDate.of(2026, 10, 21));
 
     assertThat(result.getOffers()).hasSize(1);
     assertThat(result.getOffers().get(0).getSupplierName()).isEqualTo("Acme Logistics");
@@ -121,8 +127,7 @@ class TenderServiceTest {
     tender.close();
     given(tenderRepository.findById(1L)).willReturn(Optional.of(tender));
 
-    assertThatThrownBy(
-            () -> tenderService.addOffer(1L, "Acme Logistics", new BigDecimal("1234.56")))
+    assertThatThrownBy(() -> addOffer(1L, LocalDate.of(2026, 10, 21)))
         .isInstanceOf(TenderClosedException.class);
 
     assertThat(tender.getOffers()).isEmpty();
@@ -151,5 +156,95 @@ class TenderServiceTest {
 
     assertThat(result).containsExactly(openTender);
     verify(tenderRepository, never()).findAll();
+  }
+
+  @Test
+  void addOfferOnTheBidDeadlineDayAndDeliveryOnPickupDayIsAccepted() {
+    Tender tender = TenderFixtures.tender();
+    given(tenderRepository.findById(1L)).willReturn(Optional.of(tender));
+    given(tenderRepository.save(any(Tender.class)))
+        .willAnswer(invocation -> invocation.getArgument(0));
+    Clock deadlineDay =
+        Clock.fixed(Instant.parse("2026-10-16T08:00:00Z"), ZoneId.of("Europe/Berlin"));
+    TenderService service = new TenderService(tenderRepository, deadlineDay);
+
+    Tender result =
+        service.addOffer(
+            1L,
+            "Acme",
+            new BigDecimal("1.00"),
+            LocalDate.of(2026, 10, 20),
+            LocalDate.of(2026, 10, 16),
+            " ");
+
+    assertThat(result.getOffers()).hasSize(1);
+    assertThat(result.getOffers().get(0).getNote()).isNull();
+  }
+
+  @Test
+  void addOfferTheDayAfterTheBidDeadlineIsRejectedButRemarkStillAccepted() {
+    Tender tender = TenderFixtures.tender();
+    given(tenderRepository.findById(1L)).willReturn(Optional.of(tender));
+    given(tenderRepository.save(any(Tender.class)))
+        .willAnswer(invocation -> invocation.getArgument(0));
+    Clock dayAfter = Clock.fixed(Instant.parse("2026-10-17T08:00:00Z"), ZoneId.of("Europe/Berlin"));
+    TenderService service = new TenderService(tenderRepository, dayAfter);
+
+    assertThatThrownBy(
+            () ->
+                service.addOffer(
+                    1L,
+                    "Acme",
+                    new BigDecimal("1.00"),
+                    LocalDate.of(2026, 10, 21),
+                    LocalDate.of(2026, 10, 30),
+                    null))
+        .isInstanceOf(BidDeadlinePassedException.class);
+    service.addRemark(1L, "Still allowed");
+
+    assertThat(tender.getOffers()).isEmpty();
+    assertThat(tender.getRemarks()).hasSize(1);
+  }
+
+  @Test
+  void addOfferOnClosedTenderWithPassedDeadlineReportsClosedNotDeadline() {
+    Tender tender = TenderFixtures.tender();
+    tender.close();
+    given(tenderRepository.findById(1L)).willReturn(Optional.of(tender));
+    Clock dayAfter = Clock.fixed(Instant.parse("2026-10-17T08:00:00Z"), ZoneId.of("Europe/Berlin"));
+    TenderService service = new TenderService(tenderRepository, dayAfter);
+
+    assertThatThrownBy(
+            () ->
+                service.addOffer(
+                    1L,
+                    "Acme",
+                    new BigDecimal("1.00"),
+                    LocalDate.of(2026, 10, 21),
+                    LocalDate.of(2026, 10, 30),
+                    null))
+        .isInstanceOf(TenderClosedException.class);
+  }
+
+  @Test
+  void addOfferWithDeliveryBeforePickupIsRejected() {
+    Tender tender = TenderFixtures.tender();
+    given(tenderRepository.findById(1L)).willReturn(Optional.of(tender));
+
+    assertThatThrownBy(() -> addOffer(1L, LocalDate.of(2026, 10, 19)))
+        .isInstanceOf(OfferDeliveryBeforePickupException.class);
+
+    assertThat(tender.getOffers()).isEmpty();
+    verify(tenderRepository, never()).save(any());
+  }
+
+  private Tender addOffer(Long id, LocalDate deliveryDate) {
+    return tenderService.addOffer(
+        id,
+        "Acme Logistics",
+        new BigDecimal("1234.56"),
+        deliveryDate,
+        LocalDate.of(2026, 10, 30),
+        null);
   }
 }

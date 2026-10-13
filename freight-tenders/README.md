@@ -30,10 +30,10 @@ gone on restart.
 | `GET /api/tenders/{id}` | Returns one tender with its remarks and offers | `200` |
 | `POST /api/tenders/{id}/close` | Closes the tender | `200` |
 | `POST /api/tenders/{id}/remarks` | Adds a remark (`text`) | `201` |
-| `POST /api/tenders/{id}/offers` | Adds an offer (`supplierName`, `amount`) | `201` |
+| `POST /api/tenders/{id}/offers` | Adds an offer (`supplierName` up to 100 characters, `amount`, `deliveryDate`, `validUntil` today or later, optional `note` up to 500 characters; a blank `note` is stored as `null`); rejected with `409` after the tender's `bidDeadline` has passed and with `400` if `deliveryDate` is before the tender's `pickupDate` | `201` |
 | `GET /api/health` | Liveness check, `{"status":"UP"}` | `200` |
 
-The three `POST` endpoints that take a body (create tender, add remark, add offer) return `400` with `{error, message, path, timestamp, violations}` on invalid input (blank `origin`/`destination`/`text`/`supplierName`, or a missing or non-positive `amount` below `0.01`); `violations` lists each offending `field` with a `message`. Other errors use the same shape without `violations`: `404` for an unknown tender and `409` for a closed tender. Validation runs first, so an invalid request to a closed tender returns `400`, not `409`.
+The three `POST` endpoints that take a body (create tender, add remark, add offer) return `400` with `{error, message, path, timestamp, violations}` on invalid input (blank `origin`/`destination`/`text`/`supplierName`, a missing or non-positive `amount` below `0.01`, a missing `deliveryDate` or `validUntil`, a `validUntil` in the past, or a `note` over 500 characters; an offer whose `deliveryDate` is before the tender's `pickupDate` is also a `400`, with a `violations` entry for `deliveryDate`); `violations` lists each offending `field` with a `message`. Other errors use the same shape without `violations`: `404` for an unknown tender and `409` for a closed tender and `409` for an offer added after the tender's bid deadline (remarks stay allowed; a closed tender reports the closed error first). Validation runs first, so an invalid request to a closed tender returns `400`, not `409`.
 
 ```bash
 cd backend

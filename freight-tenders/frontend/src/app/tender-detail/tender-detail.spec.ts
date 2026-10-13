@@ -4,7 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { TenderDetail as TenderDetailModel } from '../tender-api';
-import { tenderDetail, tenderSummary } from '../tender-test-data';
+import { offerSummary, tenderDetail, tenderSummary } from '../tender-test-data';
 import { formatDate, localToday } from '../tender-format';
 import { TenderDetail } from './tender-detail';
 
@@ -13,7 +13,7 @@ const BERLIN = { country: 'DE', postalCode: '10115', city: 'Berlin' };
 const OPEN_TENDER: TenderDetailModel = tenderDetail({
   destination: BERLIN,
   remarks: [{ id: 10, text: 'Bestehende Bemerkung' }],
-  offers: [{ id: 20, supplierName: 'Spedition Muster', amount: 500 }],
+  offers: [offerSummary({ id: 20, supplierName: 'Spedition Muster', amount: 500 })],
 });
 
 const CLOSED_TENDER: TenderDetailModel = {
@@ -28,9 +28,9 @@ const SORTABLE_TENDER: TenderDetailModel = tenderDetail({
     { id: 12, text: 'Zoll beachten' },
   ],
   offers: [
-    { id: 20, supplierName: 'Spedition Muster', amount: 980 },
-    { id: 21, supplierName: 'Acme Logistics', amount: 1234.56 },
-    { id: 22, supplierName: 'Nordfracht', amount: 99 },
+    offerSummary({ id: 20, supplierName: 'Spedition Muster', amount: 980 }),
+    offerSummary({ id: 21, supplierName: 'Acme Logistics', amount: 1234.56 }),
+    offerSummary({ id: 22, supplierName: 'Nordfracht', amount: 99 }),
   ],
 });
 
@@ -82,6 +82,11 @@ describe('TenderDetail', () => {
     input.value = value;
     input.dispatchEvent(new Event('input'));
     harness.detectChanges();
+  }
+
+  function fillOfferTerms(element: HTMLElement): void {
+    fill(element, 'offer-delivery-date-input', '2099-10-21');
+    fill(element, 'offer-valid-until-input', '2099-10-30');
   }
 
   function submitFormOf(element: HTMLElement, testId: string): void {
@@ -233,6 +238,9 @@ describe('TenderDetail', () => {
     amountInput.value = '750';
     amountInput.dispatchEvent(new Event('input'));
     harness.detectChanges();
+    fill(element, 'offer-delivery-date-input', '2099-10-21');
+    fill(element, 'offer-valid-until-input', '2099-10-30');
+    fill(element, 'offer-note-input', 'Inkl. Maut');
 
     element
       .querySelector('[data-testid="offer-supplier-input"]')!
@@ -240,8 +248,14 @@ describe('TenderDetail', () => {
       .dispatchEvent(new Event('submit'));
 
     const offerReq = httpMock.expectOne('/api/tenders/1/offers');
-    expect(offerReq.request.body).toEqual({ supplierName: 'Neuer Anbieter', amount: 750 });
-    offerReq.flush({ id: 21, supplierName: 'Neuer Anbieter', amount: 750 });
+    expect(offerReq.request.body).toEqual({
+      supplierName: 'Neuer Anbieter',
+      amount: 750,
+      deliveryDate: '2099-10-21',
+      validUntil: '2099-10-30',
+      note: 'Inkl. Maut',
+    });
+    offerReq.flush(offerSummary({ id: 21, supplierName: 'Neuer Anbieter', amount: 750 }));
     harness.detectChanges();
 
     expect(element.querySelector('[data-testid="offers"]')?.textContent).toContain(
@@ -431,7 +445,7 @@ describe('TenderDetail', () => {
     expect(element.querySelector('[data-testid="remarks"]')?.contains(remarksEmpty ?? null)).toBe(
       true,
     );
-    expect(offersEmpty?.getAttribute('colspan')).toBe('2');
+    expect(offersEmpty?.getAttribute('colspan')).toBe('5');
     expect(offersEmpty?.textContent).toContain('Keine Angebote vorhanden.');
   });
 
@@ -448,10 +462,11 @@ describe('TenderDetail', () => {
 
     fill(element, 'offer-supplier-input', 'Neuer Anbieter');
     fill(element, 'offer-amount-input', '500');
+    fillOfferTerms(element);
     submitFormOf(element, 'offer-supplier-input');
     httpMock
       .expectOne('/api/tenders/1/offers')
-      .flush({ id: 23, supplierName: 'Neuer Anbieter', amount: 500 });
+      .flush(offerSummary({ id: 23, supplierName: 'Neuer Anbieter', amount: 500 }));
     harness.detectChanges();
 
     expect(texts(element, 'offer-amount')[0]).toBe('500,00\u00a0€');
@@ -476,10 +491,11 @@ describe('TenderDetail', () => {
 
     fill(element, 'offer-supplier-input', 'Neuer Anbieter');
     fill(element, 'offer-amount-input', '500');
+    fillOfferTerms(element);
     submitFormOf(element, 'offer-supplier-input');
     httpMock
       .expectOne('/api/tenders/1/offers')
-      .flush({ id: 23, supplierName: 'Neuer Anbieter', amount: 500 });
+      .flush(offerSummary({ id: 23, supplierName: 'Neuer Anbieter', amount: 500 }));
     harness.detectChanges();
 
     expect(texts(element, 'offer-amount')).toEqual([
@@ -514,6 +530,7 @@ describe('TenderDetail', () => {
 
     fill(element, 'offer-supplier-input', 'Neuer Anbieter');
     fill(element, 'offer-amount-input', '750');
+    fillOfferTerms(element);
     submitFormOf(element, 'offer-supplier-input');
     httpMock.expectOne('/api/tenders/1/offers').error(new ProgressEvent('error'));
     harness.detectChanges();
@@ -551,6 +568,7 @@ describe('TenderDetail', () => {
 
     fill(element, 'offer-supplier-input', 'Neuer Anbieter');
     fill(element, 'offer-amount-input', '750');
+    fillOfferTerms(element);
     expect(offerSubmit.disabled).toBe(false);
     submitFormOf(element, 'offer-supplier-input');
     expect(offerSubmit.disabled).toBe(true);
@@ -558,7 +576,7 @@ describe('TenderDetail', () => {
 
     httpMock
       .expectOne('/api/tenders/1/offers')
-      .flush({ id: 21, supplierName: 'Neuer Anbieter', amount: 750 });
+      .flush(offerSummary({ id: 21, supplierName: 'Neuer Anbieter', amount: 750 }));
   });
 
   it('places the single closed explanation before both add-forms in DOM order', async () => {
@@ -617,9 +635,9 @@ describe('TenderDetail', () => {
     expect(
       element.querySelector<HTMLButtonElement>('[data-testid="remark-submit"]')!.disabled,
     ).toBe(true);
-    expect(
-      element.querySelector<HTMLButtonElement>('[data-testid="offer-submit"]')!.disabled,
-    ).toBe(true);
+    expect(element.querySelector<HTMLButtonElement>('[data-testid="offer-submit"]')!.disabled).toBe(
+      true,
+    );
     expect(texts(element, 'remarks-row')).toEqual(['Bestehende Bemerkung']);
     expect(texts(element, 'offers-row').length).toBe(1);
   });
@@ -686,8 +704,8 @@ describe('TenderDetail', () => {
       }),
     );
 
-    const cards = ['card-route', 'card-dates', 'card-cargo', 'card-vehicle'].map(
-      (id) => element.querySelector(`[data-testid="${id}"]`)!,
+    const cards = ['card-route', 'card-dates', 'card-cargo', 'card-vehicle'].map((id) =>
+      element.querySelector(`[data-testid="${id}"]`)!,
     );
     expect(cards.every((card) => card !== null)).toBe(true);
     expect(isBefore(cards[0], cards[1])).toBe(true);
@@ -753,7 +771,7 @@ describe('TenderDetail', () => {
     const element = await render(
       tenderDetail({
         currency: 'CHF',
-        offers: [{ id: 20, supplierName: 'Spedition Muster', amount: 500 }],
+        offers: [offerSummary({ id: 20, supplierName: 'Spedition Muster', amount: 500 })],
       }),
     );
 
@@ -763,6 +781,154 @@ describe('TenderDetail', () => {
     expect(element.querySelector('label[for="offer-amount"]')?.textContent).toContain(
       'Betrag (CHF)',
     );
+  });
+
+  it('renders five offer columns, with Hinweis not sortable', async () => {
+    const element = await render(SORTABLE_TENDER);
+
+    const headers = Array.from(element.querySelectorAll('[data-testid="offers"] thead th'), (th) =>
+      th.textContent?.trim().replace(/\s+/g, ' '),
+    );
+    expect(headers).toEqual(['Anbieter', 'Betrag (EUR)', 'Zustellung', 'Gültig bis', 'Hinweis']);
+    expect(element.querySelector('[data-testid="offers-sort-note"]')).toBeNull();
+  });
+
+  it('sorts offers by delivery date and validity date in both directions', async () => {
+    const element = await render(
+      tenderDetail({
+        offers: [
+          offerSummary({ id: 20, deliveryDate: '2099-10-22', validUntil: '2099-11-01' }),
+          offerSummary({ id: 21, deliveryDate: '2099-10-20', validUntil: '2099-12-01' }),
+          offerSummary({ id: 22, deliveryDate: '2099-10-21', validUntil: '2099-10-15' }),
+        ],
+      }),
+    );
+
+    sortBy(element, 'offers', 'deliveryDate');
+    expect(texts(element, 'offer-delivery-date')).toEqual([
+      '20.10.2099',
+      '21.10.2099',
+      '22.10.2099',
+    ]);
+    sortBy(element, 'offers', 'deliveryDate');
+    expect(texts(element, 'offer-delivery-date')).toEqual([
+      '22.10.2099',
+      '21.10.2099',
+      '20.10.2099',
+    ]);
+
+    sortBy(element, 'offers', 'validUntil');
+    expect(texts(element, 'offer-valid-until')).toEqual(['15.10.2099', '01.11.2099', '01.12.2099']);
+    sortBy(element, 'offers', 'validUntil');
+    expect(texts(element, 'offer-valid-until')).toEqual(['01.12.2099', '01.11.2099', '15.10.2099']);
+  });
+
+  it('shows the late-delivery and expired hints only where they apply', async () => {
+    const element = await render(
+      tenderDetail({
+        deliveryDate: '2099-10-22',
+        offers: [
+          offerSummary({ id: 20, deliveryDate: '2099-10-23', validUntil: '2000-01-01' }),
+          offerSummary({ id: 21, deliveryDate: '2099-10-22', validUntil: localToday() }),
+        ],
+      }),
+    );
+
+    const rows = Array.from(element.querySelectorAll('[data-testid="offers-row"]'));
+    // Newest first: id 21 is the first row, id 20 the second.
+    expect(rows[0].querySelector('[data-testid="offer-delivery-hint"]')).toBeNull();
+    expect(rows[0].querySelector('[data-testid="offer-expired-hint"]')).toBeNull();
+    expect(rows[1].querySelector('[data-testid="offer-delivery-hint"]')?.textContent).toContain(
+      'nach Wunschtermin',
+    );
+    expect(rows[1].querySelector('[data-testid="offer-expired-hint"]')?.textContent).toContain(
+      'abgelaufen',
+    );
+  });
+
+  it('shows the note of an offer', async () => {
+    const element = await render(tenderDetail({ offers: [offerSummary({ note: 'Inkl. Maut' })] }));
+
+    expect(text(element, 'offer-note')).toBe('Inkl. Maut');
+  });
+
+  it('shows German errors under invalid touched offer fields', async () => {
+    const element = await render(OPEN_TENDER);
+
+    fill(element, 'offer-supplier-input', 'x'.repeat(101));
+    fill(element, 'offer-delivery-date-input', '2099-10-19');
+    fill(element, 'offer-valid-until-input', '2000-01-01');
+    fill(element, 'offer-note-input', 'n'.repeat(501));
+    for (const id of [
+      'offer-supplier-input',
+      'offer-amount-input',
+      'offer-delivery-date-input',
+      'offer-valid-until-input',
+      'offer-note-input',
+    ]) {
+      element.querySelector(`[data-testid="${id}"]`)!.dispatchEvent(new Event('blur'));
+    }
+    harness.detectChanges();
+
+    expect(text(element, 'offer-supplierName-error')).toContain('100 Zeichen');
+    expect(text(element, 'offer-amount-error')).toContain('Betrag');
+    expect(text(element, 'offer-deliveryDate-error')).toContain('nicht vor der Abholung');
+    expect(text(element, 'offer-validUntil-error')).toContain('Vergangenheit');
+    expect(text(element, 'offer-note-error')).toContain('500 Zeichen');
+    expect(element.querySelector<HTMLButtonElement>('[data-testid="offer-submit"]')?.disabled).toBe(
+      true,
+    );
+  });
+
+  it('disables the offer form with a notice when the bid deadline has passed, keeping remarks enabled', async () => {
+    const element = await render(tenderDetail({ bidDeadline: '2000-01-01' }));
+
+    expect(text(element, 'deadline-passed-notice')).toContain('Angebotsfrist');
+    expect(element.querySelector('[data-testid="closed-explanation"]')).toBeNull();
+    for (const id of [
+      'offer-supplier-input',
+      'offer-amount-input',
+      'offer-delivery-date-input',
+      'offer-valid-until-input',
+      'offer-note-input',
+      'offer-submit',
+    ]) {
+      expect(element.querySelector<HTMLInputElement>(`[data-testid="${id}"]`)?.disabled).toBe(true);
+    }
+    expect(element.querySelector<HTMLInputElement>('[data-testid="remark-input"]')?.disabled).toBe(
+      false,
+    );
+  });
+
+  it('shows only the closed explanation for a closed tender past its deadline', async () => {
+    const element = await render({
+      ...tenderDetail({ bidDeadline: '2000-01-01' }),
+      status: 'CLOSED',
+    });
+
+    expect(element.querySelector('[data-testid="closed-explanation"]')).not.toBeNull();
+    expect(element.querySelector('[data-testid="deadline-passed-notice"]')).toBeNull();
+  });
+
+  it('keeps the entered values and shows the offer error when saving fails with 409', async () => {
+    const element = await render(OPEN_TENDER);
+    fill(element, 'offer-supplier-input', 'Neuer Anbieter');
+    fill(element, 'offer-amount-input', '750');
+    fillOfferTerms(element);
+    submitFormOf(element, 'offer-supplier-input');
+
+    httpMock
+      .expectOne('/api/tenders/1/offers')
+      .flush('deadline', { status: 409, statusText: 'Conflict' });
+    harness.detectChanges();
+
+    expect(text(element, 'offer-error')).toContain('konnte nicht gespeichert werden');
+    expect(
+      element.querySelector<HTMLInputElement>('[data-testid="offer-supplier-input"]')?.value,
+    ).toBe('Neuer Anbieter');
+    expect(
+      element.querySelector<HTMLInputElement>('[data-testid="offer-valid-until-input"]')?.value,
+    ).toBe('2099-10-30');
   });
 
   it('shows no summary line or data cards while loading', async () => {
