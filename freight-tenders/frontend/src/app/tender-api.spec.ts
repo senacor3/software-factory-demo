@@ -51,6 +51,18 @@ describe('TenderApiService', () => {
     expect(result).toEqual(summary);
   });
 
+  it('calls POST /api/tenders/{id}/offers/{offerId}/award and emits the returned detail', () => {
+    let result: unknown;
+    service.awardTender(5, 7).subscribe((detail) => (result = detail));
+
+    const req = httpMock.expectOne('/api/tenders/5/offers/7/award');
+    expect(req.request.method).toBe('POST');
+    const detail = tenderDetail({ id: 5, status: 'AWARDED', awardedOfferId: 7 });
+    req.flush(detail);
+
+    expect(result).toEqual(detail);
+  });
+
   it('calls POST /api/tenders with the full typed request object', () => {
     const request: CreateTenderRequest = {
       origin: { country: 'DE', postalCode: '20457', city: 'Hamburg' },

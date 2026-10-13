@@ -10,7 +10,13 @@ import {
   sortRows,
   toggleSort,
 } from '../table-sort';
-import { EQUIPMENT_LABELS, TenderApiService, TenderStatus, TenderSummary } from '../tender-api';
+import {
+  EQUIPMENT_LABELS,
+  STATUS_LABELS,
+  TenderApiService,
+  TenderStatus,
+  TenderSummary,
+} from '../tender-api';
 import {
   cargoHint,
   deadlineHint,
@@ -29,7 +35,15 @@ const LOAD_ERROR_MESSAGE =
 const SORT_ACCESSORS: SortAccessors<TenderSummary> = {
   origin: (tender) => tender.origin.city,
   destination: (tender) => tender.destination.city,
+  status: (tender) => STATUS_LABELS[tender.status],
 };
+
+interface Column {
+  key: keyof TenderSummary;
+  label: string;
+  sortable: boolean;
+  numeric?: boolean;
+}
 
 @Component({
   selector: 'app-tender-overview',
@@ -61,12 +75,7 @@ export class TenderOverview implements OnInit {
   }
 
   // Ladung sorts by weightKg and Angebote by offerCount; Fahrzeug is the one plain header.
-  protected readonly columns: {
-    key: keyof TenderSummary;
-    label: string;
-    sortable: boolean;
-    numeric?: boolean;
-  }[] = [
+  protected readonly columns: Column[] = [
     { key: 'origin', label: 'Von', sortable: true },
     { key: 'destination', label: 'Nach', sortable: true },
     { key: 'pickupDate', label: 'Abholung', sortable: true },
@@ -76,18 +85,29 @@ export class TenderOverview implements OnInit {
     { key: 'offerCount', label: 'Angebote', sortable: true, numeric: true },
   ];
 
+  protected readonly statusLabels = STATUS_LABELS;
+
+  // The finished tenders table additionally tells awarded from closed ones apart.
+  private readonly statusColumn: Column = {
+    key: 'status',
+    label: 'Status',
+    sortable: true,
+  };
+
   protected readonly tables = [
     this.tenderTable(
       'open-tenders',
-      'OPEN',
+      ['OPEN'],
       'Offene Ausschreibungen',
       'Keine offenen Ausschreibungen vorhanden.',
+      this.columns,
     ),
     this.tenderTable(
       'closed-tenders',
-      'CLOSED',
-      'Geschlossene Ausschreibungen',
-      'Keine geschlossenen Ausschreibungen vorhanden.',
+      ['AWARDED', 'CLOSED'],
+      'Abgeschlossene Ausschreibungen',
+      'Keine abgeschlossenen Ausschreibungen vorhanden.',
+      [...this.columns, this.statusColumn],
     ),
   ];
 
@@ -133,16 +153,22 @@ export class TenderOverview implements OnInit {
   }
 
   // Each table keeps its own sort state, so sorting one never reorders the other.
-  private tenderTable(testId: string, status: TenderStatus, heading: string, emptyMessage: string) {
+  private tenderTable(
+    testId: string,
+    statuses: TenderStatus[],
+    heading: string,
+    emptyMessage: string,
+    columns: Column[],
+  ) {
     const sort = signal<SortState<TenderSummary>>(UNSORTED);
     const rows = computed(() =>
       sortRows(
-        this.tenders().filter((tender) => tender.status === status),
+        this.tenders().filter((tender) => statuses.includes(tender.status)),
         sort(),
         SORT_ACCESSORS,
       ),
     );
 
-    return { testId, heading, emptyMessage, sort, rows };
+    return { testId, heading, emptyMessage, columns, sort, rows };
   }
 }

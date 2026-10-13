@@ -36,6 +36,8 @@ export function tenderSummary(overrides: Partial<TenderSummary> = {}): TenderSum
     status: 'OPEN',
     offerCount: 0,
     lowestOfferAmount: null,
+    awardedSupplierName: null,
+    awardedAmount: null,
     ...overrides,
   };
 }
@@ -44,5 +46,7 @@ export function tenderDetail(overrides: Partial<TenderDetail> = {}): TenderDetai
   const summary: Partial<TenderSummary> = tenderSummary();
   delete summary.offerCount;
   delete summary.lowestOfferAmount;
-  return { ...summary, remarks: [], offers: [], ...overrides } as TenderDetail;
+  delete summary.awardedSupplierName;
+  delete summary.awardedAmount;
+  return { ...summary, awardedOfferId: null, remarks: [], offers: [], ...overrides } as TenderDetail;
 }

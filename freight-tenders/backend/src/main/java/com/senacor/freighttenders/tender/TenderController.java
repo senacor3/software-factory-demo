@@ -37,6 +37,11 @@ public class TenderController {
     return TenderResponse.from(tender);
   }
 
+  @PostMapping("/{id}/offers/{offerId}/award")
+  public TenderDetailResponse awardTender(@PathVariable Long id, @PathVariable Long offerId) {
+    return TenderDetailResponse.from(tenderService.awardTender(id, offerId));
+  }
+
   @GetMapping("")
   public List<TenderResponse> listTenders(@RequestParam(required = false) TenderStatus status) {
     return tenderService.listTenders(Optional.ofNullable(status)).stream()

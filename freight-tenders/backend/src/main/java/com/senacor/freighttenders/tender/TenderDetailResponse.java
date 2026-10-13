@@ -27,6 +27,7 @@ public record TenderDetailResponse(
     Integer temperatureMaxC,
     Currency currency,
     TenderStatus status,
+    Long awardedOfferId,
     List<RemarkResponse> remarks,
     List<OfferResponse> offers) {
 
@@ -57,6 +58,7 @@ public record TenderDetailResponse(
         tender.getTemperatureMaxC(),
         tender.getCurrency(),
         tender.getStatus(),
+        tender.getAwardedOffer() == null ? null : tender.getAwardedOffer().getId(),
         tender.getRemarks().stream().map(RemarkResponse::from).toList(),
         tender.getOffers().stream().map(OfferResponse::from).toList());
   }

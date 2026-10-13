@@ -11,6 +11,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -84,6 +85,8 @@ public class Tender {
 
   @Enumerated(EnumType.STRING)
   private TenderStatus status = TenderStatus.OPEN;
+
+  @ManyToOne private Offer awardedOffer;
 
   @OneToMany(mappedBy = "tender", cascade = CascadeType.ALL, orphanRemoval = true)
   private List<Remark> remarks = new ArrayList<>();
@@ -202,6 +205,10 @@ public class Tender {
     return status;
   }
 
+  public Offer getAwardedOffer() {
+    return awardedOffer;
+  }
+
   public List<Remark> getRemarks() {
     return Collections.unmodifiableList(remarks);
   }
@@ -222,5 +229,10 @@ public class Tender {
 
   public void close() {
     status = TenderStatus.CLOSED;
+  }
+
+  public void award(Offer offer) {
+    awardedOffer = offer;
+    status = TenderStatus.AWARDED;
   }
 }

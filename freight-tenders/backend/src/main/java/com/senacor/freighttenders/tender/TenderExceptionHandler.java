@@ -27,6 +27,20 @@ public class TenderExceptionHandler {
         .body(ErrorResponse.of(HttpStatus.CONFLICT, exception.getMessage(), request));
   }
 
+  @ExceptionHandler(OfferExpiredException.class)
+  public ResponseEntity<ErrorResponse> handleOfferExpired(
+      OfferExpiredException exception, HttpServletRequest request) {
+    return ResponseEntity.status(HttpStatus.CONFLICT)
+        .body(ErrorResponse.of(HttpStatus.CONFLICT, exception.getMessage(), request));
+  }
+
+  @ExceptionHandler(OfferNotFoundException.class)
+  public ResponseEntity<ErrorResponse> handleOfferNotFound(
+      OfferNotFoundException exception, HttpServletRequest request) {
+    return ResponseEntity.status(HttpStatus.NOT_FOUND)
+        .body(ErrorResponse.of(HttpStatus.NOT_FOUND, exception.getMessage(), request));
+  }
+
   @ExceptionHandler(BidDeadlinePassedException.class)
   public ResponseEntity<ErrorResponse> handleBidDeadlinePassed(
       BidDeadlinePassedException exception, HttpServletRequest request) {

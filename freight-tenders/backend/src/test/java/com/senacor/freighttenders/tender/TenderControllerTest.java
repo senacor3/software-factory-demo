@@ -110,6 +110,71 @@ class TenderControllerTest {
   }
 
   @Test
+  void awardTenderReturns200WithAwardedOfferId() throws Exception {
+    Tender tender = TenderFixtures.tender();
+    Offer offer = TenderFixtures.offer("Acme", new BigDecimal("100.00"));
+    ReflectionTestUtils.setField(offer, "id", 10L);
+    tender.addOffer(offer);
+    tender.award(offer);
+    given(tenderService.awardTender(1L, 10L)).willReturn(tender);
+
+    mockMvc
+        .perform(post("/api/tenders/{id}/offers/{offerId}/award", 1L, 10L))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("AWARDED"))
+        .andExpect(jsonPath("$.awardedOfferId").value(10));
+  }
+
+  @Test
+  void awardTenderMapsNotFoundAndConflictToErrorShape() throws Exception {
+    given(tenderService.awardTender(99L, 10L)).willThrow(new TenderNotFoundException(99L));
+    given(tenderService.awardTender(1L, 99L)).willThrow(new OfferNotFoundException(1L, 99L));
+    given(tenderService.awardTender(2L, 10L)).willThrow(new TenderClosedException(2L));
+    given(tenderService.awardTender(3L, 10L)).willThrow(new OfferExpiredException(10L));
+
+    mockMvc
+        .perform(post("/api/tenders/{id}/offers/{offerId}/award", 99L, 10L))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.error").value("Not Found"))
+        .andExpect(jsonPath("$.violations").doesNotExist());
+    mockMvc
+        .perform(post("/api/tenders/{id}/offers/{offerId}/award", 1L, 99L))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.path").value("/api/tenders/1/offers/99/award"));
+    mockMvc
+        .perform(post("/api/tenders/{id}/offers/{offerId}/award", 2L, 10L))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.error").value("Conflict"));
+    mockMvc
+        .perform(post("/api/tenders/{id}/offers/{offerId}/award", 3L, 10L))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.message").exists());
+  }
+
+  @Test
+  void listTendersFilteredByAwardedCarriesAwardedSupplierAndAmount() throws Exception {
+    Tender awarded = TenderFixtures.tender();
+    Offer offer = TenderFixtures.offer("Acme", new BigDecimal("100.00"));
+    awarded.addOffer(offer);
+    awarded.award(offer);
+    Tender open = TenderFixtures.tender("Berlin", "Munich");
+    given(tenderService.listTenders(Optional.of(TenderStatus.AWARDED)))
+        .willReturn(List.of(awarded));
+    given(tenderService.listTenders(Optional.empty())).willReturn(List.of(awarded, open));
+
+    mockMvc
+        .perform(get("/api/tenders").param("status", "AWARDED"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].status").value("AWARDED"))
+        .andExpect(jsonPath("$[0].awardedSupplierName").value("Acme"))
+        .andExpect(jsonPath("$[0].awardedAmount").value(100.00));
+    mockMvc
+        .perform(get("/api/tenders"))
+        .andExpect(jsonPath("$[1].awardedSupplierName").doesNotExist())
+        .andExpect(jsonPath("$[1].awardedAmount").doesNotExist());
+  }
+
+  @Test
   void listTendersFilteredByStatusReturnsOnlyOpenTenders() throws Exception {
     Tender openTender = TenderFixtures.tender();
     ReflectionTestUtils.setField(openTender, "id", 1L);
