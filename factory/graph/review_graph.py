@@ -5,7 +5,7 @@
 # ///
 """review_graph -- the review job's independent review stage (CAP-6 independent agent review).
 
-Invokes the read-only `.claude/skills/light-factory-review/` skill via the `claude`
+Invokes the read-only `.claude/skills/software-factory-review/` skill via the `claude`
 CLI, parses its schema-validated structured output, and writes the one outcome the
 I/O & Edge-Case Matrix defines (see
 story-independent-review-agent-plan.md):
@@ -61,7 +61,7 @@ def _build_command(plan_path: str, decisions_path: str, schema_text: str, claude
     return [
         claude_bin,
         "-p",
-        f"/light-factory-review {plan_path} {decisions_path}",
+        f"/software-factory-review {plan_path} {decisions_path}",
         "--output-format",
         "json",
         "--json-schema",

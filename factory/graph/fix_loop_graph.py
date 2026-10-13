@@ -7,7 +7,7 @@
 
 Orchestrates: review (ticket 9's `review_graph.run_review`, unchanged) -> while
 findings remain and the cycle count is under 2 -> re-engage the *same*
-`light-factory-implementation` skill (via its optional `review_path` argument, ticket
+`software-factory-implementation` skill (via its optional `review_path` argument, ticket
 7) with the review findings as added context, re-run only `build`/`test` (`lint` and
 `security` are not re-run inside a fix cycle), then review again.
 

@@ -15,7 +15,7 @@ Case Matrix). CAP-8's "drillable diff" is satisfied by pointing at the PR's own 
 changed tab -- this never inlines the diff.
 
 Finds the PR via `open_implementation_pr.find_open_pr` (same branch-name formula every
-other stage uses: `light-factory/<story-slug>/<run-id>`). Any failure to find the PR or
+other stage uses: `software-factory/<story-slug>/<run-id>`). Any failure to find the PR or
 post the comment raises `EvidenceSummaryError`, distinguishable from a legitimate summary.
 """
 
@@ -106,7 +106,7 @@ def post_evidence_summary(
 
     body = _render_summary(checks, review_meta, findings)
 
-    branch = f"light-factory/{story_slug}/{run_id}"
+    branch = f"software-factory/{story_slug}/{run_id}"
     try:
         pr = open_implementation_pr.find_open_pr(branch, cwd=cwd)
     except open_implementation_pr.PROpenError as e:

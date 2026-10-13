@@ -5,7 +5,7 @@
 # ///
 """analysis_graph -- the analysis job's stage (CAP-1 intake judgment, CAP-2 solution proposal).
 
-Invokes the read-only `.claude/skills/light-factory-analysis/` skill via the `claude` CLI,
+Invokes the read-only `.claude/skills/software-factory-analysis/` skill via the `claude` CLI,
 parses its schema-validated structured output, and routes to one of three outcomes (see
 story-job-1-intake-analysis-plan.md's I/O & Edge-Case Matrix):
 
@@ -116,7 +116,7 @@ def _build_command(story_file: str, schema_text: str, claude_bin: str) -> list[s
     return [
         claude_bin,
         "-p",
-        f"/light-factory-analysis {story_file}",
+        f"/software-factory-analysis {story_file}",
         "--output-format",
         "json",
         "--json-schema",

@@ -77,9 +77,9 @@ def commit_and_push(
         [
             "git",
             "-c",
-            "user.name=light-factory-bot",
+            "user.name=software-factory-bot",
             "-c",
-            "user.email=light-factory-bot@users.noreply.github.com",
+            "user.email=software-factory-bot@users.noreply.github.com",
             "commit",
             "-m",
             f"{label}: {story_slug} ({run_id})",
@@ -104,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = p.parse_args(argv)
 
-    branch = f"light-factory/{args.story_slug}/{args.run_id}"
+    branch = f"software-factory/{args.story_slug}/{args.run_id}"
     try:
         result = commit_and_push(branch, args.story_slug, args.run_id, label=args.label)
     except CommitPushError as e:

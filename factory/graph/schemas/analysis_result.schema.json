@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "LightFactoryAnalysisResult",
-  "description": "Structured verdict from the light-factory-analysis skill (CAP-1 intake judgment, CAP-2 solution proposal). Parsed by factory/graph/analysis_graph.py from the claude CLI's --json-schema structured_output.",
+  "title": "SoftwareFactoryAnalysisResult",
+  "description": "Structured verdict from the software-factory-analysis skill (CAP-1 intake judgment, CAP-2 solution proposal). Parsed by factory/graph/analysis_graph.py from the claude CLI's --json-schema structured_output.",
   "type": "object",
   "additionalProperties": false,
   "properties": {

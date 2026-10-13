@@ -38,7 +38,7 @@ def _fail(stderr="boom"):
 
 
 def _open_pr(pr_number=9, pr_url="https://github.com/org/repo/pull/9"):
-    return {"branch": "light-factory/foo-bar/run-42", "pr_number": pr_number, "pr_url": pr_url}
+    return {"branch": "software-factory/foo-bar/run-42", "pr_number": pr_number, "pr_url": pr_url}
 
 
 def _review(state, environment, comment="", login="octo-reviewer"):
@@ -81,7 +81,7 @@ def test_reject_at_plan_approval_closes_pr():
     assert mock_run.call_args_list[0].args[0] == [
         "gh", "api", "repos/{owner}/{repo}/actions/runs/42/approvals",
     ]
-    find_pr.assert_called_once_with("light-factory/foo-bar/run-42", cwd=None)
+    find_pr.assert_called_once_with("software-factory/foo-bar/run-42", cwd=None)
     (close,) = _close_calls(mock_run)
     assert close[:5] == ["gh", "pr", "close", "9", "--comment"]
     assert "`plan-approval`" in close[5]

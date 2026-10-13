@@ -42,10 +42,10 @@ def test_checkout_fetches_and_checks_out_the_exact_branch_name():
     with patch("checkout_branch.subprocess.run", side_effect=fake_run):
         branch = checkout_branch.checkout_branch("foo", "run-1")
 
-    assert branch == "light-factory/foo/run-1"
+    assert branch == "software-factory/foo/run-1"
     assert calls == [
-        ["git", "fetch", "origin", "light-factory/foo/run-1"],
-        ["git", "checkout", "light-factory/foo/run-1"],
+        ["git", "fetch", "origin", "software-factory/foo/run-1"],
+        ["git", "checkout", "software-factory/foo/run-1"],
     ]
 
 
@@ -81,7 +81,7 @@ def test_checkout_forwards_cwd():
 def test_fetch_failure_raises_checkout_error():
     def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
         if cmd[:2] == ["git", "fetch"]:
-            return _fail(stderr="fatal: couldn't find remote ref light-factory/foo/run-1")
+            return _fail(stderr="fatal: couldn't find remote ref software-factory/foo/run-1")
         raise AssertionError(f"unexpected subprocess call: {cmd}")
 
     with patch("checkout_branch.subprocess.run", side_effect=fake_run):
@@ -118,8 +118,8 @@ def test_cli_checks_out_the_expected_branch_and_exits_zero():
     assert rc == 0
     calls = [c.args[0] for c in mock_run.call_args_list]
     assert calls == [
-        ["git", "fetch", "origin", "light-factory/foo/run-1"],
-        ["git", "checkout", "light-factory/foo/run-1"],
+        ["git", "fetch", "origin", "software-factory/foo/run-1"],
+        ["git", "checkout", "software-factory/foo/run-1"],
     ]
 
 

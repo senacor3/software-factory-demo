@@ -1,7 +1,7 @@
 <!-- bmad:context -->
 <!-- Verified 2026-10-12 against 8d61d21. Managed by bmad-project-context; edits inside this block are replaced on refresh. Keep anything you want preserved outside the markers. -->
 
-## light-factory
+## software-factory
 
 A gated pipeline that proves AI-agent-generated code quality mechanically — build, test, lint, security, and an independent agent review. `factory/graph/` holds the LangGraph orchestration stages (judgment work only); `factory/scripts/` holds the deterministic steps they call out to. `freight-tenders/` is the demo app the pipeline is proven against — it has its own AGENTS.md split by sub-project (see below). Planning docs live under `_bmad-output/<initiative>/`.
 
@@ -12,7 +12,7 @@ A gated pipeline that proves AI-agent-generated code quality mechanically — bu
 
 ## Where things are
 
-- Pipeline workflow: `.github/workflows/light-factory.yml` (the six-job pipeline); per-repo mechanical-check commands and toolchain versions: `.github/post-implementation-checks.yml` (CAP-5/AD-6).
+- Pipeline workflow: `.github/workflows/software-factory.yml` (the six-job pipeline); per-repo mechanical-check commands and toolchain versions: `.github/post-implementation-checks.yml` (CAP-5/AD-6).
 - Demo app, backend: `freight-tenders/backend/AGENTS.md`
 - Demo app, frontend: `freight-tenders/frontend/AGENTS.md`
 

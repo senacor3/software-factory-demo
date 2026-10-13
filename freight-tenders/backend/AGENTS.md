@@ -3,7 +3,7 @@
 
 ## freight-tenders backend
 
-Spring Boot 4.1.1 / Java 25 REST API for the freight tender domain (`src/main/java/com/senacor/freighttenders/`). Independent of light-factory's own Python tooling and of the frontend's build — built/tested/linted via Maven only.
+Spring Boot 4.1.1 / Java 25 REST API for the freight tender domain (`src/main/java/com/senacor/freighttenders/`). Independent of software-factory's own Python tooling and of the frontend's build — built/tested/linted via Maven only.
 
 ## Policy
 

@@ -9,11 +9,11 @@ currency offers are quoted in -- that is open, awarded or closed; while it is op
 offers can be recorded against it, and one offer can be awarded the contract. The frontend lists the tenders, creates new
 ones, and shows one tender with its remarks and offers.
 
-This directory is independent of light-factory's own Python tooling: nothing
+This directory is independent of software-factory's own Python tooling: nothing
 here is built, tested, or linted with `uv`/pytest/ruff. It has its own CI
 workflow, `.github/workflows/freight-tenders.yml`, running on every push/PR
-touching `freight-tenders/**`. light-factory's own pipeline
-(`.github/workflows/light-factory.yml`) also builds/tests/lints this app as
+touching `freight-tenders/**`. software-factory's own pipeline
+(`.github/workflows/software-factory.yml`) also builds/tests/lints this app as
 part of its `checks` job, via commands named in
 `.github/post-implementation-checks.yml` — so a dispatched story touching
 `freight-tenders/` is checked by both.

@@ -7,7 +7,7 @@ never an agent action.
 
 Triggered automatically once the `evidence-approval` gate is approved. Finds the PR via
 `open_implementation_pr.find_open_pr` (same branch-name formula every other stage uses:
-`light-factory/<story-slug>/<run-id>`) and runs `gh pr merge --squash --delete-branch`
+`software-factory/<story-slug>/<run-id>`) and runs `gh pr merge --squash --delete-branch`
 (user's call, 2026-10-02).
 
 Merge-conflict auto-resolution is explicitly out of scope (the spec's own open
@@ -57,7 +57,7 @@ def merge_story(
     """Find the PR and squash-merge it with branch deletion. Returns `{"pr": dict}`.
     Raises MergeError if no open PR is found or the merge itself fails (conflict or
     other `gh` failure)."""
-    branch = f"light-factory/{story_slug}/{run_id}"
+    branch = f"software-factory/{story_slug}/{run_id}"
 
     try:
         pr = open_implementation_pr.find_open_pr(branch, cwd=cwd)

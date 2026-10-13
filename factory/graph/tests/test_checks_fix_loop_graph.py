@@ -34,7 +34,7 @@ import commit_push_implementation
 import run_checks
 import state_io
 
-FAKE_BRANCH = "light-factory/foo/run-1"
+FAKE_BRANCH = "software-factory/foo/run-1"
 
 
 def _fake_proc(returncode=0, stdout="", stderr=""):
@@ -42,12 +42,12 @@ def _fake_proc(returncode=0, stdout="", stderr=""):
 
 
 def _dispatcher(impl_result=None):
-    """A `subprocess.run` side_effect routing only `/light-factory-implementation`
-    calls (this graph never invokes `/light-factory-review`)."""
+    """A `subprocess.run` side_effect routing only `/software-factory-implementation`
+    calls (this graph never invokes `/software-factory-review`)."""
 
     def run(cmd, **kwargs):
         prompt = cmd[cmd.index("-p") + 1]
-        if "/light-factory-implementation" in prompt:
+        if "/software-factory-implementation" in prompt:
             if impl_result is None:
                 raise AssertionError("unexpected implementation invocation in this test")
             return impl_result
@@ -112,7 +112,7 @@ def test_one_fix_cycle_resolves_a_single_failing_check(tmp_path):
     mock_run_check.assert_called_once_with("lint", "foo", "run-1", state_base=tmp_path, cwd=None)
 
     # the implementation re-invocation carried checks.md as its added context
-    impl_calls = [c for c in mock_run.call_args_list if "/light-factory-implementation" in c.args[0][2]]
+    impl_calls = [c for c in mock_run.call_args_list if "/software-factory-implementation" in c.args[0][2]]
     assert len(impl_calls) == 1
     assert impl_calls[0].args[0][2].endswith("checks.md")
 
@@ -144,7 +144,7 @@ def test_multiple_simultaneous_failures_counted_as_one_cycle(tmp_path):
 
     assert outcome["status"] == "resolved"
     assert outcome["fix_cycle"] == 1  # one cycle, not two, despite two failing checks
-    impl_calls = [c for c in mock_run.call_args_list if "/light-factory-implementation" in c.args[0][2]]
+    impl_calls = [c for c in mock_run.call_args_list if "/software-factory-implementation" in c.args[0][2]]
     assert len(impl_calls) == 1
     rerun_names = sorted(c.args[0] for c in mock_run_check.call_args_list)
     assert rerun_names == ["build", "lint"]  # only the failing checks are rerun, never the full suite
@@ -177,7 +177,7 @@ def test_two_fix_cycles_still_failing_stops_at_cap(tmp_path):
     assert outcome["status"] == "unresolved-after-cap"
     assert outcome["fix_cycle"] == 2
     assert outcome["failing"] == ["build"]
-    impl_calls = [c for c in mock_run.call_args_list if "/light-factory-implementation" in c.args[0][2]]
+    impl_calls = [c for c in mock_run.call_args_list if "/software-factory-implementation" in c.args[0][2]]
     assert len(impl_calls) == 2  # exactly 2 fix cycles, never a 3rd
 
     meta, body = state_io.read_state(tmp_path / "foo" / "run-1" / "checks.md")
@@ -210,7 +210,7 @@ def test_no_evidence_at_all_still_triggers_a_fix_cycle_against_every_check(tmp_p
 
     assert outcome["status"] == "resolved"
     assert outcome["fix_cycle"] == 1
-    impl_calls = [c for c in mock_run.call_args_list if "/light-factory-implementation" in c.args[0][2]]
+    impl_calls = [c for c in mock_run.call_args_list if "/software-factory-implementation" in c.args[0][2]]
     assert len(impl_calls) == 1
     rerun_names = sorted(c.args[0] for c in mock_run_check.call_args_list)
     assert rerun_names == sorted(run_checks.CHECK_NAMES)  # every check treated as unknown/failing

@@ -11,8 +11,8 @@ Thumbs.db
 
 # Installed BMad skill packages — reconstructable from skills-lock.json
 # (npx skills add bmad-code-org/BMAD-METHOD --skill <name>). Scoped to the bmad/bmod
-# prefixes so it doesn't also swallow .claude/skills/light-factory-*/ — those are
-# light-factory's own pipeline-agent skills (architecture's Namespace mapping), committed
+# prefixes so it doesn't also swallow .claude/skills/software-factory-*/ — those are
+# software-factory's own pipeline-agent skills (architecture's Namespace mapping), committed
 # deliverables, not installed packages.
 .agents/skills/
 .claude/skills/bmad*

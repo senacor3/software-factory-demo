@@ -6,7 +6,7 @@
 
 Once the analysis job's `run_analysis` (factory/graph/analysis_graph.py) decides to proceed (a
 non-halted result), this script -- not the agent -- creates the isolated branch
-(`light-factory/<story-slug>/<run-id>`), commits the analysis stage's own just-written
+(`software-factory/<story-slug>/<run-id>`), commits the analysis stage's own just-written
 `plan.md`/`decisions.md` as the branch's first real commit, and opens a PR against the
 target branch. Mirrors `state_io.py`'s "script writes, not agent" precedent (AD-5).
 
@@ -15,7 +15,7 @@ returned instead of recreating anything -- a same-run-id job re-run calls
 `run_analysis` again and must not fail or duplicate work against an already-open PR.
 
 Supersession (AD-15): once this run's PR exists, every *other* open PR whose head branch
-starts with `light-factory/<story-slug>/` is closed with a "Superseded by #N" comment and
+starts with `software-factory/<story-slug>/` is closed with a "Superseded by #N" comment and
 the new PR gets one "Retry of #M" comment (see `supersede_prior_prs`). Only the PR closes
 -- branches and state directories stay. This runs on the idempotent-reuse path too, so a
 same-run-id re-run finishes a supersession its first attempt left incomplete. An at-cap PR
@@ -84,7 +84,7 @@ def count_clarification_rounds(
     (open or closed) -- AD-13's cap must stay correct even when an at-cap PR is left open,
     so counting only closed PRs would let the cap silently reset.
 
-    Excludes `run_id`'s own branch (`light-factory/<story_slug>/<run_id>`): this is called
+    Excludes `run_id`'s own branch (`software-factory/<story_slug>/<run_id>`): this is called
     before this run's own PR exists, but a same-run-id retry after a partial failure (e.g.
     `label_clarification_round` already labeled this run's own PR, then a later step
     failed) must not double-count that already-labeled PR as a *prior* round.
@@ -92,7 +92,7 @@ def count_clarification_rounds(
     `gh pr list --head` only matches one exact branch name (no prefix/glob mode), so this
     can't reuse `find_open_pr`'s query shape. Instead, lists PRs by `--label` repo-wide
     (`--state all`, `--limit 100`) and filters client-side on the branch-prefix
-    `light-factory/<story_slug>/*` -- never another story-slug's PRs (a decoy PR for a
+    `software-factory/<story_slug>/*` -- never another story-slug's PRs (a decoy PR for a
     different slug is excluded by this prefix check). Known PoC-scope limitation,
     consistent with AD-15's own unpaginated search: a repo with more than 100
     `clarification-round`-labeled PRs across *all* story-slugs could undercount a given
@@ -117,8 +117,8 @@ def count_clarification_rounds(
     import json
 
     prs = json.loads(out) if out else []
-    prefix = f"light-factory/{story_slug}/"
-    own_branch = f"light-factory/{story_slug}/{run_id}"
+    prefix = f"software-factory/{story_slug}/"
+    own_branch = f"software-factory/{story_slug}/{run_id}"
     return sum(
         1
         for pr in prs
@@ -152,7 +152,7 @@ def supersede_prior_prs(
 
     Same query shape as `count_clarification_rounds` -- `gh pr list --head` has no prefix
     mode, so this lists open PRs repo-wide (`--limit 100`, same unpaginated PoC limitation)
-    and filters client-side on `light-factory/<story_slug>/` with the trailing slash (so
+    and filters client-side on `software-factory/<story_slug>/` with the trailing slash (so
     slug `foo` never matches `foo-bar`), excluding `run_id`'s own branch.
 
     Never `--delete-branch` and never touches state directories (AD-10/AD-12/AD-15).
@@ -177,8 +177,8 @@ def supersede_prior_prs(
     import json
 
     prs = json.loads(out) if out else []
-    prefix = f"light-factory/{story_slug}/"
-    own_branch = f"light-factory/{story_slug}/{run_id}"
+    prefix = f"software-factory/{story_slug}/"
+    own_branch = f"software-factory/{story_slug}/{run_id}"
     prior = sorted(
         pr["number"]
         for pr in prs
@@ -214,7 +214,7 @@ def open_pr_for_story(
     open PRs (AD-15, `supersede_prior_prs`) before returning. Raises PROpenError on any
     git/gh failure.
     """
-    branch = f"light-factory/{story_slug}/{run_id}"
+    branch = f"software-factory/{story_slug}/{run_id}"
 
     existing = find_open_pr(branch, cwd=cwd)
     if existing is not None:
@@ -231,9 +231,9 @@ def open_pr_for_story(
         [
             "git",
             "-c",
-            "user.name=light-factory-bot",
+            "user.name=software-factory-bot",
             "-c",
-            "user.email=light-factory-bot@users.noreply.github.com",
+            "user.email=software-factory-bot@users.noreply.github.com",
             "commit",
             "-m",
             f"Analysis: {story_slug} ({run_id})",
@@ -251,7 +251,7 @@ def open_pr_for_story(
             "--base",
             target_branch,
             "--title",
-            f"light-factory: {story_slug} ({run_id})",
+            f"software-factory: {story_slug} ({run_id})",
             "--body",
             f"Automated analysis-stage PR for `{story_slug}` (`{run_id}`). See `plan.md`/`decisions.md`.",
         ],

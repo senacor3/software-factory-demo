@@ -141,7 +141,7 @@ def test_build_command_never_uses_bare():
     cmd = review_graph._build_command("plan.md", "decisions.md", schema_text, "claude")
     assert "--bare" not in cmd
     assert cmd[0] == "claude"
-    assert "/light-factory-review plan.md decisions.md" in cmd
+    assert "/software-factory-review plan.md decisions.md" in cmd
 
 
 def test_build_command_allows_no_write_edit_bash_git_gh_tool():

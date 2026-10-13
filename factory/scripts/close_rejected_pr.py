@@ -13,7 +13,7 @@ an entry with `state: "rejected"` naming `--gate`'s Environment counts as a reje
 api` resolves `{owner}/{repo}` itself inside a checkout.
 
 On a real reject, finds this run's PR via `open_implementation_pr.find_open_pr` (same
-branch-name formula every other stage uses: `light-factory/<story-slug>/<run-id>`) and
+branch-name formula every other stage uses: `software-factory/<story-slug>/<run-id>`) and
 closes it with a comment naming the gate, the rejecting reviewer, and their review comment
 when they left one. Only the PR closes -- never `--delete-branch`, no label, no state-file
 write (AD-10/AD-12/AD-15's audit-trail-over-cleanup posture). An ordinary failure, a
@@ -122,7 +122,7 @@ def close_rejected_pr(
     if rejection is None:
         return {"rejected": False, "pr": None}
 
-    branch = f"light-factory/{story_slug}/{run_id}"
+    branch = f"software-factory/{story_slug}/{run_id}"
     try:
         pr = open_implementation_pr.find_open_pr(branch, cwd=cwd)
     except (open_implementation_pr.PROpenError, ValueError, KeyError, TypeError) as e:

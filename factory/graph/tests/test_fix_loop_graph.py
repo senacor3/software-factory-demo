@@ -17,8 +17,8 @@ review (no fix cycle, fix_cycle: 0), one fix cycle resolving the findings (fix_c
 stdlib `subprocess` module object, so patching `review_graph.subprocess.run` and
 `implementation_graph.subprocess.run` independently in the same test clobber each
 other. Instead this file patches the one shared `subprocess.run` with a single
-dispatcher that routes on which skill's prompt (`/light-factory-review` vs.
-`/light-factory-implementation`) the call is for -- so review_graph.run_review and
+dispatcher that routes on which skill's prompt (`/software-factory-review` vs.
+`/software-factory-implementation`) the call is for -- so review_graph.run_review and
 implementation_graph.run_implementation still run for real against tmp_path,
 including the real review.md writes this module reads back and re-stamps.
 checkout_branch.checkout_branch and commit_push_implementation.commit_and_push are
@@ -44,7 +44,7 @@ import checkout_branch
 import commit_push_implementation
 import state_io
 
-FAKE_BRANCH = "light-factory/foo/run-1"
+FAKE_BRANCH = "software-factory/foo/run-1"
 
 
 def _fake_proc(returncode=0, stdout="", stderr=""):
@@ -99,9 +99,9 @@ def _dispatcher(review_results=None, impl_result=None):
 
     def run(cmd, **kwargs):
         prompt = cmd[cmd.index("-p") + 1]
-        if "/light-factory-review" in prompt:
+        if "/software-factory-review" in prompt:
             return next(review_iter)
-        if "/light-factory-implementation" in prompt:
+        if "/software-factory-implementation" in prompt:
             if impl_result is None:
                 raise AssertionError("unexpected implementation invocation in this test")
             return impl_result
@@ -158,7 +158,7 @@ def test_one_fix_cycle_resolves_findings(tmp_path):
     mock_test.assert_called_once()
 
     # the implementation re-invocation carried review.md as its added context
-    impl_calls = [c for c in mock_run.call_args_list if "/light-factory-implementation" in c.args[0][2]]
+    impl_calls = [c for c in mock_run.call_args_list if "/software-factory-implementation" in c.args[0][2]]
     assert len(impl_calls) == 1
     assert impl_calls[0].args[0][2].endswith("review.md")
 
@@ -193,8 +193,8 @@ def test_two_fix_cycles_still_unresolved_stops_at_cap(tmp_path):
 
     assert outcome["status"] == "unresolved-after-cap"
     assert outcome["fix_cycle"] == 2
-    review_calls = [c for c in mock_run.call_args_list if "/light-factory-review" in c.args[0][2]]
-    impl_calls = [c for c in mock_run.call_args_list if "/light-factory-implementation" in c.args[0][2]]
+    review_calls = [c for c in mock_run.call_args_list if "/software-factory-review" in c.args[0][2]]
+    impl_calls = [c for c in mock_run.call_args_list if "/software-factory-implementation" in c.args[0][2]]
     assert len(review_calls) == 3  # initial + 2 re-reviews, never a 3rd fix cycle
     assert len(impl_calls) == 2  # exactly 2 fix cycles, never 3
 
@@ -224,7 +224,7 @@ def test_build_regression_stops_loop_immediately_raises_check_regression_error(t
             fix_loop_graph.run_review_with_fix_loop("foo", "run-1", state_base=tmp_path)
 
     mock_test.assert_not_called()  # test check never run once build already failed
-    review_calls = [c for c in mock_run.call_args_list if "/light-factory-review" in c.args[0][2]]
+    review_calls = [c for c in mock_run.call_args_list if "/software-factory-review" in c.args[0][2]]
     assert len(review_calls) == 1  # no further review invocation
 
 
@@ -243,7 +243,7 @@ def test_test_regression_stops_loop_immediately_raises_check_regression_error(tm
         with pytest.raises(fix_loop_graph.CheckRegressionError, match="test"):
             fix_loop_graph.run_review_with_fix_loop("foo", "run-1", state_base=tmp_path)
 
-    review_calls = [c for c in mock_run.call_args_list if "/light-factory-review" in c.args[0][2]]
+    review_calls = [c for c in mock_run.call_args_list if "/software-factory-review" in c.args[0][2]]
     assert len(review_calls) == 1  # no further review invocation
 
 
@@ -268,7 +268,7 @@ def test_review_tooling_failure_mid_loop_propagates(tmp_path):
         with pytest.raises(review_graph.ReviewInvocationError, match="review CLI broke"):
             fix_loop_graph.run_review_with_fix_loop("foo", "run-1", state_base=tmp_path)
 
-    impl_calls = [c for c in mock_run.call_args_list if "/light-factory-implementation" in c.args[0][2]]
+    impl_calls = [c for c in mock_run.call_args_list if "/software-factory-implementation" in c.args[0][2]]
     assert len(impl_calls) == 1  # the one fix cycle before the failing re-review
 
 
@@ -297,7 +297,7 @@ def test_implementation_tooling_failure_stops_loop_no_recheck_or_rereview(tmp_pa
     mock_commit.assert_not_called()
     mock_build.assert_not_called()
     mock_test.assert_not_called()
-    review_calls = [c for c in mock_run.call_args_list if "/light-factory-review" in c.args[0][2]]
+    review_calls = [c for c in mock_run.call_args_list if "/software-factory-review" in c.args[0][2]]
     assert len(review_calls) == 1  # no re-review attempted
 
 

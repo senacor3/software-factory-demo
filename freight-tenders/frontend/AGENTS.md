@@ -3,7 +3,7 @@
 
 ## freight-tenders frontend
 
-Angular 22 (standalone, signals, Vitest) frontend for the freight tender domain. All three pages call the backend through one shared `TenderApiService`. Independent of the backend's own build and of light-factory's own tooling; proxied to the backend locally via `proxy.conf.json`.
+Angular 22 (standalone, signals, Vitest) frontend for the freight tender domain. All three pages call the backend through one shared `TenderApiService`. Independent of the backend's own build and of software-factory's own tooling; proxied to the backend locally via `proxy.conf.json`.
 
 ## Policy
 

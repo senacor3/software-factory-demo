@@ -10,7 +10,7 @@ story-implementation-agent-plan.md's I/O & Edge-Case Matrix):
 
   1. `factory/scripts/checkout_branch.py` checks out the exact branch the analysis
      job's `open_implementation_pr.py` already opened (AD-12) -- never creates one.
-  2. The read/write-scoped `.claude/skills/light-factory-implementation/` skill
+  2. The read/write-scoped `.claude/skills/software-factory-implementation/` skill
      implements `plan.md`'s subtasks against that checkout, via `--allowedTools`
      (Read Write Edit Grep Glob -- no Bash/git/gh/merge tool) plus a `--settings`
      inline deny rule excluding `plan.md`/`decisions.md`/`review.md` from Edit --
@@ -75,7 +75,7 @@ def _build_command(
     claude_bin: str,
     review_path: str | None = None,
 ) -> list[str]:
-    prompt = f"/light-factory-implementation {plan_path} {decisions_path}"
+    prompt = f"/software-factory-implementation {plan_path} {decisions_path}"
     if review_path:
         prompt += f" {review_path}"
     return [

@@ -42,7 +42,7 @@ def test_no_changes_returns_not_committed_and_attempts_no_commit():
         raise AssertionError(f"unexpected subprocess call: {cmd}")
 
     with patch("commit_push_implementation.subprocess.run", side_effect=fake_run):
-        result = commit_push_implementation.commit_and_push("light-factory/foo/run-1", "foo", "run-1")
+        result = commit_push_implementation.commit_and_push("software-factory/foo/run-1", "foo", "run-1")
 
     assert result == {"committed": False}
     assert calls == [["git", "status", "--porcelain"]]
@@ -61,7 +61,7 @@ def test_changes_adds_commits_and_pushes():
         return _ok()
 
     with patch("commit_push_implementation.subprocess.run", side_effect=fake_run):
-        result = commit_push_implementation.commit_and_push("light-factory/foo/run-1", "foo", "run-1")
+        result = commit_push_implementation.commit_and_push("software-factory/foo/run-1", "foo", "run-1")
 
     assert result == {"committed": True}
 
@@ -70,12 +70,12 @@ def test_changes_adds_commits_and_pushes():
 
     commit_calls = [c for c in calls if "commit" in c]
     assert len(commit_calls) == 1
-    assert "user.name=light-factory-bot" in commit_calls[0]
-    assert "user.email=light-factory-bot@users.noreply.github.com" in commit_calls[0]
+    assert "user.name=software-factory-bot" in commit_calls[0]
+    assert "user.email=software-factory-bot@users.noreply.github.com" in commit_calls[0]
     assert "foo" in commit_calls[0][-1] and "run-1" in commit_calls[0][-1]
 
     push_calls = [c for c in calls if c[:2] == ["git", "push"]]
-    assert push_calls == [["git", "push", "origin", "light-factory/foo/run-1"]]
+    assert push_calls == [["git", "push", "origin", "software-factory/foo/run-1"]]
 
 
 # --- failures raise CommitPushError, distinct from CheckoutError/ImplementationInvocationError --
@@ -87,7 +87,7 @@ def test_git_status_failure_raises_commit_push_error():
 
     with patch("commit_push_implementation.subprocess.run", side_effect=fake_run):
         with pytest.raises(commit_push_implementation.CommitPushError, match="not a git repository"):
-            commit_push_implementation.commit_and_push("light-factory/foo/run-1", "foo", "run-1")
+            commit_push_implementation.commit_and_push("software-factory/foo/run-1", "foo", "run-1")
 
 
 def test_commit_failure_raises_commit_push_error():
@@ -100,7 +100,7 @@ def test_commit_failure_raises_commit_push_error():
 
     with patch("commit_push_implementation.subprocess.run", side_effect=fake_run):
         with pytest.raises(commit_push_implementation.CommitPushError, match="unable to create commit"):
-            commit_push_implementation.commit_and_push("light-factory/foo/run-1", "foo", "run-1")
+            commit_push_implementation.commit_and_push("software-factory/foo/run-1", "foo", "run-1")
 
 
 def test_push_failure_raises_commit_push_error():
@@ -113,13 +113,13 @@ def test_push_failure_raises_commit_push_error():
 
     with patch("commit_push_implementation.subprocess.run", side_effect=fake_run):
         with pytest.raises(commit_push_implementation.CommitPushError, match="rejected"):
-            commit_push_implementation.commit_and_push("light-factory/foo/run-1", "foo", "run-1")
+            commit_push_implementation.commit_and_push("software-factory/foo/run-1", "foo", "run-1")
 
 
 def test_subprocess_oserror_raises_commit_push_error():
     with patch("commit_push_implementation.subprocess.run", side_effect=OSError("git not found")):
         with pytest.raises(commit_push_implementation.CommitPushError, match="git not found"):
-            commit_push_implementation.commit_and_push("light-factory/foo/run-1", "foo", "run-1")
+            commit_push_implementation.commit_and_push("software-factory/foo/run-1", "foo", "run-1")
 
 
 # --- label kwarg -----------------------------------------------------------------------
@@ -135,7 +135,7 @@ def test_default_label_is_implementation():
         return _ok()
 
     with patch("commit_push_implementation.subprocess.run", side_effect=fake_run):
-        commit_push_implementation.commit_and_push("light-factory/foo/run-1", "foo", "run-1")
+        commit_push_implementation.commit_and_push("software-factory/foo/run-1", "foo", "run-1")
 
     commit_calls = [c for c in calls if "commit" in c]
     assert commit_calls[0][-1] == "Implementation: foo (run-1)"
@@ -152,7 +152,7 @@ def test_custom_label_is_used_in_commit_message():
 
     with patch("commit_push_implementation.subprocess.run", side_effect=fake_run):
         commit_push_implementation.commit_and_push(
-            "light-factory/foo/run-1", "foo", "run-1", label="Checks"
+            "software-factory/foo/run-1", "foo", "run-1", label="Checks"
         )
 
     commit_calls = [c for c in calls if "commit" in c]
@@ -176,7 +176,7 @@ def test_cli_commits_and_pushes_with_default_label():
 
     assert rc == 0
     push_calls = [c for c in calls if c[:2] == ["git", "push"]]
-    assert push_calls == [["git", "push", "origin", "light-factory/foo/run-1"]]
+    assert push_calls == [["git", "push", "origin", "software-factory/foo/run-1"]]
     commit_calls = [c for c in calls if "commit" in c]
     assert commit_calls[0][-1] == "Implementation: foo (run-1)"
 

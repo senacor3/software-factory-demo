@@ -19,7 +19,7 @@ import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-WORKFLOW = REPO_ROOT / ".github" / "workflows" / "light-factory.yml"
+WORKFLOW = REPO_ROOT / ".github" / "workflows" / "software-factory.yml"
 TOOLCHAIN_ACTION = "./.github/actions/checks-toolchain"
 ACTION_FILE = REPO_ROOT / ".github" / "actions" / "checks-toolchain" / "action.yml"
 

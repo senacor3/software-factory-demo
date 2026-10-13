@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "LightFactoryReviewResult",
-  "description": "Structured verdict from the light-factory-review skill (CAP-6 independent review). Parsed by factory/graph/review_graph.py from the claude CLI's --json-schema structured_output.",
+  "title": "SoftwareFactoryReviewResult",
+  "description": "Structured verdict from the software-factory-review skill (CAP-6 independent review). Parsed by factory/graph/review_graph.py from the claude CLI's --json-schema structured_output.",
   "type": "object",
   "additionalProperties": false,
   "properties": {

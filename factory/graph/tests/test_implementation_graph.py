@@ -37,7 +37,7 @@ def _fake_proc(returncode=0, stdout="", stderr=""):
     return SimpleNamespace(returncode=returncode, stdout=stdout, stderr=stderr)
 
 
-FAKE_BRANCH = "light-factory/foo/run-1"
+FAKE_BRANCH = "software-factory/foo/run-1"
 
 
 # --- full sequence: agent makes changes, committed = True --------------------------------
@@ -151,7 +151,7 @@ def test_build_command_includes_settings_deny_rule_for_state_files():
 
 def test_build_command_passes_both_plan_and_decisions_paths():
     cmd = implementation_graph._build_command("some/plan.md", "some/decisions.md", "claude")
-    assert "/light-factory-implementation some/plan.md some/decisions.md" in cmd
+    assert "/software-factory-implementation some/plan.md some/decisions.md" in cmd
 
 
 # --- review_path (fix cycle, AD-11) -----------------------------------------------------
@@ -159,14 +159,14 @@ def test_build_command_passes_both_plan_and_decisions_paths():
 
 def test_build_command_omits_review_path_when_not_given():
     cmd = implementation_graph._build_command("plan.md", "decisions.md", "claude")
-    assert "/light-factory-implementation plan.md decisions.md" in cmd
+    assert "/software-factory-implementation plan.md decisions.md" in cmd
 
 
 def test_build_command_appends_review_path_when_given():
     cmd = implementation_graph._build_command(
         "plan.md", "decisions.md", "claude", review_path="review.md"
     )
-    assert "/light-factory-implementation plan.md decisions.md review.md" in cmd
+    assert "/software-factory-implementation plan.md decisions.md review.md" in cmd
 
 
 def test_run_implementation_passes_review_path_through_to_invoke_skill(tmp_path):
@@ -196,7 +196,7 @@ def test_run_implementation_without_review_path_unchanged_behavior(tmp_path):
 
     cmd = mock_run.call_args[0][0]
     prompt = cmd[cmd.index("-p") + 1]
-    assert len(prompt.split(" ")) == 3  # "/light-factory-implementation <plan> <decisions>" only
+    assert len(prompt.split(" ")) == 3  # "/software-factory-implementation <plan> <decisions>" only
 
 
 # --- CLI exit codes --------------------------------------------------------------------------

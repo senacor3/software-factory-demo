@@ -1,13 +1,13 @@
 ---
-name: light-factory-implementation
+name: software-factory-implementation
 description: Implements plan.md's subtasks against the checked-out branch via Write/Edit only. Invoked by factory/graph/implementation_graph.py as the pipeline's implementation stage (CAP-4 scoped implementation). Never touches plan.md, decisions.md, review.md, or checks.md.
 ---
 
-# light-factory-implementation
+# software-factory-implementation
 
 ## What you are here to do
 
-You are invoked as `/light-factory-implementation <plan-path> <decisions-path>` by `factory/graph/implementation_graph.py`, the implementation stage of the light-factory pipeline. A deterministic script has already checked out the exact branch the analysis stage opened (AD-12) before you are invoked, and a deterministic script will commit and push your edits after you finish (AD-6) — you never run `git`, `gh`, or any other Bash command yourself. You have `Read`, `Write`, `Edit`, `Grep`, and `Glob` only.
+You are invoked as `/software-factory-implementation <plan-path> <decisions-path>` by `factory/graph/implementation_graph.py`, the implementation stage of the software-factory pipeline. A deterministic script has already checked out the exact branch the analysis stage opened (AD-12) before you are invoked, and a deterministic script will commit and push your edits after you finish (AD-6) — you never run `git`, `gh`, or any other Bash command yourself. You have `Read`, `Write`, `Edit`, `Grep`, and `Glob` only.
 
 ## Step 1 — Read the plan
 
@@ -21,7 +21,7 @@ If a subtask turns out to be impossible or inapplicable given what you find in t
 
 ## Fix cycle (optional third argument)
 
-When invoked as `/light-factory-implementation <plan-path> <decisions-path> <findings-path>` -- a third argument -- you are being re-engaged after an earlier pass on this same branch found issues with your prior work. Read `<findings-path>` for its findings and address them specifically, in addition to (not instead of) `plan.md`'s subtasks, which you've already implemented. Treat the findings as the priority: they describe concrete gaps between what you built and what's required. There are two callers that can re-engage you this way:
+When invoked as `/software-factory-implementation <plan-path> <decisions-path> <findings-path>` -- a third argument -- you are being re-engaged after an earlier pass on this same branch found issues with your prior work. Read `<findings-path>` for its findings and address them specifically, in addition to (not instead of) `plan.md`'s subtasks, which you've already implemented. Treat the findings as the priority: they describe concrete gaps between what you built and what's required. There are two callers that can re-engage you this way:
 
 - `factory/graph/fix_loop_graph.py`'s bounded review fix loop (AD-11): `<findings-path>` is `review.md`, naming findings the independent review stage raised against the plan/acceptance criteria.
 - `factory/graph/checks_fix_loop_graph.py`'s bounded checks fix loop (AD-10): `<findings-path>` is `checks.md`, naming which mechanical check(s) (`build`/`test`/`lint`/`security`) failed and their output. Fix the failing check(s) specifically -- do not re-derive or second-guess `plan.md`'s subtasks because of this.

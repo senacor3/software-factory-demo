@@ -1,6 +1,6 @@
 name: freight-tenders
 
-# CI for the freight-tenders demo app, independent of light-factory's own
+# CI for the freight-tenders demo app, independent of software-factory's own
 # workflow and tooling. Two jobs, each building/testing/linting its own
 # project -- see freight-tenders/README.md.
 #

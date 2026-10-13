@@ -24,36 +24,36 @@ import state_io
 
 def test_derive_story_slug_valid_kebab_case():
     assert (
-        state_io.derive_story_slug("stories/light-factory/trivial-test-story.md")
+        state_io.derive_story_slug("stories/software-factory/trivial-test-story.md")
         == "trivial-test-story"
     )
 
 
 def test_derive_story_slug_non_kebab_case_raises():
     with pytest.raises(ValueError, match="kebab-case"):
-        state_io.derive_story_slug("stories/light-factory/Not_Kebab.md")
+        state_io.derive_story_slug("stories/software-factory/Not_Kebab.md")
 
 
 def test_derive_story_slug_requires_md_extension():
     with pytest.raises(ValueError, match=r"\.md extension"):
-        state_io.derive_story_slug("stories/light-factory/trivial-test-story.txt")
+        state_io.derive_story_slug("stories/software-factory/trivial-test-story.txt")
 
 
 def test_derive_story_slug_rejects_empty_slug():
     with pytest.raises(ValueError, match="kebab-case"):
-        state_io.derive_story_slug("stories/light-factory/.md")
+        state_io.derive_story_slug("stories/software-factory/.md")
 
 
 def test_derive_story_slug_rejects_leading_or_trailing_hyphen():
     with pytest.raises(ValueError, match="kebab-case"):
-        state_io.derive_story_slug("stories/light-factory/-leading.md")
+        state_io.derive_story_slug("stories/software-factory/-leading.md")
     with pytest.raises(ValueError, match="kebab-case"):
-        state_io.derive_story_slug("stories/light-factory/trailing-.md")
+        state_io.derive_story_slug("stories/software-factory/trailing-.md")
 
 
 def test_derive_story_slug_rejects_double_hyphen():
     with pytest.raises(ValueError, match="kebab-case"):
-        state_io.derive_story_slug("stories/light-factory/double--hyphen.md")
+        state_io.derive_story_slug("stories/software-factory/double--hyphen.md")
 
 
 def test_derive_story_slug_allows_digits():
@@ -68,11 +68,11 @@ def _repo_root_cwd(tmp_path, monkeypatch):
 @pytest.mark.parametrize(
     "path",
     [
-        "stories/light-factory/foo.md",
+        "stories/software-factory/foo.md",
         "stories/freight-tenders/foo.md",
-        "./stories/light-factory/foo.md",
-        "stories//light-factory/foo.md",
-        "ABS/stories/light-factory/foo.md",
+        "./stories/software-factory/foo.md",
+        "stories//software-factory/foo.md",
+        "ABS/stories/software-factory/foo.md",
     ],
 )
 def test_derive_story_slug_accepts_project_folders(path, tmp_path):
@@ -88,11 +88,11 @@ def test_derive_story_slug_accepts_project_folders(path, tmp_path):
         "foo.md",
         "stories/foo.md",
         "stories/billing/foo.md",
-        "stories/light-factory/sub/foo.md",
-        "light-factory/foo.md",
-        "docs/stories/light-factory/foo.md",
-        "../stories/light-factory/foo.md",
-        "/elsewhere/stories/light-factory/foo.md",
+        "stories/software-factory/sub/foo.md",
+        "software-factory/foo.md",
+        "docs/stories/software-factory/foo.md",
+        "../stories/software-factory/foo.md",
+        "/elsewhere/stories/software-factory/foo.md",
     ],
 )
 def test_derive_story_slug_rejects_wrong_location(path):
@@ -113,11 +113,11 @@ def test_derive_story_slug_rejects_name_present_in_both_project_folders(project,
 
 
 def test_derive_story_slug_accepts_name_present_in_one_project_folder_only(tmp_path):
-    (tmp_path / "stories" / "light-factory").mkdir(parents=True)
-    (tmp_path / "stories" / "light-factory" / "foo.md").write_text("# foo\n")
+    (tmp_path / "stories" / "software-factory").mkdir(parents=True)
+    (tmp_path / "stories" / "software-factory" / "foo.md").write_text("# foo\n")
     (tmp_path / "stories" / "freight-tenders").mkdir(parents=True)
     (tmp_path / "stories" / "freight-tenders" / "bar.md").write_text("# bar\n")
-    assert state_io.derive_story_slug("stories/light-factory/foo.md") == "foo"
+    assert state_io.derive_story_slug("stories/software-factory/foo.md") == "foo"
 
 
 def test_derive_story_slug_extension_and_kebab_checks_run_before_location():
@@ -338,7 +338,7 @@ def test_cli_derive_success(capsys):
         [
             "derive",
             "--story-file",
-            "stories/light-factory/trivial-test-story.md",
+            "stories/software-factory/trivial-test-story.md",
             "--github-run-id",
             "999",
         ]
@@ -351,7 +351,7 @@ def test_cli_derive_success(capsys):
 
 def test_cli_derive_non_kebab_case_exits_2_and_prints_stderr(capsys):
     rc = state_io.main(
-        ["derive", "--story-file", "stories/light-factory/Not_Kebab.md", "--github-run-id", "999"]
+        ["derive", "--story-file", "stories/software-factory/Not_Kebab.md", "--github-run-id", "999"]
     )
     captured = capsys.readouterr()
     assert rc == 2
@@ -384,7 +384,7 @@ def test_cli_derive_nested_stories_dir_exits_2_and_prints_stderr(
 def test_cli_derive_dot_slash_path_normalises(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     rc = state_io.main(
-        ["derive", "--story-file", "./stories/light-factory/foo.md", "--github-run-id", "999"]
+        ["derive", "--story-file", "./stories/software-factory/foo.md", "--github-run-id", "999"]
     )
     assert rc == 0
     assert "story-slug=foo" in capsys.readouterr().out

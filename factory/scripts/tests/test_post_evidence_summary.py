@@ -51,7 +51,7 @@ def _write_findings(state_directory, findings):
 
 
 def _open_pr(pr_number=7, pr_url="https://github.com/org/repo/pull/7"):
-    return {"branch": "light-factory/foo-bar/run-1", "pr_number": pr_number, "pr_url": pr_url}
+    return {"branch": "software-factory/foo-bar/run-1", "pr_number": pr_number, "pr_url": pr_url}
 
 
 # --- posts regardless of review outcome ----------------------------------------------
@@ -67,7 +67,7 @@ def test_posts_summary_when_review_resolved(tmp_path):
          patch("post_evidence_summary.post_summary.post_comment") as post_comment:
         outcome = post_evidence_summary.post_evidence_summary("foo-bar", "run-1", state_base=tmp_path)
 
-    find_pr.assert_called_once_with("light-factory/foo-bar/run-1", cwd=None)
+    find_pr.assert_called_once_with("software-factory/foo-bar/run-1", cwd=None)
     assert post_comment.call_count == 1
     args, _kwargs = post_comment.call_args
     assert args[0] == 7

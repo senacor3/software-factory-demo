@@ -7,7 +7,7 @@ branch-checkout step.
 
 Checks out the exact branch the `analysis` job's `open_implementation_pr.py` already
 opened (AD-12) -- never creates one. Branch name formula matches AD-8/AD-12/AD-15
-exactly: `light-factory/<story-slug>/<run-id>`.
+exactly: `software-factory/<story-slug>/<run-id>`.
 
 Defensive, not expected to fail in the normal path (the analysis stage already opened
 the branch before the implementation job ever runs) -- but raises a distinct
@@ -61,7 +61,7 @@ def checkout_branch(
 
     Returns the branch name. Raises CheckoutError on any git failure.
     """
-    branch = f"light-factory/{story_slug}/{run_id}"
+    branch = f"software-factory/{story_slug}/{run_id}"
     _run(["git", "fetch", "origin", branch], cwd=cwd)
     _run(["git", "checkout", branch], cwd=cwd)
     return branch

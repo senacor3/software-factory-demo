@@ -2,7 +2,7 @@
 # /// script
 # requires-python = ">=3.13"
 # ///
-"""state_io — shared `.factory/<story-slug>/<run-id>/` state I/O for the light-factory pipeline.
+"""state_io — shared `.factory/<story-slug>/<run-id>/` state I/O for the software-factory pipeline.
 
 Every later pipeline stage (analysis, checks, review, fix-loop) needs one shared way to
 read/write state files with AD-10's exact frontmatter schema, and one shared way to
@@ -92,7 +92,7 @@ def now() -> str:
 
 
 # The sub-folders of `stories/` a story file may live in, one per project (AD-15).
-STORY_PROJECTS = ("light-factory", "freight-tenders")
+STORY_PROJECTS = ("software-factory", "freight-tenders")
 
 
 def derive_story_slug(story_file: str | os.PathLike) -> str:

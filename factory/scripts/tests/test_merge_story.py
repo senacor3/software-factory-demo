@@ -33,7 +33,7 @@ def _fail(stderr="boom"):
 
 
 def _open_pr(pr_number=7, pr_url="https://github.com/org/repo/pull/7"):
-    return {"branch": "light-factory/foo-bar/run-1", "pr_number": pr_number, "pr_url": pr_url}
+    return {"branch": "software-factory/foo-bar/run-1", "pr_number": pr_number, "pr_url": pr_url}
 
 
 # --- merge succeeds --------------------------------------------------------------------
@@ -44,7 +44,7 @@ def test_merge_succeeds_runs_squash_delete_branch():
          patch("merge_story.subprocess.run", return_value=_ok()) as mock_run:
         outcome = merge_story.merge_story("foo-bar", "run-1")
 
-    find_pr.assert_called_once_with("light-factory/foo-bar/run-1", cwd=None)
+    find_pr.assert_called_once_with("software-factory/foo-bar/run-1", cwd=None)
     cmd = mock_run.call_args.args[0]
     assert cmd == ["gh", "pr", "merge", "7", "--squash", "--delete-branch"]
     assert outcome["pr"]["pr_number"] == 7
