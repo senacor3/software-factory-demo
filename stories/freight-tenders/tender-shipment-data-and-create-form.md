@@ -75,7 +75,14 @@ The database is in-memory H2 with `ddl-auto: update`, so there is no migration.
 - An unknown enum value or a malformed date also returns `400` in the same
   error shape (`violations` may be empty), not Spring's default error body.
 - "Today" comes from an injectable `java.time.Clock`, so date rules are testable
-  without depending on the day the tests run.
+  without depending on the day the tests run. The production `Clock` bean is
+  fixed to the zone `Europe/Berlin`, not the system default, so "today" does
+  not depend on where the server runs.
+- Postal codes are checked for presence and length only. There is no
+  country-specific format check; spaces and letters are allowed ("3011 AA").
+- The backend accepts any two uppercase letters as `country` and does not
+  restrict it to a list. The 13 countries are only the choices the create form
+  offers.
 
 ### Frontend: create form
 
