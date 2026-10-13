@@ -47,6 +47,12 @@ fix loops call the same `run_setup()` before each re-check. Its result goes to
 record for the job that follows; it exits 1 when a command fails. `reconcile` (`--story-slug S --run-id R`) resets a stale
 `checks.md` an earlier attempt's fix loop left behind, once every check has passed or
 been skipped; it exits 0 whether or not it wrote anything.
+
+`any-check-failed` (the check steps' outcomes as arguments) is how the `checks` job
+says "a check failed" without failing itself (AD-10 addendum, backlog bug 4): it
+prints `any-check-failed=true|false`, shaped for `>> "$GITHUB_OUTPUT"`, from the
+`steps.<id>.outcome` values the workflow passes it. It exits 2, printing no line, for
+a value that is not a step outcome -- never reading it as "nothing failed".
 """
 
 from __future__ import annotations
@@ -78,6 +84,13 @@ NO_SETUP_DETAIL = f"no `{SETUP_KEY}` command configured in {CONFIG_RELPATH}"
 # Return codes a shell gives when a command could not be started at all -- 126 "found
 # but not executable", 127 "not found" -- as opposed to a tool that ran and reported.
 TOOLING_RETURNCODES = (126, 127)
+
+# Every value GitHub Actions gives `steps.<id>.outcome`. Only `failure` is a check that
+# ran and failed; a step is `skipped` or `cancelled` only when something else already
+# ended the job.
+STEP_OUTCOMES = ("success", "failure", "skipped", "cancelled")
+
+ANY_CHECK_FAILED_OUTPUT = "any-check-failed"
 
 RESOLVED_CHECKS_BODY = "## Failing checks\n\n_none_"
 
@@ -446,9 +459,9 @@ def reconcile_checks_state(
     """Reset a stale `checks.md` once every check has passed or been skipped.
 
     `checks.md` is written by the checks fix loop, which only runs when the `checks`
-    job failed -- so when a later attempt of that job goes green, nothing else would
-    correct what an earlier attempt's loop stamped. This is the one case the `checks`
-    job writes the file: it must already exist with a status other than `resolved`,
+    job reported a failed check -- so when a later attempt of that job finds none,
+    nothing else would correct what an earlier attempt's loop stamped. This is the one
+    case the `checks` job writes the file: it must already exist with a status other than `resolved`,
     all five evidence files must read `pass` or `skipped`, and the recorded setup must
     not have failed. The `fix_cycle` count is carried over, never reset. Returns
     whether the file was rewritten.
@@ -480,6 +493,24 @@ def reconcile_checks_state(
         extra={"fix_cycle": meta.get("fix_cycle", 0)},
     )
     return True
+
+
+def any_check_failed(outcomes: list[str]) -> bool:
+    """True when any of the check steps' outcomes is `failure`.
+
+    `outcomes` are GitHub Actions `steps.<id>.outcome` values. Raises `ValueError`
+    for an empty list or a value outside `STEP_OUTCOMES` -- an expression that names
+    a step id that does not exist evaluates to an empty string, and reading that as
+    "nothing failed" would switch the checks fix loop off without anyone noticing.
+    """
+    if not outcomes:
+        raise ValueError("no step outcome given")
+    unknown = [o for o in outcomes if o not in STEP_OUTCOMES]
+    if unknown:
+        raise ValueError(
+            f"not a step outcome: {', '.join(repr(o) for o in unknown)}; expected one of {', '.join(STEP_OUTCOMES)}"
+        )
+    return "failure" in outcomes
 
 
 def run_build(
@@ -574,6 +605,21 @@ def cmd_reconcile(args) -> int:
     return 0
 
 
+def cmd_any_check_failed(args) -> int:
+    """Print `any-check-failed=true|false` from the given step outcomes.
+
+    Shaped for direct `>> "$GITHUB_OUTPUT"` redirection, like `cmd_toolchains`. An
+    unknown outcome prints nothing to stdout and exits 2.
+    """
+    try:
+        failed = any_check_failed(args.outcomes)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    print(f"{ANY_CHECK_FAILED_OUTPUT}={'true' if failed else 'false'}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -587,8 +633,15 @@ def main(argv: list[str] | None = None) -> int:
     pr.add_argument("--story-slug", required=True)
     pr.add_argument("--run-id", required=True)
 
+    pa = sub.add_parser(
+        ANY_CHECK_FAILED_OUTPUT, help="print any-check-failed=true|false from the check steps' outcomes"
+    )
+    pa.add_argument("outcomes", nargs="*", help="steps.<id>.outcome values, one per check step")
+
     args = p.parse_args(argv)
 
+    if args.cmd == ANY_CHECK_FAILED_OUTPUT:
+        return cmd_any_check_failed(args)
     if args.cmd == "toolchains":
         return cmd_toolchains(args)
     if args.cmd == SETUP_KEY:

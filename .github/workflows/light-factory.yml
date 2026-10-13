@@ -180,6 +180,12 @@ jobs:
     # AD-5/AD-6: contents:write scopes checkout_branch.py's git fetch/checkout and
     # commit_push_implementation.py's git add/commit/push, nothing else -- this job
     # runs no agent and opens/closes no PR.
+    #
+    # AD-10 addendum (backlog bug 4): "a check failed" leaves this job as an output,
+    # not as the job's own conclusion -- see "Report check outcomes" below. The
+    # `checks-fix-loop` and `review` jobs' `if:` read it.
+    outputs:
+      any-check-failed: ${{ steps.report.outputs.any-check-failed }}
     permissions:
       contents: write
     steps:
@@ -214,10 +220,9 @@ jobs:
       # runs the config's `setup:` commands (e.g. a dependency install), so no check
       # relies on an earlier check having run. The `checks-fix-loop` job re-runs only
       # the failed check(s) and runs this same setup before each re-check, from
-      # checks_fix_loop_graph.py. `continue-on-error: true` like the checks, and
-      # counted in "Fail job if any check failed" -- its result is committed as
-      # evidence/checks/setup.json beside theirs, so the fix loop names a failed
-      # setup as a tooling failure instead of spending a fix cycle on it.
+      # checks_fix_loop_graph.py. `continue-on-error: true` like the checks, so they
+      # still run and leave evidence; "Fail job if setup failed" below then fails the
+      # job. Its result is committed as evidence/checks/setup.json beside theirs.
       - name: Setup check workspace
         id: setup
         continue-on-error: true
@@ -236,10 +241,9 @@ jobs:
       #
       # AD-10 addendum: each step has `continue-on-error: true` so all 5 always run
       # and leave evidence, regardless of an earlier one failing -- a failing step's
-      # own outcome is still recorded (`steps.<id>.outcome`), and "Fail job if any
-      # check failed" below explicitly fails the job from that, preserving today's
-      # "any check failure fails the job" outcome while making every check's
-      # evidence durable for the new `checks-fix-loop` job to read, even on failure.
+      # own outcome is still recorded (`steps.<id>.outcome`), and "Report check
+      # outcomes" below turns those into this job's `any-check-failed` output, with
+      # every check's evidence durable for the `checks-fix-loop` job to read.
       - name: Build check
         id: build
         continue-on-error: true
@@ -281,9 +285,11 @@ jobs:
             --run-id "${{ needs.analysis.outputs.run-id }}"
 
       # AD-10 addendum (backlog bug 5): `checks.md` is written by the fix loop, which
-      # only runs when this job failed -- so when a later attempt of this job goes
-      # green, nothing else would correct an `unresolved-after-cap` an earlier
-      # attempt's loop stamped. This resets it to `resolved` in exactly that case
+      # only runs when this job reported a failed check -- so when a later attempt
+      # of this job finds none, nothing else would correct an `unresolved-after-cap`
+      # an earlier attempt's loop stamped. A later attempt of this job means a full
+      # re-run: "Re-run failed jobs" does not re-run it, since a failed check does
+      # not fail it (backlog bug 4). This resets it to `resolved` in exactly that case
       # (the file exists, setup did not fail, and all 5 checks above passed or were
       # skipped) and is a
       # no-op in every other, including a first attempt, where no `checks.md` exists.
@@ -310,34 +316,48 @@ jobs:
             --run-id "${{ needs.analysis.outputs.run-id }}" \
             --label Checks
 
-      # Explicitly fails the job if any check above failed -- `continue-on-error:
-      # true` on those steps means their own failure no longer fails the job by
-      # itself, so this step restores that outcome from each step's recorded
-      # `outcome` after evidence has already been committed durably above.
-      - name: Fail job if any check failed
+      # AD-10 addendum (backlog bug 4): a failed check does not fail this job. GitHub
+      # Actions takes a run's conclusion from its worst job, so a `checks` job that
+      # ended in `failure` to start the fix loop left the whole run red even when the
+      # loop recovered and the story merged. Instead this writes the job's
+      # `any-check-failed` output from the 5 check steps' recorded outcomes, after
+      # their evidence has been committed above; `checks-fix-loop` starts on it and
+      # `review` waits on it. A value run_checks.py does not know as a step outcome
+      # (a mistyped step id evaluates to an empty string) fails this step, and so
+      # the job, rather than counting as "nothing failed".
+      - name: Report check outcomes
+        id: report
         if: always()
         run: |
-          for outcome in \
-            "${{ steps.setup.outcome }}" \
+          uv run factory/scripts/run_checks.py any-check-failed \
             "${{ steps.build.outcome }}" \
             "${{ steps.test.outcome }}" \
             "${{ steps.lint.outcome }}" \
             "${{ steps.security.outcome }}" \
-            "${{ steps.static_analysis.outcome }}"; do
-            if [ "$outcome" = "failure" ]; then
-              echo "at least one check failed" >&2
-              exit 1
-            fi
-          done
+            "${{ steps.static_analysis.outcome }}" >> "$GITHUB_OUTPUT"
+
+      # A failed setup is not a check failure the fix loop could repair -- the
+      # checkout was never prepared, so whatever the checks then reported says
+      # nothing about the code. It fails this job for real: neither the fix loop
+      # nor `review` runs, and "Re-run failed jobs" re-runs this job, which is how a
+      # transient install failure recovers.
+      - name: Fail job if setup failed
+        if: always() && steps.setup.outcome == 'failure'
+        run: |
+          echo "setup failed: the checkout could not be prepared for the checks" >&2
+          exit 1
 
   checks-fix-loop:
     name: "Checks fix loop"
     needs: [analysis, implementation, checks]
-    # AD-10: runs only when `checks` actually failed -- `checks` keeps its
+    # AD-10: runs only when `checks` reported a failed check -- `checks` keeps its
     # documented "runs no agent" invariant and this job only pays agent-setup cost
-    # on that path. `!cancelled()` keeps it off a concurrency-cancelled run, same as
-    # `close-rejected-pr` below.
-    if: ${{ !cancelled() && needs.checks.result == 'failure' }}
+    # on that path. The signal is `checks`' `any-check-failed` output, not its
+    # conclusion (backlog bug 4): `checks` ends `success` on a failed check, and a
+    # `checks` job that itself failed (a crashed step, a failed setup) has nothing
+    # this loop could repair. `!cancelled()` keeps it off a concurrency-cancelled
+    # run, same as `close-rejected-pr` below.
+    if: ${{ !cancelled() && needs.checks.result == 'success' && needs.checks.outputs.any-check-failed == 'true' }}
     runs-on: ubuntu-24.04
     # AD-5/AD-6: contents:write scopes checkout_branch.py's git fetch/checkout and
     # implementation_graph.py's/commit_push_implementation.py's git calls, nothing
@@ -385,8 +405,8 @@ jobs:
       # already committed to learn which check(s) failed, re-engages the
       # implementation skill with that as context, re-runs only those check(s), and
       # repeats up to the same cap of 2 cycles. Still failing at the cap fails this
-      # step (and so this job) -- `review` below only proceeds on a `success` result
-      # from either `checks` or this job. CLAUDE_CODE_OAUTH_TOKEN is read
+      # step (and so this job) -- `review` below only proceeds when `checks` reported
+      # no failed check or this job ended `success`. CLAUDE_CODE_OAUTH_TOKEN is read
       # automatically by the `claude` CLI from the environment (AD-9).
       - name: Run checks fix loop
         env:
@@ -412,14 +432,19 @@ jobs:
   review:
     name: "Review & fix loop"
     needs: [analysis, implementation, checks, checks-fix-loop]
-    # AD-10: proceeds when `checks` passed outright, or when `checks-fix-loop` ran
-    # and resolved it -- `checks-fix-loop` is `skipped` (not `success`) on the
-    # all-pass-first-try path, so this `if:` only ever has one of the two sides
-    # true. `!cancelled()` preserves this job's prior behavior on a
-    # concurrency-cancelled run. Bracket notation (`needs['checks-fix-loop']`), not
-    # dot notation, because GitHub Actions expressions parse a bare `-` in a
-    # property name as the subtraction operator.
-    if: ${{ !cancelled() && (needs.checks.result == 'success' || needs['checks-fix-loop'].result == 'success') }}
+    # AD-10: proceeds when `checks` reported no failed check, or when
+    # `checks-fix-loop` ran and resolved what it reported -- `checks-fix-loop` is
+    # `skipped` (not `success`) on the all-pass-first-try path, so only one of the
+    # two sides is ever true. `checks` ending `success` is required either way but
+    # no longer enough (backlog bug 4): it ends `success` on a failed check too, so
+    # this must never run on that alone. The output is matched against the literal
+    # `false`, an allow-list like `implementation`'s `if:` above -- an empty or
+    # unknown value keeps this job from running rather than letting it through.
+    # `!cancelled()` preserves this job's prior
+    # behavior on a concurrency-cancelled run. Bracket notation
+    # (`needs['checks-fix-loop']`), not dot notation, because GitHub Actions
+    # expressions parse a bare `-` in a property name as the subtraction operator.
+    if: ${{ !cancelled() && needs.checks.result == 'success' && (needs.checks.outputs.any-check-failed == 'false' || needs['checks-fix-loop'].result == 'success') }}
     runs-on: ubuntu-24.04
     # AD-5: contents:write scopes checkout_branch.py/commit_push_implementation.py's
     # git calls (including fix_loop_graph.py's own fix-cycle commits);

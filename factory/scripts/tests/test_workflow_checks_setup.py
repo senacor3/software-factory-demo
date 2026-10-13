@@ -12,6 +12,7 @@ and the shared composite action as data -- no job is run -- and fail when the tw
 jobs' setup drifts apart again.
 """
 
+import re
 from pathlib import Path
 
 import pytest
@@ -78,10 +79,59 @@ def test_checks_job_prepares_the_checkout_before_any_check(jobs):
 
 
 def test_checks_job_fails_when_setup_failed(jobs):
+    """A failed setup is not a check failure: it fails the job, never goes to the fix loop."""
     steps = jobs["checks"]["steps"]
-    fail_step = steps[_index(steps, name="Fail job if any check failed")]
-    for step_id in ["setup", *CHECK_STEP_IDS]:
-        assert f"steps.{step_id}.outcome" in fail_step["run"]
+    fail_step = steps[_index(steps, name="Fail job if setup failed")]
+    assert fail_step["if"] == "always() && steps.setup.outcome == 'failure'"
+    assert "exit 1" in fail_step["run"]
+
+
+# --- backlog bug 4: "a check failed" is a job output, not the job's conclusion ---------
+
+
+def test_checks_job_reports_failed_checks_as_an_output_and_does_not_fail_on_them(jobs):
+    checks = jobs["checks"]
+    steps = checks["steps"]
+    assert checks["outputs"] == {"any-check-failed": "${{ steps.report.outputs.any-check-failed }}"}
+
+    report = steps[_index(steps, id="report")]
+    assert report["if"] == "always()"
+    assert "run_checks.py any-check-failed" in report["run"]
+    assert report["run"].rstrip().endswith('>> "$GITHUB_OUTPUT"')
+    # exactly the five checks' outcomes -- setup is not a check the fix loop could repair
+    assert re.findall(r"steps\.(\w+)\.outcome", report["run"]) == CHECK_STEP_IDS
+    assert all(_index(steps, id=check) < _index(steps, id="report") for check in CHECK_STEP_IDS)
+    assert _index(steps, name="Commit checks evidence") < _index(steps, id="report")
+
+    # nothing but a failed setup makes this job exit non-zero from the steps' outcomes
+    for step in steps:
+        if step.get("name") != "Fail job if setup failed":
+            assert "exit 1" not in step.get("run", "")
+    assert all(steps[_index(steps, id=check)].get("continue-on-error") is True for check in CHECK_STEP_IDS)
+
+
+def test_fix_loop_starts_on_the_output_of_a_checks_job_that_succeeded(jobs):
+    assert jobs["checks-fix-loop"]["if"] == (
+        "${{ !cancelled() && needs.checks.result == 'success'"
+        " && needs.checks.outputs.any-check-failed == 'true' }}"
+    )
+    assert "checks" in jobs["checks-fix-loop"]["needs"]
+
+
+def test_review_runs_only_when_no_check_failed_or_the_fix_loop_succeeded(jobs):
+    assert jobs["review"]["if"] == (
+        "${{ !cancelled() && needs.checks.result == 'success'"
+        # the literal `false`, never "anything but true": an empty output opens nothing
+        " && (needs.checks.outputs.any-check-failed == 'false'"
+        " || needs['checks-fix-loop'].result == 'success') }}"
+    )
+    assert {"checks", "checks-fix-loop"} <= set(jobs["review"]["needs"])
+
+
+def test_no_job_reads_the_checks_jobs_failure_as_a_signal_any_more(jobs):
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "needs.checks.result == 'failure'" not in text
+    assert "Fail job if any check failed" not in "\n".join(step.get("name", "") for step in jobs["checks"]["steps"])
 
 
 def test_checks_job_reconciles_checks_state_after_the_checks_and_before_committing(jobs):

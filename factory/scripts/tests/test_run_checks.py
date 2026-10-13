@@ -768,3 +768,61 @@ def test_cli_reconcile_exits_zero_and_reports_whether_it_wrote(tmp_path, monkeyp
     assert run_checks.main(args) == 0
     assert json.loads(capsys.readouterr().out) == {"ok": True, "reconciled": True}
     assert state_io.read_state(path)[0]["status"] == "resolved"
+
+
+# --- any-check-failed: the checks job's signal to the fix loop (backlog bug 4) ----------
+
+
+@pytest.mark.parametrize(
+    "outcomes, expected",
+    [
+        (["success"] * 5, False),
+        (["success", "failure", "success", "success", "success"], True),
+        (["failure"] * 5, True),
+        # A step is skipped/cancelled only when something else already ended the job.
+        (["skipped"] * 5, False),
+        (["success", "skipped", "cancelled", "success", "success"], False),
+        (["success", "failure", "skipped", "skipped", "skipped"], True),
+    ],
+)
+def test_any_check_failed_is_true_only_for_a_failure_outcome(outcomes, expected):
+    assert run_checks.any_check_failed(outcomes) is expected
+
+
+@pytest.mark.parametrize(
+    "outcomes, named",
+    [
+        (["success", "", "success"], "''"),  # a mistyped step id evaluates to an empty string
+        (["success", "failed"], "'failed'"),
+        (["true"], "'true'"),
+        ([], "no step outcome"),
+    ],
+)
+def test_any_check_failed_rejects_what_is_not_a_step_outcome(outcomes, named):
+    with pytest.raises(ValueError, match=named):
+        run_checks.any_check_failed(outcomes)
+
+
+@pytest.mark.parametrize(
+    "outcomes, line",
+    [
+        (["success", "success", "success", "success", "success"], "any-check-failed=false"),
+        (["success", "success", "failure", "success", "failure"], "any-check-failed=true"),
+        (["skipped", "skipped", "skipped", "skipped", "skipped"], "any-check-failed=false"),
+    ],
+)
+def test_cmd_any_check_failed_prints_the_output_line(capsys, outcomes, line):
+    rc = run_checks.main(["any-check-failed", *outcomes])
+
+    assert rc == 0
+    assert capsys.readouterr().out == line + "\n"  # exactly one line, for >> "$GITHUB_OUTPUT"
+
+
+@pytest.mark.parametrize("outcomes", [["success", "", "success", "success", "success"], ["success", "bogus"], []])
+def test_cmd_any_check_failed_exits_2_and_prints_no_line_for_an_unknown_outcome(capsys, outcomes):
+    rc = run_checks.main(["any-check-failed", *outcomes])
+
+    captured = capsys.readouterr()
+    assert rc == 2
+    assert captured.out == ""  # never a line the workflow could read as "nothing failed"
+    assert "error:" in captured.err

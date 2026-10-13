@@ -456,17 +456,19 @@ def test_tool_missing_on_recheck_stops_the_loop_without_another_agent_call(tmp_p
 def test_tool_missing_in_the_first_evidence_stops_before_any_fix_cycle(tmp_path, run_setup):
     _all_checks_initially_passing_except(tmp_path, [])
     _write_evidence(tmp_path, "test", "fail", detail="sh: 1: ng: not found", returncode=127)
+    still_missing = {"status": "fail", "command": ["npm", "test"], "returncode": 127, "detail": "sh: 1: ng: not found"}
 
     with patch("subprocess.run", side_effect=_dispatcher()) as mock_run, \
-         patch("checks_fix_loop_graph.run_checks.run_check") as mock_run_check:
+         patch("checks_fix_loop_graph.run_checks.run_check", return_value=still_missing) as mock_run_check:
         outcome = checks_fix_loop_graph.run_checks_with_fix_loop("foo", "run-1", state_base=tmp_path)
 
     assert outcome["status"] == "tooling-failure"
     assert outcome["fix_cycle"] == 0
     assert sorted(outcome["tooling"]) == ["test"]
     mock_run.assert_not_called()  # the implementation agent is never engaged for it
-    mock_run_check.assert_not_called()
-    run_setup.assert_not_called()
+    # verified once -- setup, then the one failing check -- before it is believed
+    run_setup.assert_called_once()
+    mock_run_check.assert_called_once_with("test", "foo", "run-1", state_base=tmp_path, cwd=None)
 
     meta, body = state_io.read_state(tmp_path / "foo" / "run-1" / "checks.md")
     assert meta["status"] == "tooling-failure"
@@ -552,6 +554,16 @@ def _write_setup_evidence(tmp_path, status="fail"):
     path.write_text(json.dumps({"status": status, "command": ["npm", "ci"], "returncode": 1, "detail": "npm error network", "commands": [["npm", "ci"]]}))
 
 
+SETUP_STILL_FAILING = {
+    "status": "fail",
+    "command": ["npm", "ci"],
+    "returncode": 1,
+    "detail": "npm error network",
+    "commands": [["npm", "ci"]],
+}
+PASSING = {"status": "pass", "command": ["x"], "returncode": 0, "detail": ""}
+
+
 @pytest.mark.parametrize(
     "failing_names, returncode",
     [
@@ -560,11 +572,12 @@ def _write_setup_evidence(tmp_path, status="fail"):
         ([], 0),  # or did not need it and passed: the attempt is still not green
     ],
 )
-def test_setup_that_failed_in_the_checks_job_is_named_before_any_fix_cycle(tmp_path, run_setup, failing_names, returncode):
+def test_recorded_setup_failure_that_still_fails_is_named_before_any_fix_cycle(tmp_path, run_setup, failing_names, returncode):
     _all_checks_initially_passing_except(tmp_path, [])
     for name in failing_names:
         _write_evidence(tmp_path, name, "fail", detail="Cannot find module", returncode=returncode)
     _write_setup_evidence(tmp_path)
+    run_setup.return_value = dict(SETUP_STILL_FAILING)
 
     with patch("subprocess.run", side_effect=_dispatcher()) as mock_run, \
          patch("checks_fix_loop_graph.run_checks.run_check") as mock_run_check:
@@ -574,12 +587,53 @@ def test_setup_that_failed_in_the_checks_job_is_named_before_any_fix_cycle(tmp_p
     assert outcome["fix_cycle"] == 0
     assert sorted(outcome["tooling"]) == ["setup"]
     mock_run.assert_not_called()  # never a fix cycle for a checkout that was not prepared
-    mock_run_check.assert_not_called()
-    run_setup.assert_not_called()
+    run_setup.assert_called_once()  # verified once, not taken from the record
+    mock_run_check.assert_not_called()  # and nothing checked on a checkout setup could not prepare
 
     meta, body = state_io.read_state(tmp_path / "foo" / "run-1" / "checks.md")
     assert meta["status"] == "tooling-failure"
     assert "setup" in body and "npm ci" in body and "npm error network" in body
+
+
+# --- backlog bug 4: "Re-run failed jobs" re-runs this job alone -------------------------
+
+
+def test_rerun_after_a_transient_setup_failure_recovers_without_an_agent_call(tmp_path, run_setup):
+    """The earlier attempt of this job recorded a failed setup (a registry that was
+    down) and committed it. The `checks` job is green, so the re-run starts here, from
+    that record -- and must not fail from it when setup works now."""
+    _all_checks_initially_passing_except(tmp_path, ["lint"], detail="sh: 1: ng: not found")
+    _write_setup_evidence(tmp_path)
+    run_setup.return_value = {"status": "pass", "command": ["npm", "ci"], "returncode": 0, "detail": "", "commands": [["npm", "ci"]]}
+
+    with patch("subprocess.run", side_effect=_dispatcher()) as mock_run, \
+         patch("checks_fix_loop_graph.run_checks.run_check", return_value=dict(PASSING)) as mock_run_check:
+        outcome = checks_fix_loop_graph.run_checks_with_fix_loop("foo", "run-1", state_base=tmp_path)
+
+    assert outcome["status"] == "resolved"
+    assert outcome["fix_cycle"] == 0  # the verification is not a fix cycle
+    mock_run.assert_not_called()
+    mock_run_check.assert_called_once_with("lint", "foo", "run-1", state_base=tmp_path, cwd=None)
+    assert state_io.read_state(tmp_path / "foo" / "run-1" / "checks.md")[0]["status"] == "resolved"
+
+
+def test_rerun_after_a_transient_tooling_failure_goes_on_to_fix_the_real_finding(tmp_path, run_setup):
+    """The recorded 127 is gone on verification, and what the check reports now is an
+    ordinary finding: the loop takes it from there, with its full two cycles."""
+    _all_checks_initially_passing_except(tmp_path, [])
+    _write_evidence(tmp_path, "lint", "fail", detail="sh: 1: ng: not found", returncode=127)
+    finding = {"status": "fail", "command": ["npm", "run", "lint"], "returncode": 1, "detail": "1 real finding"}
+    results = iter([finding, dict(PASSING)])  # the verification, then cycle 1's re-check
+
+    a, b, c = _impl_patches()
+    with a as mock_run, b, c, \
+         patch("checks_fix_loop_graph.run_checks.run_check", side_effect=lambda *args, **kwargs: next(results)):
+        outcome = checks_fix_loop_graph.run_checks_with_fix_loop("foo", "run-1", state_base=tmp_path)
+
+    assert outcome["status"] == "resolved"
+    assert outcome["fix_cycle"] == 1
+    mock_run.assert_called_once()  # one agent call, for the real finding
+    assert run_setup.call_count == 2  # before the verification and before the cycle's re-check
 
 
 def test_recorded_setup_that_passed_does_not_stop_the_loop(tmp_path):
