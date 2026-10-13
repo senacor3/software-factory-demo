@@ -51,6 +51,10 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v10.2.0
+        with:
+          cache-dependency-glob: |
+            factory/graph/**/*.py
+            factory/scripts/**/*.py
 
       - name: Derive story-slug and run-id
         id: derive
@@ -113,6 +117,10 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v10.2.0
+        with:
+          cache-dependency-glob: |
+            factory/graph/**/*.py
+            factory/scripts/**/*.py
 
       # Real pass/fail test of the needs: propagation (AD-8/AD-15): independently
       # recompute the expected story-slug/run-id (same derivation, same github.run_id,
@@ -180,6 +188,10 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v10.2.0
+        with:
+          cache-dependency-glob: |
+            factory/graph/**/*.py
+            factory/scripts/**/*.py
 
       # This job starts on a fresh runner -- `actions/checkout@v7` above checks out
       # the default ref, not the story's branch -- so it must explicitly check out
@@ -329,6 +341,10 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v10.2.0
+        with:
+          cache-dependency-glob: |
+            factory/graph/**/*.py
+            factory/scripts/**/*.py
 
       - name: Checkout implementation branch
         run: |
@@ -397,6 +413,10 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v10.2.0
+        with:
+          cache-dependency-glob: |
+            factory/graph/**/*.py
+            factory/scripts/**/*.py
 
       - name: Checkout implementation branch
         run: |
@@ -478,6 +498,10 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v10.2.0
+        with:
+          cache-dependency-glob: |
+            factory/graph/**/*.py
+            factory/scripts/**/*.py
 
       # CAP-9 approval and merge (AD-14): a deterministic pipeline step, triggered
       # automatically on evidence-approval's approval -- never an agent action. A
@@ -518,6 +542,10 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v10.2.0
+        with:
+          cache-dependency-glob: |
+            factory/graph/**/*.py
+            factory/scripts/**/*.py
 
       # The gate checked is the one guarding the job that failed: plan-approval for
       # `implementation`, evidence-approval for `merge` (`merge` is `skipped`, never
