@@ -37,6 +37,17 @@ describe('table-sort', () => {
   });
 
   describe('sortRows', () => {
+    it("sorts by a column's accessor instead of the row's own property when one is given", () => {
+      const sorted = sortRows<Row>(
+        ROWS,
+        { column: 'name', direction: 'ascending' },
+        { name: (row) => String(row.amount) },
+      );
+
+      // '1234.56' < '980' < '99' as text
+      expect(ids(sorted)).toEqual([2, 1, 3]);
+    });
+
     it('orders rows newest-first by id while no column is active', () => {
       expect(ids(sortRows(ROWS, UNSORTED))).toEqual([3, 2, 1]);
     });

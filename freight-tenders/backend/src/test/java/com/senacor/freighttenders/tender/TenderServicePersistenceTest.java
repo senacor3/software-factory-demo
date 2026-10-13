@@ -26,7 +26,7 @@ class TenderServicePersistenceTest {
 
   @Test
   void addRemarkAppendsTheNewRemarkAsTheLastElementAfterRealPersistence() {
-    Tender tender = new Tender("Hamburg", "Rotterdam");
+    Tender tender = TenderFixtures.tender();
     tender.addRemark(new Remark("First remark"));
     Long id = tenderRepository.save(tender).getId();
 
@@ -39,7 +39,7 @@ class TenderServicePersistenceTest {
 
   @Test
   void addOfferAppendsTheNewOfferAsTheLastElementAfterRealPersistence() {
-    Tender tender = new Tender("Hamburg", "Rotterdam");
+    Tender tender = TenderFixtures.tender();
     tender.addOffer(new Offer("First Supplier", new BigDecimal("100.00")));
     Long id = tenderRepository.save(tender).getId();
 

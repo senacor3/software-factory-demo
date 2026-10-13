@@ -1,11 +1,25 @@
 import { Component, inject, OnInit, WritableSignal, computed, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { catchError, of } from 'rxjs';
-import { SortState, UNSORTED, ariaSort, sortIndicator, sortRows, toggleSort } from '../table-sort';
+import {
+  SortAccessors,
+  SortState,
+  UNSORTED,
+  ariaSort,
+  sortIndicator,
+  sortRows,
+  toggleSort,
+} from '../table-sort';
 import { STATUS_LABELS, TenderApiService, TenderStatus, TenderSummary } from '../tender-api';
 
 const LOAD_ERROR_MESSAGE =
   'Die Ausschreibungen konnten nicht geladen werden. Bitte versuchen Sie es später erneut.';
+
+// Von and Nach show, and so sort by, the city of the address.
+const SORT_ACCESSORS: SortAccessors<TenderSummary> = {
+  origin: (tender) => tender.origin.city,
+  destination: (tender) => tender.destination.city,
+};
 
 @Component({
   selector: 'app-tender-overview',
@@ -93,6 +107,7 @@ export class TenderOverview implements OnInit {
       sortRows(
         this.tenders().filter((tender) => tender.status === status),
         sort(),
+        SORT_ACCESSORS,
       ),
     );
 

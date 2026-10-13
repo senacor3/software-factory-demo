@@ -285,7 +285,8 @@ label {
   letter-spacing: 0.02em;
 }
 
-input {
+input,
+select {
   display: block;
   width: 100%;
   padding: 8px 12px;
@@ -296,13 +297,15 @@ input {
   font: inherit;
 }
 
-input:focus-visible {
+input:focus-visible,
+select:focus-visible {
   border-color: var(--color-primary);
   outline: 2px solid var(--color-primary);
   outline-offset: 0;
 }
 
-input:disabled {
+input:disabled,
+select:disabled {
   background: var(--color-surface-dim);
   color: var(--color-on-surface-variant);
   cursor: not-allowed;

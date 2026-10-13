@@ -3,6 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { TenderSummary } from '../tender-api';
+import { tenderSummary } from '../tender-test-data';
 import { TenderOverview } from './tender-overview';
 
 describe('TenderOverview', () => {
@@ -25,12 +26,26 @@ describe('TenderOverview', () => {
     httpMock.verify();
   });
 
+  function tender(
+    id: number,
+    originCity: string,
+    destinationCity: string,
+    status: TenderSummary['status'] = 'OPEN',
+  ): TenderSummary {
+    return tenderSummary({
+      id,
+      origin: { country: 'DE', postalCode: '10115', city: originCity },
+      destination: { country: 'DE', postalCode: '80331', city: destinationCity },
+      status,
+    });
+  }
+
   const SORTABLE_TENDERS: TenderSummary[] = [
-    { id: 1, origin: 'Hamburg', destination: 'Rotterdam', status: 'OPEN' },
-    { id: 2, origin: 'Aachen', destination: 'Zürich', status: 'OPEN' },
-    { id: 3, origin: 'Köln', destination: 'Antwerpen', status: 'OPEN' },
-    { id: 4, origin: 'Stuttgart', destination: 'Frankfurt', status: 'CLOSED' },
-    { id: 5, origin: 'Bremen', destination: 'Mailand', status: 'CLOSED' },
+    tender(1, 'Hamburg', 'Rotterdam'),
+    tender(2, 'Aachen', 'Zürich'),
+    tender(3, 'Köln', 'Antwerpen'),
+    tender(4, 'Stuttgart', 'Frankfurt', 'CLOSED'),
+    tender(5, 'Bremen', 'Mailand', 'CLOSED'),
   ];
 
   function load(tenders: TenderSummary[]): HTMLElement {
@@ -87,8 +102,8 @@ describe('TenderOverview', () => {
 
   it('lists open and closed tenders under their German headings when the backend returns a mix', () => {
     const tenders: TenderSummary[] = [
-      { id: 1, origin: 'Hamburg', destination: 'Berlin', status: 'OPEN' },
-      { id: 2, origin: 'München', destination: 'Köln', status: 'CLOSED' },
+      tender(1, 'Hamburg', 'Berlin'),
+      tender(2, 'München', 'Köln', 'CLOSED'),
     ];
 
     fixture.detectChanges();
@@ -106,9 +121,7 @@ describe('TenderOverview', () => {
   });
 
   it('shows a German empty-state message for the section with no tenders', () => {
-    const tenders: TenderSummary[] = [
-      { id: 1, origin: 'Hamburg', destination: 'Berlin', status: 'OPEN' },
-    ];
+    const tenders: TenderSummary[] = [tender(1, 'Hamburg', 'Berlin')];
 
     fixture.detectChanges();
     httpMock.expectOne('/api/tenders').flush(tenders);
@@ -121,9 +134,7 @@ describe('TenderOverview', () => {
   });
 
   it("links to the create-tender page and to each tender's detail page", () => {
-    const tenders: TenderSummary[] = [
-      { id: 1, origin: 'Hamburg', destination: 'Berlin', status: 'OPEN' },
-    ];
+    const tenders: TenderSummary[] = [tender(1, 'Hamburg', 'Berlin')];
 
     fixture.detectChanges();
     httpMock.expectOne('/api/tenders').flush(tenders);
@@ -137,6 +148,18 @@ describe('TenderOverview', () => {
       '[data-testid="open-tenders-link"]',
     );
     expect(tenderLink?.getAttribute('href')).toBe('/tenders/1');
+  });
+
+  it('shows the city of the origin and destination address in the Von and Nach columns', () => {
+    const compiled = load([tender(1, 'Hamburg', 'Rotterdam')]);
+
+    const row = compiled.querySelector('[data-testid="open-tenders-row"]');
+    const cells = Array.from(row?.querySelectorAll('td') ?? []).map((cell) =>
+      cell.textContent?.trim(),
+    );
+    expect(cells.slice(0, 2)).toEqual(['Hamburg', 'Rotterdam']);
+    expect(row?.textContent).not.toContain('20457');
+    expect(row?.textContent).not.toContain('[object Object]');
   });
 
   it('shows a German error message when the backend is unreachable', () => {

@@ -1,0 +1,40 @@
+{
+  "status": "pass",
+  "command": [
+    "npm",
+    "--prefix",
+    "freight-tenders/frontend",
+    "run",
+    "build"
+  ],
+  "returncode": 0,
+  "detail": "",
+  "commands": [
+    [
+      "/home/runner/work/_temp/setup-uv-cache/environments-v2/checks-fix-loop-graph-afb7a13f0ac7936a/bin/python",
+      "-m",
+      "compileall",
+      "factory",
+      "-q"
+    ],
+    [
+      "bash",
+      "-c",
+      "JAVA_HOME=\"$JAVA_HOME_25_X64\" mvn -B -f freight-tenders/backend/pom.xml compile"
+    ],
+    [
+      "npm",
+      "--prefix",
+      "freight-tenders/frontend",
+      "ci"
+    ],
+    [
+      "npm",
+      "--prefix",
+      "freight-tenders/frontend",
+      "run",
+      "build"
+    ]
+  ],
+  "config_source": "origin/main"
+}

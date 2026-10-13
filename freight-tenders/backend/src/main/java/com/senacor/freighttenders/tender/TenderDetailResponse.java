@@ -1,5 +1,7 @@
 package com.senacor.freighttenders.tender;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -8,8 +10,22 @@ import java.util.List;
  */
 public record TenderDetailResponse(
     Long id,
-    String origin,
-    String destination,
+    AddressResponse origin,
+    AddressResponse destination,
+    LocalDate pickupDate,
+    LocalDate deliveryDate,
+    LocalDate bidDeadline,
+    String commodity,
+    Integer weightKg,
+    BigDecimal loadingMeters,
+    Integer palletCount,
+    EquipmentType equipmentType,
+    boolean dangerousGoods,
+    String adrClass,
+    boolean temperatureControlled,
+    Integer temperatureMinC,
+    Integer temperatureMaxC,
+    Currency currency,
     TenderStatus status,
     List<RemarkResponse> remarks,
     List<OfferResponse> offers) {
@@ -24,8 +40,22 @@ public record TenderDetailResponse(
   public static TenderDetailResponse from(Tender tender) {
     return new TenderDetailResponse(
         tender.getId(),
-        tender.getOrigin(),
-        tender.getDestination(),
+        AddressResponse.from(tender.getOrigin()),
+        AddressResponse.from(tender.getDestination()),
+        tender.getPickupDate(),
+        tender.getDeliveryDate(),
+        tender.getBidDeadline(),
+        tender.getCommodity(),
+        tender.getWeightKg(),
+        tender.getLoadingMeters(),
+        tender.getPalletCount(),
+        tender.getEquipmentType(),
+        tender.isDangerousGoods(),
+        tender.getAdrClass(),
+        tender.isTemperatureControlled(),
+        tender.getTemperatureMinC(),
+        tender.getTemperatureMaxC(),
+        tender.getCurrency(),
         tender.getStatus(),
         tender.getRemarks().stream().map(RemarkResponse::from).toList(),
         tender.getOffers().stream().map(OfferResponse::from).toList());
