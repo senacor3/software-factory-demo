@@ -11,19 +11,29 @@
 # run_checks.py reads this file from origin/main, not from the story branch, so a
 # change here applies to runs started after it is merged.
 #
+# `setup:` holds commands, shaped like a check's, that prepare the checkout for the
+# checks -- a dependency install, say. They run before the checks in the `checks` job
+# (`run_checks.py setup`) and again before every re-check in the checks fix loop and
+# the review fix loop, which re-run only some of the checks on a fresh runner: so
+# anything a check needs installed belongs here, not in an earlier check's list. The
+# key is optional.
+#
 # `toolchains:` names the runner toolchain versions the commands above need (e.g. a
-# JDK or Node) -- read by `run_checks.py toolchains` and wired into the `checks` job's
-# own setup steps (AD-6 addendum). A key with no value, or the whole mapping absent,
+# JDK or Node) -- read by `run_checks.py toolchains` and set up by the composite action
+# .github/actions/checks-toolchain, which the `checks` and `checks-fix-loop` jobs both
+# use (AD-6 addendum). A key with no value, or the whole mapping absent,
 # means no setup step runs for it.
 toolchains:
   java: '25'
   node: '26'
 
+setup:
+  - ["npm", "--prefix", "freight-tenders/frontend", "ci"]
+
 checks:
   build:
     - ["{python}", "-m", "compileall", "factory", "-q"]
     - ["bash", "-c", "JAVA_HOME=\"$JAVA_HOME_25_X64\" mvn -B -f freight-tenders/backend/pom.xml compile"]
-    - ["npm", "--prefix", "freight-tenders/frontend", "ci"]
     - ["npm", "--prefix", "freight-tenders/frontend", "run", "build"]
   test:
     - ["uv", "run", "--with", "pytest", "--with", "pyyaml", "pytest", "factory/graph/tests/", "factory/scripts/tests/"]

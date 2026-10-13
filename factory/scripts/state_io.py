@@ -71,9 +71,11 @@ STATUS_BY_STAGE = {
     "review": frozenset(
         {"in-review", "findings-open", "fix-in-progress", "resolved", "unresolved-after-cap"}
     ),
-    # AD-10's checks-fix-loop stage (checks_fix_loop_graph.py), mirroring review's enum.
+    # AD-10's checks-fix-loop stage (checks_fix_loop_graph.py), mirroring review's enum,
+    # plus `tooling-failure`: a check's command could not be started at all, so the
+    # loop stopped without a fix cycle for it (AD-10 addendum, backlog bug 5).
     "checks": frozenset(
-        {"checking", "findings-open", "fix-in-progress", "resolved", "unresolved-after-cap"}
+        {"checking", "findings-open", "fix-in-progress", "resolved", "unresolved-after-cap", "tooling-failure"}
     ),
 }
 

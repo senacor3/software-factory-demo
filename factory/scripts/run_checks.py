@@ -37,6 +37,22 @@ mapping and prints `java=`/`node=` lines shaped for `>> "$GITHUB_OUTPUT"` -- the
 `checks` job's workflow steps use it to set up the Java/Node versions the configured
 build/test/lint commands need, before any of the five checks above run. It writes no
 evidence and exits 2 only on a missing/unreadable/malformed config.
+
+Two more subcommands serve the `checks` job around its five check steps (AD-6 and
+AD-10 addenda, backlog bug 5). `setup` (`--story-slug S --run-id R`) runs the config's
+optional top-level `setup:` commands -- what prepares the checkout for the checks, e.g.
+a dependency install -- so a check never relies on an earlier check having run; both
+fix loops call the same `run_setup()` before each re-check. Its result goes to
+`evidence/checks/setup.json`, beside the five checks' own, so a failed setup is on
+record for the job that follows; it exits 1 when a command fails. `reconcile` (`--story-slug S --run-id R`) resets a stale
+`checks.md` an earlier attempt's fix loop left behind, once every check has passed or
+been skipped; it exits 0 whether or not it wrote anything.
+
+`any-check-failed` (the check steps' outcomes as arguments) is how the `checks` job
+says "a check failed" without failing itself (AD-10 addendum, backlog bug 4): it
+prints `any-check-failed=true|false`, shaped for `>> "$GITHUB_OUTPUT"`, from the
+`steps.<id>.outcome` values the workflow passes it. It exits 2, printing no line, for
+a value that is not a step outcome -- never reading it as "nothing failed".
 """
 
 from __future__ import annotations
@@ -60,6 +76,23 @@ CONFIG_RELPATH = Path(".github") / "post-implementation-checks.yml"
 PYTHON_TOKEN = "{python}"
 
 NOT_CONFIGURED_DETAIL = f"no command configured for this check in {CONFIG_RELPATH}"
+
+SETUP_KEY = "setup"
+
+NO_SETUP_DETAIL = f"no `{SETUP_KEY}` command configured in {CONFIG_RELPATH}"
+
+# Return codes a shell gives when a command could not be started at all -- 126 "found
+# but not executable", 127 "not found" -- as opposed to a tool that ran and reported.
+TOOLING_RETURNCODES = (126, 127)
+
+# Every value GitHub Actions gives `steps.<id>.outcome`. Only `failure` is a check that
+# ran and failed; a step is `skipped` or `cancelled` only when something else already
+# ended the job.
+STEP_OUTCOMES = ("success", "failure", "skipped", "cancelled")
+
+ANY_CHECK_FAILED_OUTPUT = "any-check-failed"
+
+RESOLVED_CHECKS_BODY = "## Failing checks\n\n_none_"
 
 
 TARGET_BRANCH = "main"
@@ -171,7 +204,11 @@ def _parse_commands(name: str, text: str, path: object, yaml) -> list[list[str]]
             f"{path} names unknown check(s) {', '.join(unknown)}; allowed: {', '.join(CHECK_NAMES)}"
         )
 
-    commands = checks.get(name)
+    return _command_list(name, checks.get(name), path)
+
+
+def _command_list(name: str, commands: object, path: object) -> list[list[str]]:
+    """Validate one list of commands from the config; None means none configured."""
     if commands is None:
         return []
     if not isinstance(commands, list):
@@ -182,6 +219,30 @@ def _parse_commands(name: str, text: str, path: object, yaml) -> list[list[str]]
                 f"{path}: every `{name}` command must be a non-empty list of strings, got {cmd!r}"
             )
     return [[arg.replace(PYTHON_TOKEN, sys.executable) for arg in cmd] for cmd in commands]
+
+
+def load_setup_commands(*, cwd: str | os.PathLike | None = None) -> list[list[str]]:
+    """Return the config's top-level `setup:` commands; an empty list means none.
+
+    Read the same way `checks:` is (`_read_config_text`), and each command has the same
+    shape as a check's. The key is optional -- a config without it prepares nothing.
+    Raises `ChecksConfigError` (carrying `source`) for a missing/unreadable config,
+    invalid YAML, or a `setup:` value that is not a list of commands.
+    """
+    import yaml
+
+    text, source, path = _read_config_text(cwd)
+    try:
+        try:
+            data = yaml.safe_load(text)
+        except yaml.YAMLError as e:
+            raise ChecksConfigError(f"{path} is not valid YAML: {e}") from e
+        if not isinstance(data, dict):
+            raise ChecksConfigError(f"{path} must hold a top-level mapping")
+        return _command_list(SETUP_KEY, data.get(SETUP_KEY), path)
+    except ChecksConfigError as e:
+        e.source = source
+        raise
 
 
 def _parse_toolchains(text: str, path: object, yaml) -> dict[str, str]:
@@ -320,6 +381,138 @@ def run_check(
     return result
 
 
+def run_setup(
+    story_slug: str,
+    run_id: str,
+    *,
+    state_base: str | os.PathLike = state_io.FACTORY_DIR,
+    cwd: str | os.PathLike | None = None,
+) -> dict:
+    """Run the config's `setup:` commands in order, stopping at the first failure.
+
+    Returns the same result shape `run_check` does (`skipped` when no command is
+    configured) and writes it to `evidence/checks/setup.json`. Setup is not one of the
+    five checks -- it is what they all rely on -- but its result has to outlive the job
+    that ran it the same way theirs does, so a failed setup can be named afterwards
+    instead of read off the checks that then failed for want of it. A config that
+    cannot be read is a `"fail"`, never raised.
+    """
+    try:
+        commands = load_setup_commands(cwd=cwd)
+    except ChecksConfigError as e:
+        result = {"status": "fail", "command": None, "returncode": None, "detail": str(e), "commands": []}
+    else:
+        if not commands:
+            result = {"status": "skipped", "command": None, "returncode": None, "detail": NO_SETUP_DETAIL, "commands": []}
+        else:
+            ran = []
+            for cmd in commands:
+                result = _run_command(cmd, cwd=cwd)
+                ran.append(cmd)
+                if result["status"] == "fail":
+                    break
+            result["commands"] = ran
+
+    _write_evidence(SETUP_KEY, story_slug, run_id, result, state_base=state_base)
+    return result
+
+
+def read_setup_result(
+    story_slug: str,
+    run_id: str,
+    *,
+    state_base: str | os.PathLike = state_io.FACTORY_DIR,
+) -> dict | None:
+    """Return the last recorded setup result, or None when there is none to read.
+
+    None is not a failure: a config without `setup:` commands still records `skipped`,
+    but a run started before setup existed has no file at all.
+    """
+    path = state_io.state_dir(story_slug, run_id, base=state_base) / "evidence" / "checks" / f"{SETUP_KEY}.json"
+    try:
+        result = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+    return result if isinstance(result, dict) else None
+
+
+def is_tooling_failure(result: dict) -> bool:
+    """True when a failed result's command could not be started at all.
+
+    That is a shell's 126/127, or no return code because spawning it raised (see
+    `_run_command`) -- a broken runner, not a finding in the code under check. A
+    result that names no command (missing evidence, an unreadable config) is not one.
+    """
+    return (
+        result.get("status") == "fail"
+        and result.get("command") is not None
+        and (result.get("returncode") is None or result.get("returncode") in TOOLING_RETURNCODES)
+    )
+
+
+def reconcile_checks_state(
+    story_slug: str,
+    run_id: str,
+    *,
+    state_base: str | os.PathLike = state_io.FACTORY_DIR,
+) -> bool:
+    """Reset a stale `checks.md` once every check has passed or been skipped.
+
+    `checks.md` is written by the checks fix loop, which only runs when the `checks`
+    job reported a failed check -- so when a later attempt of that job finds none,
+    nothing else would correct what an earlier attempt's loop stamped. This is the one
+    case the `checks` job writes the file: it must already exist with a status other than `resolved`,
+    all five evidence files must read `pass` or `skipped`, and the recorded setup must
+    not have failed. The `fix_cycle` count is carried over, never reset. Returns
+    whether the file was rewritten.
+    """
+    directory = state_io.state_dir(story_slug, run_id, base=state_base)
+    checks_path = directory / "checks.md"
+    try:
+        meta, _ = state_io.read_state(checks_path)
+    except (FileNotFoundError, ValueError):
+        return False
+    if meta.get("status") == "resolved":
+        return False
+    setup = read_setup_result(story_slug, run_id, state_base=state_base)
+    if setup is not None and setup.get("status") == "fail":
+        return False
+    for name in CHECK_NAMES:
+        try:
+            evidence = json.loads((directory / "evidence" / "checks" / f"{name}.json").read_text(encoding="utf-8"))
+        except (FileNotFoundError, json.JSONDecodeError):
+            return False
+        if not isinstance(evidence, dict) or evidence.get("status") not in ("pass", "skipped"):
+            return False
+    state_io.write_state(
+        checks_path,
+        story_slug=story_slug,
+        stage="checks",
+        status="resolved",
+        body=RESOLVED_CHECKS_BODY,
+        extra={"fix_cycle": meta.get("fix_cycle", 0)},
+    )
+    return True
+
+
+def any_check_failed(outcomes: list[str]) -> bool:
+    """True when any of the check steps' outcomes is `failure`.
+
+    `outcomes` are GitHub Actions `steps.<id>.outcome` values. Raises `ValueError`
+    for an empty list or a value outside `STEP_OUTCOMES` -- an expression that names
+    a step id that does not exist evaluates to an empty string, and reading that as
+    "nothing failed" would switch the checks fix loop off without anyone noticing.
+    """
+    if not outcomes:
+        raise ValueError("no step outcome given")
+    unknown = [o for o in outcomes if o not in STEP_OUTCOMES]
+    if unknown:
+        raise ValueError(
+            f"not a step outcome: {', '.join(repr(o) for o in unknown)}; expected one of {', '.join(STEP_OUTCOMES)}"
+        )
+    return "failure" in outcomes
+
+
 def run_build(
     story_slug: str,
     run_id: str,
@@ -398,17 +591,63 @@ def cmd_toolchains(args) -> int:
     return 0
 
 
+def cmd_setup(args) -> int:
+    """Run the config's `setup:` commands; exit 1 when one fails, 0 otherwise."""
+    result = run_setup(args.story_slug, args.run_id)
+    print(json.dumps(result))
+    return 1 if result["status"] == "fail" else 0
+
+
+def cmd_reconcile(args) -> int:
+    """Reset a stale `checks.md` when every check passed; exit 0 either way."""
+    reconciled = reconcile_checks_state(args.story_slug, args.run_id)
+    print(json.dumps({"ok": True, "reconciled": reconciled}))
+    return 0
+
+
+def cmd_any_check_failed(args) -> int:
+    """Print `any-check-failed=true|false` from the given step outcomes.
+
+    Shaped for direct `>> "$GITHUB_OUTPUT"` redirection, like `cmd_toolchains`. An
+    unknown outcome prints nothing to stdout and exits 2.
+    """
+    try:
+        failed = any_check_failed(args.outcomes)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    print(f"{ANY_CHECK_FAILED_OUTPUT}={'true' if failed else 'false'}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
     for name in CHECK_NAMES:
         _add_check_subparser(sub, name)
     sub.add_parser("toolchains", help="print configured runner toolchain versions (java=/node=)")
+    ps = sub.add_parser(SETUP_KEY, help="run the configured setup commands that prepare the checkout for the checks")
+    ps.add_argument("--story-slug", required=True)
+    ps.add_argument("--run-id", required=True)
+    pr = sub.add_parser("reconcile", help="reset a stale checks.md once every check passed or was skipped")
+    pr.add_argument("--story-slug", required=True)
+    pr.add_argument("--run-id", required=True)
+
+    pa = sub.add_parser(
+        ANY_CHECK_FAILED_OUTPUT, help="print any-check-failed=true|false from the check steps' outcomes"
+    )
+    pa.add_argument("outcomes", nargs="*", help="steps.<id>.outcome values, one per check step")
 
     args = p.parse_args(argv)
 
+    if args.cmd == ANY_CHECK_FAILED_OUTPUT:
+        return cmd_any_check_failed(args)
     if args.cmd == "toolchains":
         return cmd_toolchains(args)
+    if args.cmd == SETUP_KEY:
+        return cmd_setup(args)
+    if args.cmd == "reconcile":
+        return cmd_reconcile(args)
 
     result = run_check(args.check, args.story_slug, args.run_id)
     print(json.dumps(result))

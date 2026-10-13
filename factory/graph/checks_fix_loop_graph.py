@@ -6,8 +6,10 @@
 """checks_fix_loop_graph -- the checks-fix-loop job's bounded fix loop (AD-10, new
 stage mirroring AD-11's existing review fix loop).
 
-Runs only when the `checks` job's result is `failure` (wired via the workflow's
-`checks-fix-loop` job `if:`). Unlike `fix_loop_graph.py`, the *initial* check run
+Runs only when the `checks` job reported a failed check -- its `any-check-failed`
+output, not its conclusion: that job ends `success` on a failed check, so a run this
+loop recovers is not left red (wired via the workflow's `checks-fix-loop` job `if:`,
+backlog bug 4). Unlike `fix_loop_graph.py`, the *initial* check run
 already happened in the `checks` job itself (CAP-5, AD-6) -- this module never
 re-invokes `run_checks.py`'s commands speculatively, it only reads the evidence that
 job already wrote (`evidence/checks/<name>.json`, committed before this job starts)
@@ -24,9 +26,30 @@ A hard cap of 2 fix cycles (`MAX_FIX_CYCLES`, duplicated from `fix_loop_graph.py
 rather than imported -- the two fix-loop stages are independently owned, see the
 plan's Code Map): if still failing after the second cycle's recheck, stop -- no
 third fix cycle -- and stamp `checks.md`'s status `unresolved-after-cap` instead of
-looping again just to relabel. Cap-out fails the job the same way an ordinary
-`checks` failure does today (via this module's CLI exit code) -- no silent success,
-no auto-merge.
+looping again just to relabel. Cap-out fails this job (via this module's CLI exit
+code), and with it the run -- no silent success, no auto-merge.
+
+A re-check runs under the conditions the `checks` job's first run had: the job
+sets up the same toolchains (the workflow's shared `checks-toolchain` action), and
+this module runs the config's `setup:` commands (`run_checks.run_setup`, e.g. a
+dependency install) before every re-check -- after the agent's edits, since a fix may
+change what there is to install -- because re-running only the failed check(s) means
+no earlier check has prepared the checkout.
+
+A check whose command could not be started at all (`run_checks.is_tooling_failure`),
+or a failing setup command, is a tooling failure, not a finding in the code: the loop
+stops without engaging the implementation agent for it, stamps `checks.md`'s status
+`tooling-failure` naming the check and command, and this module's CLI exits 6. That
+holds for the evidence the loop starts from -- the checks' and the setup's
+(`evidence/checks/setup.json`) -- as well as for a re-check. Checks that still hold a
+real finding at that point stay listed in `checks.md` beside the tooling failure.
+
+A tooling failure in the evidence the loop starts from is verified once before it is
+believed: setup and the failing check(s) are run again, with no agent call and no fix
+cycle counted. That evidence may be this job's own from an earlier attempt -- "Re-run
+failed jobs" re-runs this job alone, since the `checks` job is not a failed one -- and
+a runner problem that has since gone (a registry that was down) must not fail every
+re-run from the record of it.
 
 `checks.md`'s `fix_cycle` counter is incremented and stamped only by this module's
 own code -- never derived from or trusted to the implementation agent's output.
@@ -42,6 +65,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import sys
 from pathlib import Path
 
@@ -110,6 +134,29 @@ def _rerun_checks(
     }
 
 
+def _tooling_failures(failing: dict[str, dict]) -> dict[str, dict]:
+    """Return the subset of `failing` whose command could not be started at all."""
+    return {name: result for name, result in failing.items() if run_checks.is_tooling_failure(result)}
+
+
+def _describe_tooling_failure(name: str, result: dict) -> str:
+    command = result.get("command")
+    what = f"`{shlex.join(command)}`" if command else "its configuration"
+    returncode = result.get("returncode")
+    code = "" if returncode is None else f" (return code {returncode})"
+    return f"{name}: {what} could not be run{code}: {result.get('detail', '')}"
+
+
+def _render_tooling_body(tooling: dict[str, dict], failing: dict[str, dict]) -> str:
+    """Name what could not be run, then whatever still holds a real finding beside it."""
+    lines = ["## Tooling failures", ""]
+    lines += [f"- {_describe_tooling_failure(name, tooling[name])}" for name in sorted(tooling)]
+    findings = {name: result for name, result in failing.items() if name not in tooling}
+    if findings:
+        lines += ["", _render_checks_body(findings)]
+    return "\n".join(lines)
+
+
 def _render_checks_body(failing: dict[str, dict]) -> str:
     lines = ["## Failing checks", ""]
     if not failing:
@@ -133,10 +180,13 @@ def run_checks_with_fix_loop(
 ) -> dict:
     """Bounded checks fix loop (cap 2 cycles, AD-10) -> final status stamp.
 
-    Returns `{"status": str, "fix_cycle": int, "failing": list[str], "checks": dict}`
-    where `status` is the stamped final status (`resolved` or
-    `unresolved-after-cap`), `failing` the still-failing check names (empty when
-    resolved), and `checks` the frontmatter dict actually written to `checks.md`.
+    Returns `{"status": str, "fix_cycle": int, "failing": list[str], "tooling": dict,
+    "checks": dict}` where `status` is the stamped final status (`resolved`,
+    `unresolved-after-cap` or `tooling-failure`), `failing` the still-failing check
+    names (empty when resolved), `tooling` the `{name: result}` of whatever could not
+    be run (`setup` for a failing setup command; empty unless the status is
+    `tooling-failure`), and `checks` the frontmatter dict actually written to
+    `checks.md`.
 
     Raises `implementation_graph.ImplementationInvocationError` if the implementation
     agent's tooling call fails, or `checkout_branch.CheckoutError` /
@@ -150,7 +200,21 @@ def run_checks_with_fix_loop(
     failing = _failing_checks(run_checks.CHECK_NAMES, story_slug, run_id, state_base=state_base)
 
     cycle = 0
-    while failing and cycle < MAX_FIX_CYCLES:
+    setup = run_checks.read_setup_result(story_slug, run_id, state_base=state_base)
+    setup_failed = setup is not None and setup.get("status") == "fail"
+    tooling = _tooling_failures(failing)
+    if setup_failed or tooling:
+        # The evidence on the branch says something could not be run. Verify that
+        # once before believing it -- see the module docstring -- with setup first:
+        # where it failed, whatever the checks then reported says nothing about the
+        # code.
+        setup = run_checks.run_setup(story_slug, run_id, state_base=state_base, cwd=cwd)
+        if setup["status"] == "fail":
+            tooling = {run_checks.SETUP_KEY: setup}
+        else:
+            failing = _rerun_checks(sorted(failing), story_slug, run_id, state_base=state_base, cwd=cwd)
+            tooling = _tooling_failures(failing)
+    while failing and not tooling and cycle < MAX_FIX_CYCLES:
         cycle += 1
 
         state_io.write_state(
@@ -171,15 +235,25 @@ def run_checks_with_fix_loop(
             review_path=checks_path,
         )
 
-        failing = _rerun_checks(sorted(failing), story_slug, run_id, state_base=state_base, cwd=cwd)
+        setup = run_checks.run_setup(story_slug, run_id, state_base=state_base, cwd=cwd)
+        if setup["status"] == "fail":
+            tooling = {run_checks.SETUP_KEY: setup}
+            break
 
-    final_status = "unresolved-after-cap" if failing else "resolved"
+        failing = _rerun_checks(sorted(failing), story_slug, run_id, state_base=state_base, cwd=cwd)
+        tooling = _tooling_failures(failing)
+
+    if tooling:
+        final_status, body = "tooling-failure", _render_tooling_body(tooling, failing)
+    else:
+        final_status = "unresolved-after-cap" if failing else "resolved"
+        body = _render_checks_body(failing)
     checks_meta = state_io.write_state(
         checks_path,
         story_slug=story_slug,
         stage="checks",
         status=final_status,
-        body=_render_checks_body(failing),
+        body=body,
         extra={"fix_cycle": cycle},
     )
 
@@ -187,6 +261,7 @@ def run_checks_with_fix_loop(
         "status": final_status,
         "fix_cycle": cycle,
         "failing": sorted(failing),
+        "tooling": tooling,
         "checks": checks_meta,
     }
 
@@ -242,6 +317,21 @@ def main(argv: list[str] | None = None) -> int:
     except (checkout_branch.CheckoutError, commit_push_implementation.CommitPushError) as e:
         print(f"fix-cycle git step failed: {e}", file=sys.stderr)
         return 5
+
+    if outcome["status"] == "tooling-failure":
+        for name in sorted(outcome["tooling"]):
+            print(f"tooling failure: {_describe_tooling_failure(name, outcome['tooling'][name])}", file=sys.stderr)
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "status": outcome["status"],
+                    "fix_cycle": outcome["fix_cycle"],
+                    "tooling": sorted(outcome["tooling"]),
+                }
+            )
+        )
+        return 6
 
     print(json.dumps({"ok": True, "status": outcome["status"], "fix_cycle": outcome["fix_cycle"]}))
     return 1 if outcome["status"] == "unresolved-after-cap" else 0

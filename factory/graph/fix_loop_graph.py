@@ -107,6 +107,16 @@ def run_review_with_fix_loop(
             review_path=review_path,
         )
 
+        # The recheck runs on this job's own fresh runner, so prepare the checkout the
+        # way the `checks` job did (the config's `setup:` commands, e.g. a dependency
+        # install) -- after the agent's edits, which may change what there is to
+        # install. See run_checks.run_setup and AD-6's addendum (backlog bug 5).
+        setup_result = run_checks.run_setup(story_slug, run_id, state_base=state_base, cwd=cwd)
+        if setup_result["status"] == "fail":
+            raise CheckRegressionError(
+                f"fix cycle {cycle} could not prepare the checkout for the recheck (setup): "
+                f"{setup_result.get('detail', '')}"
+            )
         build_result = run_checks.run_build(story_slug, run_id, state_base=state_base, cwd=cwd)
         if build_result["status"] == "fail":
             raise CheckRegressionError(

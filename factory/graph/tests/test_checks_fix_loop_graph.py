@@ -56,10 +56,28 @@ def _dispatcher(impl_result=None):
     return run
 
 
-def _write_evidence(tmp_path, name, status, detail=""):
+def _write_evidence(tmp_path, name, status, detail="", returncode=None):
+    if returncode is None:
+        returncode = 0 if status == "pass" else 1
     path = state_io.state_dir("foo", "run-1", base=tmp_path) / "evidence" / "checks" / f"{name}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"status": status, "command": ["x"], "returncode": 0 if status == "pass" else 1, "detail": detail}))
+    path.write_text(json.dumps({"status": status, "command": ["x"], "returncode": returncode, "detail": detail}))
+
+
+# The autouse fixture below replaces `run_checks.run_setup`; keep the real one.
+_real_run_setup = run_checks.run_setup
+
+SETUP_SKIPPED = {"status": "skipped", "command": None, "returncode": None, "detail": "", "commands": []}
+
+
+@pytest.fixture(autouse=True)
+def run_setup():
+    """Default every test to a config with no `setup:` commands; setup tests re-patch.
+
+    Also keeps the loop's setup call off the real `subprocess.run`/checks config.
+    """
+    with patch("checks_fix_loop_graph.run_checks.run_setup", return_value=dict(SETUP_SKIPPED)) as mock:
+        yield mock
 
 
 def _all_checks_initially_passing_except(tmp_path, failing_names, detail="broke"):
@@ -321,3 +339,311 @@ def test_cli_main_commit_push_error_exits_5(capsys, tmp_path, monkeypatch):
     captured = capsys.readouterr()
     assert rc == 5
     assert "push rejected" in captured.err
+
+
+# --- backlog bug 5: a re-check runs under the conditions the first check had -----------
+
+
+def _impl_patches():
+    return (
+        patch("subprocess.run", side_effect=_dispatcher(impl_result=_fake_proc(stdout="done"))),
+        patch("implementation_graph.checkout_branch.checkout_branch", return_value=FAKE_BRANCH),
+        patch(
+            "implementation_graph.commit_push_implementation.commit_and_push",
+            return_value={"committed": True},
+        ),
+    )
+
+
+class _Workspace:
+    """A fake runner whose frontend tools exist only once the setup command ran --
+    the fresh `checks-fix-loop` runner of runs 38377603346 and 38387681388, where
+    `npm ci` had only ever run as part of the `build` check in another job."""
+
+    SETUP = ("npm", "ci")
+
+    def __init__(self, findings=0):
+        self.installed = False
+        self.findings = findings  # how many more runs of a frontend command still report a real finding
+        self.log = []
+
+    def commands_for(self, name):
+        return [["backend-tool", name], ["npm", "run", name]]
+
+    def run_command(self, cmd, *, cwd=None):
+        self.log.append(cmd)
+        if cmd == list(self.SETUP):
+            self.installed = True
+        elif cmd[0] == "npm" and not self.installed:
+            return {"status": "fail", "command": cmd, "returncode": 127, "detail": "sh: 1: ng: not found"}
+        elif cmd[0] == "npm" and self.findings:
+            self.findings -= 1
+            return {"status": "fail", "command": cmd, "returncode": 1, "detail": "1 real finding"}
+        return {"status": "pass", "command": cmd, "returncode": 0, "detail": ""}
+
+    def patches(self):
+        return (
+            patch("run_checks._load_config", side_effect=lambda name, cwd=None: (self.commands_for(name), "origin/main")),
+            patch("run_checks.load_setup_commands", return_value=[list(self.SETUP)]),
+            patch("run_checks._run_command", side_effect=self.run_command),
+        )
+
+
+@pytest.mark.parametrize("name", ["test", "lint", "static_analysis"])
+def test_recheck_of_one_check_after_build_passed_runs_setup_first_and_resolves(tmp_path, name, run_setup):
+    """`build` passed in the `checks` job, so the loop never re-runs it -- the
+    re-check of `name` alone must still find the dependencies `build` used to
+    install as a side effect."""
+    _all_checks_initially_passing_except(tmp_path, [name], detail="1 real finding")
+    workspace = _Workspace()
+    run_setup.side_effect = _real_run_setup  # the real setup, against the fake workspace
+
+    a, b, c = _impl_patches()
+    d, e, f = workspace.patches()
+    with a, b, c, d, e, f:
+        outcome = checks_fix_loop_graph.run_checks_with_fix_loop("foo", "run-1", state_base=tmp_path)
+
+    assert outcome["status"] == "resolved"
+    assert outcome["fix_cycle"] == 1
+    # setup first, then only the failed check's own commands -- never `build`, never the full suite
+    assert workspace.log == [["npm", "ci"], ["backend-tool", name], ["npm", "run", name]]
+    assert state_io.read_state(tmp_path / "foo" / "run-1" / "checks.md")[0]["status"] == "resolved"
+
+
+def test_setup_runs_again_before_each_cycles_recheck(tmp_path, run_setup):
+    """A fix cycle may change what there is to install (e.g. the lockfile), so setup
+    is not a one-off at the start of the job."""
+    _all_checks_initially_passing_except(tmp_path, ["test"], detail="1 real finding")
+    workspace = _Workspace(findings=1)  # cycle 1's re-check still reports it, cycle 2's passes
+    run_setup.side_effect = _real_run_setup
+
+    a, b, c = _impl_patches()
+    d, e, f = workspace.patches()
+    with a as mock_run, b, c, d, e, f:
+        outcome = checks_fix_loop_graph.run_checks_with_fix_loop("foo", "run-1", state_base=tmp_path)
+
+    assert outcome["status"] == "resolved"
+    assert outcome["fix_cycle"] == 2
+    assert mock_run.call_count == 2
+    cycle = [["npm", "ci"], ["backend-tool", "test"], ["npm", "run", "test"]]
+    assert workspace.log == cycle + cycle
+
+
+# --- backlog bug 5: a tooling failure is not counted as a code finding ------------------
+
+
+@pytest.mark.parametrize("returncode", [127, 126, None])
+def test_tool_missing_on_recheck_stops_the_loop_without_another_agent_call(tmp_path, returncode):
+    _all_checks_initially_passing_except(tmp_path, ["lint"], detail="1 real finding")
+    missing = {"status": "fail", "command": ["npm", "run", "lint"], "returncode": returncode, "detail": "sh: 1: ng: not found"}
+
+    a, b, c = _impl_patches()
+    with a as mock_run, b, c, patch("checks_fix_loop_graph.run_checks.run_check", return_value=missing) as mock_run_check:
+        outcome = checks_fix_loop_graph.run_checks_with_fix_loop("foo", "run-1", state_base=tmp_path)
+
+    assert outcome["status"] == "tooling-failure"
+    assert outcome["fix_cycle"] == 1  # the cycle that ran; no second one spent on a missing tool
+    assert sorted(outcome["tooling"]) == ["lint"]
+    mock_run.assert_called_once()
+    mock_run_check.assert_called_once()
+
+    meta, body = state_io.read_state(tmp_path / "foo" / "run-1" / "checks.md")
+    assert meta["status"] == "tooling-failure"
+    assert meta["fix_cycle"] == "1"
+    assert "lint" in body and "npm run lint" in body and "ng: not found" in body
+
+
+def test_tool_missing_in_the_first_evidence_stops_before_any_fix_cycle(tmp_path, run_setup):
+    _all_checks_initially_passing_except(tmp_path, [])
+    _write_evidence(tmp_path, "test", "fail", detail="sh: 1: ng: not found", returncode=127)
+    still_missing = {"status": "fail", "command": ["npm", "test"], "returncode": 127, "detail": "sh: 1: ng: not found"}
+
+    with patch("subprocess.run", side_effect=_dispatcher()) as mock_run, \
+         patch("checks_fix_loop_graph.run_checks.run_check", return_value=still_missing) as mock_run_check:
+        outcome = checks_fix_loop_graph.run_checks_with_fix_loop("foo", "run-1", state_base=tmp_path)
+
+    assert outcome["status"] == "tooling-failure"
+    assert outcome["fix_cycle"] == 0
+    assert sorted(outcome["tooling"]) == ["test"]
+    mock_run.assert_not_called()  # the implementation agent is never engaged for it
+    # verified once -- setup, then the one failing check -- before it is believed
+    run_setup.assert_called_once()
+    mock_run_check.assert_called_once_with("test", "foo", "run-1", state_base=tmp_path, cwd=None)
+
+    meta, body = state_io.read_state(tmp_path / "foo" / "run-1" / "checks.md")
+    assert meta["status"] == "tooling-failure"
+    assert meta["fix_cycle"] == "0"
+    assert "test" in body and "ng: not found" in body
+
+
+def test_a_tooling_failure_beside_a_real_finding_still_stops_the_loop(tmp_path):
+    _all_checks_initially_passing_except(tmp_path, ["lint", "test"], detail="1 real finding")
+    results = {
+        "lint": {"status": "fail", "command": ["npm", "run", "lint"], "returncode": 1, "detail": "1 real finding"},
+        "test": {"status": "fail", "command": ["npm", "test"], "returncode": 127, "detail": "sh: 1: ng: not found"},
+    }
+
+    a, b, c = _impl_patches()
+    with a as mock_run, b, c, \
+         patch("checks_fix_loop_graph.run_checks.run_check", side_effect=lambda name, *args, **kwargs: results[name]):
+        outcome = checks_fix_loop_graph.run_checks_with_fix_loop("foo", "run-1", state_base=tmp_path)
+
+    assert outcome["status"] == "tooling-failure"
+    assert outcome["fix_cycle"] == 1
+    assert sorted(outcome["tooling"]) == ["test"]
+    assert outcome["failing"] == ["lint", "test"]
+    mock_run.assert_called_once()
+
+    # the real finding is not lost behind the tooling failure
+    _, body = state_io.read_state(tmp_path / "foo" / "run-1" / "checks.md")
+    assert "## Tooling failures" in body and "npm test" in body
+    assert "## Failing checks" in body and "**lint**: 1 real finding" in body
+    assert "**test**" not in body  # named once, as what it is
+
+
+def test_failing_setup_command_is_a_tooling_failure_naming_that_command(tmp_path, run_setup):
+    _all_checks_initially_passing_except(tmp_path, ["lint"], detail="1 real finding")
+    run_setup.return_value = {
+        "status": "fail",
+        "command": ["npm", "ci"],
+        "returncode": 1,
+        "detail": "npm error network",
+        "commands": [["npm", "ci"]],
+    }
+
+    a, b, c = _impl_patches()
+    with a as mock_run, b, c, patch("checks_fix_loop_graph.run_checks.run_check") as mock_run_check:
+        outcome = checks_fix_loop_graph.run_checks_with_fix_loop("foo", "run-1", state_base=tmp_path)
+
+    assert outcome["status"] == "tooling-failure"
+    assert outcome["fix_cycle"] == 1
+    assert sorted(outcome["tooling"]) == ["setup"]
+    mock_run.assert_called_once()
+    mock_run_check.assert_not_called()  # nothing is re-checked on a checkout setup could not prepare
+
+    meta, body = state_io.read_state(tmp_path / "foo" / "run-1" / "checks.md")
+    assert meta["status"] == "tooling-failure"
+    assert "setup" in body and "npm ci" in body and "npm error network" in body
+
+
+def test_cli_main_tooling_failure_exits_6_and_names_the_cause(capsys, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    # main() uses the default state base, `.factory/` under the working directory
+    _all_checks_initially_passing_except(tmp_path / state_io.FACTORY_DIR, ["lint"], detail="1 real finding")
+    missing = {"status": "fail", "command": ["npm", "run", "lint"], "returncode": 127, "detail": "sh: 1: ng: not found"}
+
+    a, b, c = _impl_patches()
+    with a, b, c, patch("checks_fix_loop_graph.run_checks.run_check", return_value=missing):
+        rc = checks_fix_loop_graph.main(["--story-slug", "foo", "--run-id", "run-1"])
+
+    captured = capsys.readouterr()
+    assert rc == 6
+    assert json.loads(captured.out.strip()) == {
+        "ok": False,
+        "status": "tooling-failure",
+        "fix_cycle": 1,
+        "tooling": ["lint"],
+    }
+    assert "tooling failure: lint" in captured.err
+    assert "npm run lint" in captured.err and "return code 127" in captured.err
+
+
+def _write_setup_evidence(tmp_path, status="fail"):
+    path = state_io.state_dir("foo", "run-1", base=tmp_path) / "evidence" / "checks" / "setup.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"status": status, "command": ["npm", "ci"], "returncode": 1, "detail": "npm error network", "commands": [["npm", "ci"]]}))
+
+
+SETUP_STILL_FAILING = {
+    "status": "fail",
+    "command": ["npm", "ci"],
+    "returncode": 1,
+    "detail": "npm error network",
+    "commands": [["npm", "ci"]],
+}
+PASSING = {"status": "pass", "command": ["x"], "returncode": 0, "detail": ""}
+
+
+@pytest.mark.parametrize(
+    "failing_names, returncode",
+    [
+        (["build", "test"], 1),  # the checks then failed for want of it, with an ordinary exit code
+        (["build"], 127),
+        ([], 0),  # or did not need it and passed: the attempt is still not green
+    ],
+)
+def test_recorded_setup_failure_that_still_fails_is_named_before_any_fix_cycle(tmp_path, run_setup, failing_names, returncode):
+    _all_checks_initially_passing_except(tmp_path, [])
+    for name in failing_names:
+        _write_evidence(tmp_path, name, "fail", detail="Cannot find module", returncode=returncode)
+    _write_setup_evidence(tmp_path)
+    run_setup.return_value = dict(SETUP_STILL_FAILING)
+
+    with patch("subprocess.run", side_effect=_dispatcher()) as mock_run, \
+         patch("checks_fix_loop_graph.run_checks.run_check") as mock_run_check:
+        outcome = checks_fix_loop_graph.run_checks_with_fix_loop("foo", "run-1", state_base=tmp_path)
+
+    assert outcome["status"] == "tooling-failure"
+    assert outcome["fix_cycle"] == 0
+    assert sorted(outcome["tooling"]) == ["setup"]
+    mock_run.assert_not_called()  # never a fix cycle for a checkout that was not prepared
+    run_setup.assert_called_once()  # verified once, not taken from the record
+    mock_run_check.assert_not_called()  # and nothing checked on a checkout setup could not prepare
+
+    meta, body = state_io.read_state(tmp_path / "foo" / "run-1" / "checks.md")
+    assert meta["status"] == "tooling-failure"
+    assert "setup" in body and "npm ci" in body and "npm error network" in body
+
+
+# --- backlog bug 4: "Re-run failed jobs" re-runs this job alone -------------------------
+
+
+def test_rerun_after_a_transient_setup_failure_recovers_without_an_agent_call(tmp_path, run_setup):
+    """The earlier attempt of this job recorded a failed setup (a registry that was
+    down) and committed it. The `checks` job is green, so the re-run starts here, from
+    that record -- and must not fail from it when setup works now."""
+    _all_checks_initially_passing_except(tmp_path, ["lint"], detail="sh: 1: ng: not found")
+    _write_setup_evidence(tmp_path)
+    run_setup.return_value = {"status": "pass", "command": ["npm", "ci"], "returncode": 0, "detail": "", "commands": [["npm", "ci"]]}
+
+    with patch("subprocess.run", side_effect=_dispatcher()) as mock_run, \
+         patch("checks_fix_loop_graph.run_checks.run_check", return_value=dict(PASSING)) as mock_run_check:
+        outcome = checks_fix_loop_graph.run_checks_with_fix_loop("foo", "run-1", state_base=tmp_path)
+
+    assert outcome["status"] == "resolved"
+    assert outcome["fix_cycle"] == 0  # the verification is not a fix cycle
+    mock_run.assert_not_called()
+    mock_run_check.assert_called_once_with("lint", "foo", "run-1", state_base=tmp_path, cwd=None)
+    assert state_io.read_state(tmp_path / "foo" / "run-1" / "checks.md")[0]["status"] == "resolved"
+
+
+def test_rerun_after_a_transient_tooling_failure_goes_on_to_fix_the_real_finding(tmp_path, run_setup):
+    """The recorded 127 is gone on verification, and what the check reports now is an
+    ordinary finding: the loop takes it from there, with its full two cycles."""
+    _all_checks_initially_passing_except(tmp_path, [])
+    _write_evidence(tmp_path, "lint", "fail", detail="sh: 1: ng: not found", returncode=127)
+    finding = {"status": "fail", "command": ["npm", "run", "lint"], "returncode": 1, "detail": "1 real finding"}
+    results = iter([finding, dict(PASSING)])  # the verification, then cycle 1's re-check
+
+    a, b, c = _impl_patches()
+    with a as mock_run, b, c, \
+         patch("checks_fix_loop_graph.run_checks.run_check", side_effect=lambda *args, **kwargs: next(results)):
+        outcome = checks_fix_loop_graph.run_checks_with_fix_loop("foo", "run-1", state_base=tmp_path)
+
+    assert outcome["status"] == "resolved"
+    assert outcome["fix_cycle"] == 1
+    mock_run.assert_called_once()  # one agent call, for the real finding
+    assert run_setup.call_count == 2  # before the verification and before the cycle's re-check
+
+
+def test_recorded_setup_that_passed_does_not_stop_the_loop(tmp_path):
+    _all_checks_initially_passing_except(tmp_path, ["lint"], detail="1 real finding")
+    _write_setup_evidence(tmp_path, status="pass")
+    passing = {"status": "pass", "command": ["x"], "returncode": 0, "detail": ""}
+
+    a, b, c = _impl_patches()
+    with a, b, c, patch("checks_fix_loop_graph.run_checks.run_check", return_value=passing):
+        outcome = checks_fix_loop_graph.run_checks_with_fix_loop("foo", "run-1", state_base=tmp_path)
+
+    assert outcome["status"] == "resolved"
+    assert outcome["fix_cycle"] == 1

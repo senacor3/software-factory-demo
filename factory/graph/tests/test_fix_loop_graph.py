@@ -81,6 +81,17 @@ def _failing_check(name):
     return {"status": "fail", "command": ["x"], "returncode": 1, "detail": f"{name} broke"}
 
 
+@pytest.fixture(autouse=True)
+def run_setup():
+    """Default every test to a config with no `setup:` commands; setup tests re-patch.
+
+    Also keeps the loop's setup call off the real `subprocess.run`/checks config.
+    """
+    skipped = {"status": "skipped", "command": None, "returncode": None, "detail": "", "commands": []}
+    with patch("fix_loop_graph.run_checks.run_setup", return_value=skipped) as mock:
+        yield mock
+
+
 def _dispatcher(review_results=None, impl_result=None):
     """A `subprocess.run` side_effect that routes to a review-call queue or a fixed
     implementation-call result, based on which skill the `-p` prompt invokes."""
@@ -400,3 +411,51 @@ def test_cli_main_success_exits_0_unresolved_after_cap(capsys, tmp_path, monkeyp
     assert rc == 0
     out = json.loads(captured.out.strip())
     assert out == {"ok": True, "status": "unresolved-after-cap", "fix_cycle": 2}
+
+
+# --- backlog bug 5: the recheck prepares its own checkout --------------------------------
+
+
+def test_recheck_prepares_the_checkout_before_build_and_test(tmp_path, run_setup):
+    """`build` no longer installs dependencies as a side effect, and this job's runner
+    is as fresh as the `checks-fix-loop` job's -- so setup runs first, every cycle."""
+    order = []
+    run_setup.side_effect = lambda *a, **k: order.append("setup") or {"status": "pass", "command": ["npm", "ci"], "returncode": 0, "detail": ""}
+
+    with patch(
+        "subprocess.run",
+        side_effect=_dispatcher(review_results=[_findings_proc(), _clean_proc()], impl_result=_fake_proc(stdout="done")),
+    ), \
+         patch("implementation_graph.checkout_branch.checkout_branch", return_value=FAKE_BRANCH), \
+         patch(
+             "implementation_graph.commit_push_implementation.commit_and_push",
+             return_value={"committed": True},
+         ), \
+         patch("fix_loop_graph.run_checks.run_build", side_effect=lambda *a, **k: order.append("build") or _passing_check("build")), \
+         patch("fix_loop_graph.run_checks.run_test", side_effect=lambda *a, **k: order.append("test") or _passing_check("test")):
+        outcome = fix_loop_graph.run_review_with_fix_loop("foo", "run-1", state_base=tmp_path)
+
+    assert outcome["status"] == "resolved"
+    assert order == ["setup", "build", "test"]
+    run_setup.assert_called_once_with("foo", "run-1", state_base=tmp_path, cwd=None)
+
+
+def test_failing_setup_stops_the_loop_before_any_recheck(tmp_path, run_setup):
+    run_setup.return_value = {"status": "fail", "command": ["npm", "ci"], "returncode": 1, "detail": "npm error network"}
+
+    with patch(
+        "subprocess.run",
+        side_effect=_dispatcher(review_results=[_findings_proc()], impl_result=_fake_proc(stdout="done")),
+    ), \
+         patch("implementation_graph.checkout_branch.checkout_branch", return_value=FAKE_BRANCH), \
+         patch(
+             "implementation_graph.commit_push_implementation.commit_and_push",
+             return_value={"committed": True},
+         ), \
+         patch("fix_loop_graph.run_checks.run_build") as mock_build, \
+         patch("fix_loop_graph.run_checks.run_test") as mock_test:
+        with pytest.raises(fix_loop_graph.CheckRegressionError, match="setup.*npm error network"):
+            fix_loop_graph.run_review_with_fix_loop("foo", "run-1", state_base=tmp_path)
+
+    mock_build.assert_not_called()
+    mock_test.assert_not_called()
