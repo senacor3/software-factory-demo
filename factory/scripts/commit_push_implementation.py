@@ -17,7 +17,7 @@ All `git` subprocess failures raise a single `CommitPushError`, distinct from
 
 `commit_and_push`'s `label` keyword (default `"Implementation"`) names the stage in
 the commit message -- the `checks`/`review` jobs' own evidence-commit steps pass
-`"Checks"`/`"Review"` via this module's CLI (`--story-slug`/`--run-id`/`--label`),
+`"Quality Assurance"`/`"Review"` via this module's CLI (`--story-slug`/`--run-id`/`--label`),
 reusing this same persistence mechanism rather than duplicating it. Existing
 in-process callers that omit `label` are unaffected.
 """
@@ -64,8 +64,8 @@ def commit_and_push(
     git failure.
 
     `label` (keyword-only, default `"Implementation"`) names the stage in the commit
-    message -- e.g. `"Checks"`/`"Review"` when this is reused by those jobs' own
-    evidence-commit steps -- and otherwise changes nothing about this function's
+    message -- e.g. `"Quality Assurance"`/`"Review"` when this is reused by those jobs'
+    own evidence-commit steps -- and otherwise changes nothing about this function's
     behavior.
     """
     status = _run(["git", "status", "--porcelain"], cwd=cwd)
@@ -100,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--label",
         default="Implementation",
-        help="commit message stage label, e.g. Checks/Review (default: Implementation)",
+        help='commit message stage label, e.g. `"Quality Assurance"`/Review (default: Implementation)',
     )
     args = p.parse_args(argv)
 

@@ -174,7 +174,7 @@ jobs:
             --run-id "${{ needs.analysis.outputs.run-id }}"
 
   checks:
-    name: "Checks"
+    name: "Quality Assurance"
     needs: [analysis, implementation]
     runs-on: ubuntu-24.04
     # AD-5/AD-6: contents:write scopes checkout_branch.py's git fetch/checkout and
@@ -314,7 +314,7 @@ jobs:
           uv run factory/scripts/commit_push_implementation.py \
             --story-slug "${{ needs.analysis.outputs.story-slug }}" \
             --run-id "${{ needs.analysis.outputs.run-id }}" \
-            --label Checks
+            --label "Quality Assurance"
 
       # AD-10 addendum (backlog bug 4): a failed check does not fail this job. GitHub
       # Actions takes a run's conclusion from its worst job, so a `checks` job that
@@ -348,7 +348,7 @@ jobs:
           exit 1
 
   checks-fix-loop:
-    name: "Checks fix loop"
+    name: "Quality Assurance fix loop"
     needs: [analysis, implementation, checks]
     # AD-10: runs only when `checks` reported a failed check -- `checks` keeps its
     # documented "runs no agent" invariant and this job only pays agent-setup cost
@@ -427,7 +427,7 @@ jobs:
           uv run factory/scripts/commit_push_implementation.py \
             --story-slug "${{ needs.analysis.outputs.story-slug }}" \
             --run-id "${{ needs.analysis.outputs.run-id }}" \
-            --label Checks-fix-loop
+            --label "Quality Assurance fix loop"
 
   review:
     name: "Review & fix loop"

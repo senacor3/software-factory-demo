@@ -152,11 +152,11 @@ def test_custom_label_is_used_in_commit_message():
 
     with patch("commit_push_implementation.subprocess.run", side_effect=fake_run):
         commit_push_implementation.commit_and_push(
-            "software-factory/foo/run-1", "foo", "run-1", label="Checks"
+            "software-factory/foo/run-1", "foo", "run-1", label="Quality Assurance"
         )
 
     commit_calls = [c for c in calls if "commit" in c]
-    assert commit_calls[0][-1] == "Checks: foo (run-1)"
+    assert commit_calls[0][-1] == "Quality Assurance: foo (run-1)"
 
 
 # --- CLI -------------------------------------------------------------------------------
