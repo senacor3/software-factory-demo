@@ -143,6 +143,14 @@ describe('TenderDetail', () => {
     expect(backLink(element)?.getAttribute('href')).toBe('/');
   });
 
+  it('shows the back link when the route id is not a number', async () => {
+    const harness = await RouterTestingHarness.create('/tenders/abc');
+
+    const element = harness.routeNativeElement as HTMLElement;
+    expect(backLink(element)?.getAttribute('href')).toBe('/');
+    expect(element.querySelector('main')?.firstElementChild).toBe(backLink(element));
+  });
+
   it('shows the back link as the first element in main for an open tender', async () => {
     const element = await render(OPEN_TENDER);
 
