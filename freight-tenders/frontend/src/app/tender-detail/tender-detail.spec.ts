@@ -445,7 +445,7 @@ describe('TenderDetail', () => {
     expect(element.querySelector('[data-testid="remarks"]')?.contains(remarksEmpty ?? null)).toBe(
       true,
     );
-    expect(offersEmpty?.getAttribute('colspan')).toBe('5');
+    expect(offersEmpty?.getAttribute('colspan')).toBe('6');
     expect(offersEmpty?.textContent).toContain('Keine Angebote vorhanden.');
   });
 
@@ -783,14 +783,127 @@ describe('TenderDetail', () => {
     );
   });
 
-  it('renders five offer columns, with Hinweis not sortable', async () => {
+  it('renders six offer columns with a trailing Vergeben column, Hinweis not sortable', async () => {
     const element = await render(SORTABLE_TENDER);
 
     const headers = Array.from(element.querySelectorAll('[data-testid="offers"] thead th'), (th) =>
       th.textContent?.trim().replace(/\s+/g, ' '),
     );
-    expect(headers).toEqual(['Anbieter', 'Betrag (EUR)', 'Zustellung', 'Gültig bis', 'Hinweis']);
+    expect(headers).toEqual([
+      'Anbieter',
+      'Betrag (EUR)',
+      'Zustellung',
+      'Gültig bis',
+      'Hinweis',
+      'Vergeben',
+    ]);
     expect(element.querySelector('[data-testid="offers-sort-note"]')).toBeNull();
+  });
+
+  describe('awarding an offer', () => {
+    const AWARD_TENDER: TenderDetailModel = tenderDetail({
+      offers: [
+        offerSummary({ id: 20, supplierName: 'Spedition Muster' }),
+        offerSummary({ id: 21, supplierName: 'Acme Logistics' }),
+        offerSummary({ id: 22, supplierName: 'Abgelaufen GmbH', validUntil: '2000-01-01' }),
+      ],
+    });
+
+    function click(element: HTMLElement, testId: string, index = 0): void {
+      element.querySelectorAll<HTMLButtonElement>(`[data-testid="${testId}"]`)[index].click();
+      harness.detectChanges();
+    }
+
+    it('offers Vergeben only for non-expired offers of an open tender', async () => {
+      const element = await render(AWARD_TENDER);
+
+      expect(element.querySelectorAll('[data-testid="award-offer"]')).toHaveLength(2);
+    });
+
+    it('offers no award actions on closed tenders', async () => {
+      const element = await render({ ...AWARD_TENDER, status: 'CLOSED' });
+
+      expect(element.querySelector('[data-testid="award-offer"]')).toBeNull();
+      expect(element.querySelector('[data-testid="offers-header-award"]')).toBeNull();
+    });
+
+    it('confirms in place for one row only and cancels without a request', async () => {
+      const element = await render(AWARD_TENDER);
+
+      click(element, 'award-offer', 0);
+      expect(element.querySelectorAll('[data-testid="award-confirm"]')).toHaveLength(1);
+      click(element, 'award-offer', 0);
+      expect(element.querySelectorAll('[data-testid="award-confirm"]')).toHaveLength(1);
+      expect(element.querySelector('[data-testid="award-confirm"]')?.textContent).toContain(
+        'Zuschlag bestätigen',
+      );
+
+      click(element, 'award-cancel');
+      expect(element.querySelector('[data-testid="award-confirm"]')).toBeNull();
+      expect(element.querySelectorAll('[data-testid="award-offer"]')).toHaveLength(2);
+    });
+
+    it('disables the buttons while the request is in flight', async () => {
+      const element = await render(AWARD_TENDER);
+
+      click(element, 'award-offer', 0);
+      click(element, 'award-confirm');
+
+      const req = httpMock.expectOne('/api/tenders/1/offers/20/award');
+      expect(
+        element.querySelector<HTMLButtonElement>('[data-testid="award-confirm"]')?.disabled,
+      ).toBe(true);
+      expect(
+        element.querySelector<HTMLButtonElement>('[data-testid="award-cancel"]')?.disabled,
+      ).toBe(true);
+      req.flush({ ...AWARD_TENDER, status: 'AWARDED', awardedOfferId: 20 });
+    });
+
+    it('shows a German alert and keeps the tender open when awarding fails', async () => {
+      const element = await render(AWARD_TENDER);
+
+      click(element, 'award-offer', 0);
+      click(element, 'award-confirm');
+      httpMock
+        .expectOne('/api/tenders/1/offers/20/award')
+        .flush({}, { status: 409, statusText: 'Conflict' });
+      harness.detectChanges();
+
+      const error = element.querySelector('[data-testid="award-error"]');
+      expect(error?.getAttribute('role')).toBe('alert');
+      expect(error?.textContent).toContain('Der Zuschlag konnte nicht erteilt werden.');
+      expect(element.querySelector('[data-testid="status"]')?.textContent).toContain('Offen');
+      expect(element.querySelector('[data-testid="close-tender"]')).not.toBeNull();
+    });
+
+    it('updates the page in place after a successful award', async () => {
+      const element = await render(AWARD_TENDER);
+
+      click(element, 'award-offer', 1);
+      click(element, 'award-confirm');
+      httpMock
+        .expectOne('/api/tenders/1/offers/21/award')
+        .flush({ ...AWARD_TENDER, status: 'AWARDED', awardedOfferId: 21 });
+      harness.detectChanges();
+      await harness.fixture.whenStable();
+
+      expect(element.querySelector('[data-testid="status"]')?.textContent).toContain('Vergeben');
+      expect(texts(element, 'offer-awarded')).toEqual(['Zuschlag']);
+      expect(element.querySelector('[data-testid="offers-row"]')?.textContent).toContain(
+        'Acme Logistics',
+      );
+      expect(element.querySelector('[data-testid="close-tender"]')).toBeNull();
+      expect(element.querySelector('[data-testid="award-offer"]')).toBeNull();
+      expect(element.querySelector<HTMLButtonElement>('[data-testid="offer-submit"]')?.disabled).toBe(
+        true,
+      );
+      expect(element.querySelector<HTMLButtonElement>('[data-testid="remark-submit"]')?.disabled).toBe(
+        true,
+      );
+      const explanation = element.querySelector('[data-testid="awarded-explanation"]');
+      expect(explanation?.textContent).toContain('vergeben');
+      expect(document.activeElement).toBe(explanation);
+    });
   });
 
   it('sorts offers by delivery date and validity date in both directions', async () => {

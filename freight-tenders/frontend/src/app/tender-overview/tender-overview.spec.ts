@@ -129,7 +129,7 @@ describe('TenderOverview', () => {
 
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('[data-testid="closed-tenders-empty"]')?.textContent).toContain(
-      'Keine geschlossenen Ausschreibungen vorhanden.',
+      'Keine abgeschlossenen Ausschreibungen vorhanden.',
     );
   });
 
@@ -443,8 +443,39 @@ describe('TenderOverview', () => {
       compiled.querySelector('[data-testid="open-tenders"]')?.contains(openEmpty ?? null),
     ).toBe(true);
     expect(compiled.querySelector('[data-testid="closed-tenders-empty"]')?.textContent).toContain(
-      'Keine geschlossenen Ausschreibungen vorhanden.',
+      'Keine abgeschlossenen Ausschreibungen vorhanden.',
     );
+    expect(
+      compiled.querySelector('[data-testid="closed-tenders-empty"]')?.getAttribute('colspan'),
+    ).toBe('8');
+  });
+
+  it('lists awarded and closed tenders together with a Status column and Zuschlag line', () => {
+    const awarded = {
+      ...tender(6, 'Dresden', 'Leipzig', 'AWARDED'),
+      awardedSupplierName: 'Acme Logistics',
+      awardedAmount: 1234.5,
+    };
+    const compiled = load([tender(1, 'Hamburg', 'Berlin'), awarded, tender(7, 'Ulm', 'Bonn', 'CLOSED')]);
+
+    expect(compiled.querySelectorAll('h2')[1].textContent).toContain(
+      'Abgeschlossene Ausschreibungen',
+    );
+    expect(origins(compiled, 'closed-tenders')).toEqual(['Ulm', 'Dresden']);
+    expect(origins(compiled, 'open-tenders')).toEqual(['Hamburg']);
+    expect(
+      Array.from(compiled.querySelectorAll('[data-testid="tender-status"]'), (node) =>
+        node.textContent?.trim(),
+      ),
+    ).toEqual(['Geschlossen', 'Vergeben']);
+    expect(compiled.querySelector('[data-testid="awarded-offer"]')?.textContent).toContain(
+      'Zuschlag: Acme Logistics',
+    );
+
+    sortBy(compiled, 'closed-tenders', 'status');
+    expect(origins(compiled, 'closed-tenders')).toEqual(['Ulm', 'Dresden']);
+    sortBy(compiled, 'closed-tenders', 'status');
+    expect(origins(compiled, 'closed-tenders')).toEqual(['Dresden', 'Ulm']);
   });
 
   it("navigates to the tender's detail page when its row is selected anywhere", () => {

@@ -13,12 +13,12 @@
         <h1 data-testid="page-title">
           {{ currentTender.origin.city }} → {{ currentTender.destination.city }}
         </h1>
-        <span [class]="isClosed() ? 'pill-closed' : 'pill-open'" data-testid="status">{{
+        <span [class]="'pill-' + currentTender.status.toLowerCase()" data-testid="status">{{
           statusLabel()
         }}</span>
       </div>
 
-      @if (!isClosed()) {
+      @if (isOpen()) {
         <button
           type="button"
           class="btn-secondary"
@@ -36,6 +36,12 @@
     @if (closeError()) {
       <p class="form-error close-error" role="alert" data-testid="close-error">
         {{ closeError() }}
+      </p>
+    }
+
+    @if (isAwarded()) {
+      <p #awardedExplanationRef class="notice" tabindex="-1" data-testid="awarded-explanation">
+        {{ awardedExplanation }}
       </p>
     }
 
@@ -213,6 +219,9 @@
               </button>
             </th>
             <th scope="col" data-testid="offers-header-note">Hinweis</th>
+            @if (showAwardColumn()) {
+              <th scope="col" data-testid="offers-header-award">Vergeben</th>
+            }
           </tr>
         </thead>
         <tbody>
@@ -239,16 +248,59 @@
                 }
               </td>
               <td data-testid="offer-note">{{ offer.note }}</td>
+              @if (showAwardColumn()) {
+                <td data-testid="offer-award-cell">
+                  @if (isAwarded() && offer.id === currentTender.awardedOfferId) {
+                    <span class="cell-primary" data-testid="offer-awarded">Zuschlag</span>
+                  } @else if (canAward(offer)) {
+                    @if (awardingOfferId() === offer.id) {
+                      <button
+                        type="button"
+                        class="btn-primary btn-compact"
+                        data-testid="award-confirm"
+                        [disabled]="awarding()"
+                        (click)="onConfirmAward(offer.id)"
+                      >
+                        Zuschlag bestätigen
+                      </button>
+                      <button
+                        type="button"
+                        class="btn-secondary btn-compact"
+                        data-testid="award-cancel"
+                        [disabled]="awarding()"
+                        (click)="onCancelAward()"
+                      >
+                        Abbrechen
+                      </button>
+                    } @else {
+                      <button
+                        type="button"
+                        class="btn-secondary btn-compact"
+                        data-testid="award-offer"
+                        [disabled]="awarding()"
+                        (click)="onAskAward(offer.id)"
+                      >
+                        Vergeben
+                      </button>
+                    }
+                  }
+                </td>
+              }
             </tr>
           } @empty {
             <tr>
-              <td class="empty-cell" colspan="5" data-testid="offers-empty">
+              <td class="empty-cell" [attr.colspan]="showAwardColumn() ? 6 : 5"
+                data-testid="offers-empty">
                 Keine Angebote vorhanden.
               </td>
             </tr>
           }
         </tbody>
       </table>
+
+      @if (awardError()) {
+        <p class="form-error" role="alert" data-testid="award-error">{{ awardError() }}</p>
+      }
 
       @if (deadlinePassed()) {
         <p class="notice" data-testid="deadline-passed-notice">{{ deadlinePassedNotice }}</p>

@@ -30,7 +30,9 @@ public record TenderResponse(
     Currency currency,
     TenderStatus status,
     int offerCount,
-    BigDecimal lowestOfferAmount) {
+    BigDecimal lowestOfferAmount,
+    String awardedSupplierName,
+    BigDecimal awardedAmount) {
 
   public static TenderResponse from(Tender tender) {
     BigDecimal lowestOfferAmount =
@@ -39,6 +41,7 @@ public record TenderResponse(
             .filter(Objects::nonNull)
             .min(Comparator.naturalOrder())
             .orElse(null);
+    Offer awarded = tender.getAwardedOffer();
     return new TenderResponse(
         tender.getId(),
         AddressResponse.from(tender.getOrigin()),
@@ -59,6 +62,8 @@ public record TenderResponse(
         tender.getCurrency(),
         tender.getStatus(),
         tender.getOffers().size(),
-        lowestOfferAmount);
+        lowestOfferAmount,
+        awarded == null ? null : awarded.getSupplierName(),
+        awarded == null ? null : awarded.getAmount());
   }
 }

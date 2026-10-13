@@ -47,7 +47,25 @@ public class TenderService {
 
   public Tender closeTender(Long id) {
     Tender tender = getTenderOrThrow(id);
+    if (tender.getStatus() == TenderStatus.AWARDED) {
+      throw new TenderClosedException(tender.getId(), tender.getStatus());
+    }
     tender.close();
+    return tenderRepository.save(tender);
+  }
+
+  public Tender awardTender(Long tenderId, Long offerId) {
+    Tender tender = getTenderOrThrow(tenderId);
+    Offer offer =
+        tender.getOffers().stream()
+            .filter(candidate -> offerId.equals(candidate.getId()))
+            .findFirst()
+            .orElseThrow(() -> new OfferNotFoundException(tenderId, offerId));
+    rejectIfClosed(tender);
+    if (offer.getValidUntil().isBefore(LocalDate.now(clock))) {
+      throw new OfferExpiredException(offerId);
+    }
+    tender.award(offer);
     return tenderRepository.save(tender);
   }
 
@@ -90,8 +108,8 @@ public class TenderService {
   }
 
   private void rejectIfClosed(Tender tender) {
-    if (tender.getStatus() == TenderStatus.CLOSED) {
-      throw new TenderClosedException(tender.getId());
+    if (tender.getStatus() != TenderStatus.OPEN) {
+      throw new TenderClosedException(tender.getId(), tender.getStatus());
     }
   }
 }

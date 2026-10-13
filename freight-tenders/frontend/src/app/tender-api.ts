@@ -2,10 +2,11 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
-export type TenderStatus = 'OPEN' | 'CLOSED';
+export type TenderStatus = 'OPEN' | 'AWARDED' | 'CLOSED';
 
 export const STATUS_LABELS: Record<TenderStatus, string> = {
   OPEN: 'Offen',
+  AWARDED: 'Vergeben',
   CLOSED: 'Geschlossen',
 };
 
@@ -102,6 +103,8 @@ export interface TenderSummary {
   status: TenderStatus;
   offerCount: number;
   lowestOfferAmount: number | null;
+  awardedSupplierName: string | null;
+  awardedAmount: number | null;
 }
 
 export interface RemarkSummary {
@@ -127,7 +130,12 @@ export interface AddOfferRequest {
 }
 
 // The detail response lists the offers themselves instead of summarising them.
-export interface TenderDetail extends Omit<TenderSummary, 'offerCount' | 'lowestOfferAmount'> {
+export interface TenderDetail
+  extends Omit<
+    TenderSummary,
+    'offerCount' | 'lowestOfferAmount' | 'awardedSupplierName' | 'awardedAmount'
+  > {
+  awardedOfferId: number | null;
   remarks: RemarkSummary[];
   offers: OfferSummary[];
 }
@@ -152,6 +160,10 @@ export class TenderApiService {
 
   close(id: number): Observable<TenderSummary> {
     return this.http.post<TenderSummary>(`/api/tenders/${id}/close`, null);
+  }
+
+  awardTender(id: number, offerId: number): Observable<TenderDetail> {
+    return this.http.post<TenderDetail>(`/api/tenders/${id}/offers/${offerId}/award`, null);
   }
 
   addRemark(id: number, text: string): Observable<RemarkSummary> {

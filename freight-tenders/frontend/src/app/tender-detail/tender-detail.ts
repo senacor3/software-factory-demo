@@ -49,6 +49,10 @@ const OFFER_ERROR_MESSAGE =
   'Das Angebot konnte nicht gespeichert werden. Bitte versuchen Sie es später erneut.';
 const CLOSE_ERROR_MESSAGE =
   'Die Ausschreibung konnte nicht geschlossen werden. Bitte versuchen Sie es später erneut.';
+const AWARD_ERROR_MESSAGE =
+  'Der Zuschlag konnte nicht erteilt werden. Bitte versuchen Sie es später erneut.';
+const AWARDED_EXPLANATION =
+  'Diese Ausschreibung ist vergeben, daher können keine weiteren Bemerkungen oder Angebote hinzugefügt werden.';
 const CLOSED_EXPLANATION =
   'Diese Ausschreibung ist geschlossen, daher können keine weiteren Bemerkungen oder Angebote hinzugefügt werden.';
 
@@ -101,7 +105,17 @@ export class TenderDetail implements OnInit {
   protected readonly closing = signal(false);
   protected readonly closeError = signal<string | null>(null);
 
+  private readonly awardedExplanationRef =
+    viewChild<ElementRef<HTMLElement>>('awardedExplanationRef');
+
+  protected readonly awardingOfferId = signal<number | null>(null);
+  protected readonly awarding = signal(false);
+  protected readonly awardError = signal<string | null>(null);
+
+  protected readonly isOpen = computed(() => this.tender()?.status === 'OPEN');
+  protected readonly isAwarded = computed(() => this.tender()?.status === 'AWARDED');
   protected readonly isClosed = computed(() => this.tender()?.status === 'CLOSED');
+  protected readonly showAwardColumn = computed(() => this.isOpen() || this.isAwarded());
   protected readonly statusLabel = computed(() => {
     const current = this.tender();
     return current ? STATUS_LABELS[current.status] : '';
@@ -180,6 +194,7 @@ export class TenderDetail implements OnInit {
   protected readonly isDeliveryLate = isDeliveryLate;
   protected readonly localToday = localToday;
   protected readonly closedExplanation = CLOSED_EXPLANATION;
+  protected readonly awardedExplanation = AWARDED_EXPLANATION;
   protected readonly ariaSort = ariaSort;
   protected readonly sortIndicator = sortIndicator;
 
@@ -189,9 +204,15 @@ export class TenderDetail implements OnInit {
   );
 
   protected readonly offerSort = signal<SortState<OfferSummary>>(UNSORTED);
-  protected readonly sortedOffers = computed(() =>
-    sortRows(this.tender()?.offers ?? [], this.offerSort()),
-  );
+  // The awarded offer always leads, whatever the chosen sort.
+  protected readonly sortedOffers = computed(() => {
+    const sorted = sortRows(this.tender()?.offers ?? [], this.offerSort());
+    const awardedId = this.tender()?.awardedOfferId ?? null;
+    return [
+      ...sorted.filter((offer) => offer.id === awardedId),
+      ...sorted.filter((offer) => offer.id !== awardedId),
+    ];
+  });
 
   protected readonly remarkForm = this.formBuilder.nonNullable.group({
     text: ['', Validators.required],
@@ -245,7 +266,7 @@ export class TenderDetail implements OnInit {
         this.tender.set(tender);
         this.offerForm.controls.deliveryDate.updateValueAndValidity();
 
-        if (tender.status === 'CLOSED') {
+        if (tender.status !== 'OPEN') {
           this.remarkForm.disable();
           this.offerForm.disable();
         } else if (this.deadlinePassed()) {
@@ -325,6 +346,59 @@ export class TenderDetail implements OnInit {
         // The close button (the focused element) is removed on this change; the explanation
         // only exists after the next render, so focus it then.
         afterNextRender(() => this.closedExplanationRef()?.nativeElement.focus(), {
+          injector: this.injector,
+        });
+      });
+  }
+
+  protected canAward(offer: OfferSummary): boolean {
+    return this.isOpen() && !isOfferExpired(offer.validUntil, localToday());
+  }
+
+  protected onAskAward(offerId: number): void {
+    if (this.awarding()) {
+      return;
+    }
+    this.awardError.set(null);
+    this.awardingOfferId.set(offerId);
+  }
+
+  protected onCancelAward(): void {
+    if (this.awarding()) {
+      return;
+    }
+    this.awardingOfferId.set(null);
+  }
+
+  protected onConfirmAward(offerId: number): void {
+    const current = this.tender();
+    if (current === null || this.awarding()) {
+      return;
+    }
+
+    this.awarding.set(true);
+    this.awardError.set(null);
+
+    this.tenderApi
+      .awardTender(current.id, offerId)
+      .pipe(catchError(() => of(null)))
+      .subscribe((result) => {
+        this.awarding.set(false);
+
+        if (result === null) {
+          this.awardError.set(AWARD_ERROR_MESSAGE);
+          this.awardingOfferId.set(null);
+          return;
+        }
+
+        this.awardingOfferId.set(null);
+        this.tender.set(result);
+        this.remarkForm.disable();
+        this.offerForm.disable();
+
+        // The clicked button is removed by this change; the explanation only exists after the
+        // next render, so focus it then.
+        afterNextRender(() => this.awardedExplanationRef()?.nativeElement.focus(), {
           injector: this.injector,
         });
       });

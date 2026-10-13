@@ -14,6 +14,12 @@
     <Method name="getTender" />
     <Bug pattern="EI_EXPOSE_REP" />
   </Match>
+  <!-- Same pattern for the awarded-offer reference on Tender. -->
+  <Match>
+    <Class name="com.senacor.freighttenders.tender.Tender" />
+    <Method name="getAwardedOffer" />
+    <Bug pattern="EI_EXPOSE_REP" />
+  </Match>
   <Match>
     <Class name="com.senacor.freighttenders.tender.Remark" />
     <Method name="getTender" />

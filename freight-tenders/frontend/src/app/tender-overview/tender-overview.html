@@ -16,7 +16,7 @@
           <table class="data-table data-table-wide" [attr.data-testid]="table.testId">
             <thead>
               <tr>
-                @for (column of columns; track column.key) {
+                @for (column of table.columns; track column.key) {
                   @if (column.sortable) {
                     <th
                       scope="col"
@@ -100,16 +100,34 @@
                     <span class="cell-primary" data-testid="offer-count">{{
                       tender.offerCount
                     }}</span>
-                    @if (tender.lowestOfferAmount !== null) {
+                    @if (tender.status === 'AWARDED' && tender.awardedSupplierName !== null) {
+                      <span class="cell-caption" data-testid="awarded-offer"
+                        >Zuschlag: {{ tender.awardedSupplierName }}
+                        {{ formatAmount(tender.awardedAmount ?? 0, tender.currency) }}</span
+                      >
+                    } @else if (tender.lowestOfferAmount !== null) {
                       <span class="cell-caption" data-testid="lowest-offer"
                         >ab {{ formatAmount(tender.lowestOfferAmount, tender.currency) }}</span
                       >
                     }
                   </td>
+                  @if (table.columns.length > columns.length) {
+                    <td>
+                      <span
+                        [class]="'pill-' + tender.status.toLowerCase()"
+                        data-testid="tender-status"
+                        >{{ statusLabels[tender.status] }}</span
+                      >
+                    </td>
+                  }
                 </tr>
               } @empty {
                 <tr>
-                  <td class="empty-cell" colspan="7" [attr.data-testid]="table.testId + '-empty'">
+                  <td
+                    class="empty-cell"
+                    [attr.colspan]="table.columns.length"
+                    [attr.data-testid]="table.testId + '-empty'"
+                  >
                     {{ table.emptyMessage }}
                   </td>
                 </tr>

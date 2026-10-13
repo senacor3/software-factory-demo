@@ -68,6 +68,26 @@ class TenderServicePersistenceTest {
   }
 
   @Test
+  void awardedOfferPersistsAndReloads() {
+    Tender tender = TenderFixtures.tender();
+    tender.addOffer(TenderFixtures.offer("First Supplier", new BigDecimal("100.00")));
+    tender.addOffer(TenderFixtures.offer("Second Supplier", new BigDecimal("200.00")));
+    Long id = tenderRepository.save(tender).getId();
+    entityManager.flush();
+    entityManager.clear();
+    Long offerId = tenderRepository.findById(id).orElseThrow().getOffers().get(1).getId();
+
+    tenderService.awardTender(id, offerId);
+    entityManager.flush();
+    entityManager.clear();
+
+    Tender reloaded = tenderRepository.findById(id).orElseThrow();
+    assertThat(reloaded.getStatus()).isEqualTo(TenderStatus.AWARDED);
+    assertThat(reloaded.getAwardedOffer().getId()).isEqualTo(offerId);
+    assertThat(reloaded.getAwardedOffer().getSupplierName()).isEqualTo("Second Supplier");
+  }
+
+  @Test
   void addOfferAppendsTheNewOfferAsTheLastElementAfterRealPersistence() {
     Tender tender = TenderFixtures.tender();
     tender.addOffer(TenderFixtures.offer("First Supplier", new BigDecimal("100.00")));
