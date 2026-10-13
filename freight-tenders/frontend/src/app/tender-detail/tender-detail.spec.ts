@@ -316,7 +316,7 @@ describe('TenderDetail', () => {
     expect(ariaSortOf(element, 'offers', 'amount')).toBe('none');
     expect(sortButtonText(element, 'remarks', 'text')).toBe('Bemerkung');
     expect(sortButtonText(element, 'offers', 'supplierName')).toBe('Anbieter');
-    expect(sortButtonText(element, 'offers', 'amount')).toBe('Betrag');
+    expect(sortButtonText(element, 'offers', 'amount')).toBe('Betrag (EUR)');
   });
 
   it('sorts remarks ascending when the header is selected, and descending when selected again', async () => {
@@ -385,7 +385,7 @@ describe('TenderDetail', () => {
     expect(ariaSortOf(element, 'offers', 'supplierName')).toBe('ascending');
     expect(sortButtonText(element, 'offers', 'supplierName')).toContain('▲');
     expect(ariaSortOf(element, 'offers', 'amount')).toBe('none');
-    expect(sortButtonText(element, 'offers', 'amount')).toBe('Betrag');
+    expect(sortButtonText(element, 'offers', 'amount')).toBe('Betrag (EUR)');
   });
 
   it('sorts the remarks and offers tables independently of each other', async () => {
@@ -421,7 +421,7 @@ describe('TenderDetail', () => {
 
     expect(sortButtonText(element, 'remarks', 'text')).toBe('Bemerkung');
     expect(sortButtonText(element, 'offers', 'supplierName')).toBe('Anbieter');
-    expect(sortButtonText(element, 'offers', 'amount')).toBe('Betrag');
+    expect(sortButtonText(element, 'offers', 'amount')).toBe('Betrag (EUR)');
 
     const remarksEmpty = element.querySelector('[data-testid="remarks-empty"]');
     const offersEmpty = element.querySelector('[data-testid="offers-empty"]');

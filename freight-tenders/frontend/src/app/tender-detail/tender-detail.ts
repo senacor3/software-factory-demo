@@ -14,12 +14,23 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { catchError, of } from 'rxjs';
 import { SortState, UNSORTED, ariaSort, sortIndicator, sortRows, toggleSort } from '../table-sort';
 import {
+  COUNTRY_LABELS,
+  EQUIPMENT_LABELS,
   OfferSummary,
   RemarkSummary,
   STATUS_LABELS,
   TenderApiService,
   TenderDetail as TenderDetailModel,
 } from '../tender-api';
+import {
+  deadlineHint,
+  formatAmount,
+  formatDate,
+  formatLoadingMeters,
+  formatTemperatureRange,
+  formatWeight,
+  localToday,
+} from '../tender-format';
 
 const LOAD_ERROR_MESSAGE =
   'Die Ausschreibung wurde nicht gefunden oder konnte nicht geladen werden.';
@@ -32,8 +43,7 @@ const CLOSE_ERROR_MESSAGE =
 const CLOSED_EXPLANATION =
   'Diese Ausschreibung ist geschlossen, daher können keine weiteren Bemerkungen oder Angebote hinzugefügt werden.';
 
-// UI-only: the domain's offer amount is a bare number without a currency.
-const AMOUNT_FORMAT = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
+const NO_INFO = 'Keine Angabe';
 
 @Component({
   selector: 'app-tender-detail',
@@ -63,6 +73,65 @@ export class TenderDetail implements OnInit {
     return current ? STATUS_LABELS[current.status] : '';
   });
 
+  protected readonly summaryLine = computed(() => {
+    const current = this.tender();
+    if (!current) {
+      return '';
+    }
+    return [
+      formatDate(current.pickupDate),
+      formatDate(current.deliveryDate),
+      EQUIPMENT_LABELS[current.equipmentType],
+      formatWeight(current.weightKg),
+    ].join(' · ');
+  });
+
+  protected readonly bidDeadlineText = computed(() => {
+    const current = this.tender();
+    if (!current) {
+      return '';
+    }
+    const date = formatDate(current.bidDeadline);
+    const hint = deadlineHint(current.bidDeadline, current.status, localToday());
+    return hint ? `${date} (${hint})` : date;
+  });
+
+  protected readonly originCountry = computed(() => this.countryLabel(this.tender()?.origin.country));
+  protected readonly destinationCountry = computed(() =>
+    this.countryLabel(this.tender()?.destination.country),
+  );
+  protected readonly weightText = computed(() => formatWeight(this.tender()?.weightKg ?? 0));
+  protected readonly loadingMetersText = computed(() =>
+    formatLoadingMeters(this.tender()?.loadingMeters ?? 0),
+  );
+  protected readonly equipmentLabel = computed(() => {
+    const current = this.tender();
+    return current ? EQUIPMENT_LABELS[current.equipmentType] : '';
+  });
+  protected readonly palletText = computed(() => {
+    const count = this.tender()?.palletCount;
+    return count === null || count === undefined ? NO_INFO : String(count);
+  });
+  protected readonly dangerousGoodsText = computed(() => {
+    const current = this.tender();
+    if (!current?.dangerousGoods) {
+      return 'Nein';
+    }
+    return current.adrClass ? `Ja, ADR-Klasse ${current.adrClass}` : 'Ja';
+  });
+  protected readonly temperatureText = computed(() => {
+    const current = this.tender();
+    if (
+      !current?.temperatureControlled ||
+      current.temperatureMinC === null ||
+      current.temperatureMaxC === null
+    ) {
+      return 'Keine Vorgabe';
+    }
+    return formatTemperatureRange(current.temperatureMinC, current.temperatureMaxC);
+  });
+
+  protected readonly formatDate = formatDate;
   protected readonly closedExplanation = CLOSED_EXPLANATION;
   protected readonly ariaSort = ariaSort;
   protected readonly sortIndicator = sortIndicator;
@@ -132,7 +201,12 @@ export class TenderDetail implements OnInit {
   }
 
   protected formatAmount(amount: number): string {
-    return AMOUNT_FORMAT.format(amount);
+    const currency = this.tender()?.currency ?? 'EUR';
+    return formatAmount(amount, currency);
+  }
+
+  private countryLabel(code: string | undefined): string {
+    return code ? (COUNTRY_LABELS[code] ?? code) : '';
   }
 
   protected onClose(): void {
