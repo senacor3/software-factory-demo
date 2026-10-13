@@ -2,9 +2,9 @@
 schema_version: 1
 story_slug: seed-demo-tenders
 stage: checks
-status: unresolved-after-cap
-updated: 2026-10-13T14:40:14Z
-fix_cycle: 2
+status: findings-open
+updated: 2026-10-13T14:41:34Z
+fix_cycle: 1
 ---
 
 ## Failing checks

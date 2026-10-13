@@ -17,7 +17,7 @@ import org.springframework.test.web.servlet.MockMvc;
 class DemoProfileGatingTest {
 
   @Nested
-  @SpringBootTest
+  @SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:gating-without-demo")
   @AutoConfigureMockMvc
   class WithoutDemoProfile {
 
@@ -37,7 +37,7 @@ class DemoProfileGatingTest {
   }
 
   @Nested
-  @SpringBootTest
+  @SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:gating-with-demo")
   @AutoConfigureMockMvc
   @ActiveProfiles("demo")
   class WithDemoProfile {
