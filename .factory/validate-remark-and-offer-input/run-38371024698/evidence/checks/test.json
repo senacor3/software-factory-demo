@@ -1,0 +1,40 @@
+{
+  "status": "pass",
+  "command": [
+    "npm",
+    "--prefix",
+    "freight-tenders/frontend",
+    "test",
+    "--",
+    "--watch=false"
+  ],
+  "returncode": 0,
+  "detail": "",
+  "commands": [
+    [
+      "uv",
+      "run",
+      "--with",
+      "pytest",
+      "--with",
+      "pyyaml",
+      "pytest",
+      "factory/graph/tests/",
+      "factory/scripts/tests/"
+    ],
+    [
+      "bash",
+      "-c",
+      "JAVA_HOME=\"$JAVA_HOME_25_X64\" mvn -B -f freight-tenders/backend/pom.xml test"
+    ],
+    [
+      "npm",
+      "--prefix",
+      "freight-tenders/frontend",
+      "test",
+      "--",
+      "--watch=false"
+    ]
+  ],
+  "config_source": "origin/main"
+}
