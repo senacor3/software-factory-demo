@@ -3,7 +3,7 @@ title: 'The checks fix loop re-checks under the same conditions as the checks jo
 type: 'bugfix'
 ticket: '5'
 created: '2026-10-13'
-status: 'built'
+status: done
 route: 'full'
 route_source: 'auto'
 review: 'quick'

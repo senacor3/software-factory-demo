@@ -3,7 +3,7 @@ title: 'The checks job reports failed checks through a job output, so a run the 
 type: 'bugfix'
 ticket: '4'
 created: '2026-10-13'
-status: 'built'
+status: done
 route: 'full'
 route_source: 'auto'
 review: 'quick'
