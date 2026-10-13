@@ -78,6 +78,28 @@ Listing tenders must not run one extra query per tender to compute them.
   container; Layout & Spacing notes the overview's wider content area.
 - `mockups/tender-overview.html` is updated to the new columns.
 
+### Clarifications
+
+- "Today" for the "heute"/"abgelaufen" hints is the browser's local date. The
+  hints are computed in the frontend; the backend returns no such flag.
+- `lowestOfferAmount` and the "ab" amount are in the tender's `currency`.
+- Sorting uses the first line's underlying value only: city name, date, weight
+  in kg, offer count. Second-line content never affects the order.
+- The overview keeps loading all tenders with one `GET /api/tenders` call and
+  splitting them into the two tables in the frontend, as today.
+- The first two columns keep their existing sort keys' behavior; existing
+  `data-testid` values are kept where the element still exists, and tests for
+  the removed status column are removed.
+
+### Implementation choices
+
+Anything this story does not specify -- class and method names, how a rule or
+query is implemented, how components and styles are split, test structure --
+is the implementer's choice. Follow the conventions in
+`freight-tenders/backend/AGENTS.md` and `freight-tenders/frontend/AGENTS.md`
+and prefer the simplest option; none of it needs a decision from the story
+author.
+
 ## Why
 
 The overview is the dispatcher's work queue. With pickup date, load, vehicle,

@@ -31,9 +31,9 @@ enforces: offers can be added to an open tender forever.
   existing error shape. `deliveryDate` before the tender's `pickupDate` cannot
   be checked on the request alone; it is also rejected with `400` and a
   `violations` entry for `deliveryDate`.
-- `supplierName` and `amount` are validated here even if
-  `stories/freight-tenders/validate-remark-and-offer-input.md` has not been
-  implemented yet; if it has, keep its behavior.
+- `supplierName` and `amount` are already validated since
+  `stories/freight-tenders/validate-remark-and-offer-input.md`; keep that
+  behavior and add the 100-character limit for `supplierName`.
 - An offer for a tender whose `bidDeadline` is before today is rejected with
   `409 Conflict` through a new domain exception, mapped in
   `TenderExceptionHandler` like `TenderClosedException`. An offer on the
@@ -75,6 +75,33 @@ Trans Benelux       1.390,00 €     23.10.2026           15.10.2026
 - `freight-tenders/README.md`: the offers endpoint row and the error paragraph.
 - `EXPERIENCE.md`: the add-offer form row in Component Patterns, a State
   Patterns row "Bid deadline passed", and Flow 1.
+
+### Clarifications
+
+- Order of checks for `POST /api/tenders/{id}/offers`: request validation
+  (`400`), tender exists (`404`), tender is open (`409`), bid deadline not
+  passed (`409`), `deliveryDate` not before the tender's `pickupDate` (`400`).
+- All date comparisons are inclusive: `validUntil` may be today, the offer's
+  `deliveryDate` may equal the tender's `pickupDate`, and an offer on the
+  `bidDeadline` day is accepted.
+- A blank or missing `note` is stored and returned as `null`.
+- In the frontend, "today" is the browser's local date. "abgelaufen" applies
+  when `validUntil` is before today; "nach Wunschtermin" when the offer's
+  `deliveryDate` is strictly after the tender's `deliveryDate`.
+- The frontend decides from `bidDeadline` and the browser's date whether to
+  disable the offer form. The backend stays authoritative: its `409` is
+  handled like any other failed offer request.
+- Sorting by "Zustellung" and "Gültig bis" orders by date; the second-line
+  hints do not affect the order.
+
+### Implementation choices
+
+Anything this story does not specify -- class and method names, how a rule or
+query is implemented, how components and styles are split, test structure --
+is the implementer's choice. Follow the conventions in
+`freight-tenders/backend/AGENTS.md` and `freight-tenders/frontend/AGENTS.md`
+and prefer the simplest option; none of it needs a decision from the story
+author.
 
 ## Why
 

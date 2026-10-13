@@ -98,6 +98,27 @@ in `{typography.body}`.
 - `freight-tenders/README.md`: the `/tenders/:id` row.
 - `mockups/tender-detail.html` is updated to the new layout.
 
+### Clarifications
+
+- "Today" for "(heute)"/"(abgelaufen)" is the browser's local date.
+- The summary line and the cards are rendered only for a loaded tender, open
+  or closed.
+- Amounts are formatted with the German locale and the tender's currency, for
+  example `1.450,00 €` or `CHF 1.450,00` -- whatever `Intl.NumberFormat`
+  produces for `de-DE` and that currency.
+- The offer form's fields and the offers table's columns do not change in this
+  story beyond the amount format and the amount label.
+- The default sort order of both tables is unchanged.
+
+### Implementation choices
+
+Anything this story does not specify -- class and method names, how a rule or
+query is implemented, how components and styles are split, test structure --
+is the implementer's choice. Follow the conventions in
+`freight-tenders/backend/AGENTS.md` and `freight-tenders/frontend/AGENTS.md`
+and prefer the simplest option; none of it needs a decision from the story
+author.
+
 ## Why
 
 The detail page is where a dispatcher decides between offers, and they can

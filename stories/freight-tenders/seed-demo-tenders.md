@@ -59,6 +59,27 @@ started. The set covers every state the UI distinguishes:
   API uses, so their state is consistent with what the application itself
   would produce.
 
+### Clarifications
+
+- "Today" is the date of the application's `Clock` bean (`Europe/Berlin`).
+- How the two deliberately past-dated values get stored is the implementer's
+  choice, but the validation rules of the API must not be weakened or made
+  conditional on the profile to allow it.
+- Tender 7 is awarded and tender 8 closed after their offers and remarks have
+  been added.
+- The seeder is not exposed through any endpoint and adds no configuration
+  property beyond the profile.
+- No frontend change.
+
+### Implementation choices
+
+Anything this story does not specify -- class and method names, how a rule or
+query is implemented, how components and styles are split, test structure --
+is the implementer's choice. Follow the conventions in
+`freight-tenders/backend/AGENTS.md` and `freight-tenders/frontend/AGENTS.md`
+and prefer the simplest option; none of it needs a decision from the story
+author.
+
 ## Why
 
 A demo should start with the overview already telling a story: urgent and

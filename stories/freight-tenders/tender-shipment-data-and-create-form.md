@@ -83,6 +83,21 @@ The database is in-memory H2 with `ddl-auto: update`, so there is no migration.
 - The backend accepts any two uppercase letters as `country` and does not
   restrict it to a list. The 13 countries are only the choices the create form
   offers.
+- `adrClass` is a string in the API and the database, not a Java enum, and is
+  validated against the 13 listed values. Any other value is an ordinary
+  validation failure: `400` with a `violations` entry for `adrClass`.
+- All date comparisons are inclusive at the boundary: `pickupDate` and
+  `bidDeadline` may be today, `deliveryDate` may equal `pickupDate`, and
+  `bidDeadline` may equal `pickupDate`.
+
+### Implementation choices
+
+Anything this story does not specify -- class and method names, how a
+constraint is implemented, how the form is split into components, test
+structure -- is the implementer's choice. Follow the conventions in
+`freight-tenders/backend/AGENTS.md` and `freight-tenders/frontend/AGENTS.md`
+and prefer the simplest option; none of it needs a decision from the story
+author.
 
 ### Frontend: create form
 

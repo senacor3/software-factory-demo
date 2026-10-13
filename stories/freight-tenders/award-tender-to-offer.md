@@ -74,6 +74,36 @@ nothing else.
   "Awarded tender" and "Award in flight / failed", and Flow 1's ending.
 - `DESIGN.md`: the pill token, the Colors section and the Do's and Don'ts.
 
+### Clarifications
+
+- Awarding is allowed before and after the bid deadline. The deadline only
+  stops new offers.
+- Order of checks for the award endpoint: tender exists (`404`), offer exists
+  and belongs to the tender (`404`), tender is `OPEN` (`409`), offer has not
+  expired (`409`). An offer whose `validUntil` is today has not expired.
+- Closing an already closed tender behaves as it does today; only closing an
+  awarded tender is new and returns `409`.
+- Which exception types back the new `409` and `404` responses is the
+  implementer's choice, as long as they are mapped in `TenderExceptionHandler`
+  to the existing error shape.
+- The overview keeps loading all tenders in one call and splitting them in the
+  frontend: `OPEN` goes to the first table, `AWARDED` and `CLOSED` to the
+  second.
+- Sorting the second table by "Status" orders by the German label.
+- "Compact" for the row buttons means reduced padding so the row height does
+  not grow; it is a shared modifier class next to `btn-secondary`.
+- Whether an offer has expired is decided in the frontend from `validUntil`
+  and the browser's local date; the backend's `409` stays authoritative.
+
+### Implementation choices
+
+Anything this story does not specify -- class and method names, how a rule or
+query is implemented, how components and styles are split, test structure --
+is the implementer's choice. Follow the conventions in
+`freight-tenders/backend/AGENTS.md` and `freight-tenders/frontend/AGENTS.md`
+and prefer the simplest option; none of it needs a decision from the story
+author.
+
 ## Why
 
 Awarding is what a tender is for. Recording it as data lets the app answer the
