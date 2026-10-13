@@ -318,4 +318,105 @@ class TenderControllerTest {
         .andExpect(jsonPath("$.path").value("/api/tenders/99/offers"))
         .andExpect(jsonPath("$.timestamp").exists());
   }
+
+  @Test
+  void addRemarkWithBlankWhitespaceOrMissingTextReturns400WithViolation() throws Exception {
+    for (String body : List.of("{\"text\":\"\"}", "{\"text\":\"   \"}", "{}")) {
+      mockMvc
+          .perform(
+              post("/api/tenders/{id}/remarks", 1L)
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(body))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.error").value("Bad Request"))
+          .andExpect(jsonPath("$.message").exists())
+          .andExpect(jsonPath("$.path").value("/api/tenders/1/remarks"))
+          .andExpect(jsonPath("$.timestamp").exists())
+          .andExpect(jsonPath("$.violations.length()").value(1))
+          .andExpect(jsonPath("$.violations[0].field").value("text"));
+    }
+
+    verifyNoInteractions(tenderService);
+  }
+
+  @Test
+  void addOfferWithBlankSupplierNameReturns400WithViolation() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/tenders/{id}/offers", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"supplierName\":\"  \",\"amount\":10.00}"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.violations.length()").value(1))
+        .andExpect(jsonPath("$.violations[0].field").value("supplierName"));
+
+    verifyNoInteractions(tenderService);
+  }
+
+  @Test
+  void addOfferWithMissingZeroOrNegativeAmountReturns400WithViolation() throws Exception {
+    for (String amountJson : List.of("", ",\"amount\":0", ",\"amount\":-5", ",\"amount\":0.00")) {
+      mockMvc
+          .perform(
+              post("/api/tenders/{id}/offers", 1L)
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content("{\"supplierName\":\"Acme Logistics\"" + amountJson + "}"))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.violations.length()").value(1))
+          .andExpect(jsonPath("$.violations[0].field").value("amount"));
+    }
+
+    verifyNoInteractions(tenderService);
+  }
+
+  @Test
+  void addOfferWithEmptyBodyReturns400WithViolationForEachField() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/tenders/{id}/offers", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.violations.length()").value(2))
+        .andExpect(
+            jsonPath("$.violations[*].field").value(containsInAnyOrder("supplierName", "amount")));
+
+    verifyNoInteractions(tenderService);
+  }
+
+  @Test
+  void addOfferWithMinimumAmountReturns201() throws Exception {
+    Tender tender = new Tender("Hamburg", "Rotterdam");
+    ReflectionTestUtils.setField(tender, "id", 1L);
+    Offer offer = new Offer("Acme Logistics", new BigDecimal("0.01"));
+    ReflectionTestUtils.setField(offer, "id", 20L);
+    tender.addOffer(offer);
+    given(tenderService.addOffer(eq(1L), eq("Acme Logistics"), eq(new BigDecimal("0.01"))))
+        .willReturn(tender);
+
+    mockMvc
+        .perform(
+            post("/api/tenders/{id}/offers", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"supplierName\":\"Acme Logistics\",\"amount\":0.01}"))
+        .andExpect(status().isCreated());
+  }
+
+  @Test
+  void invalidRemarkOrOfferOnClosedTenderReturns400NotConflict() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/tenders/{id}/remarks", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"text\":\"\"}"))
+        .andExpect(status().isBadRequest());
+    mockMvc
+        .perform(
+            post("/api/tenders/{id}/offers", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"supplierName\":\"\",\"amount\":0}"))
+        .andExpect(status().isBadRequest());
+
+    verifyNoInteractions(tenderService);
+  }
 }

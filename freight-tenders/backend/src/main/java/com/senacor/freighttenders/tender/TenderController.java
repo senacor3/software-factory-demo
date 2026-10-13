@@ -52,7 +52,7 @@ public class TenderController {
 
   @PostMapping("/{id}/remarks")
   public ResponseEntity<RemarkResponse> addRemark(
-      @PathVariable Long id, @RequestBody AddRemarkRequest request) {
+      @PathVariable Long id, @Valid @RequestBody AddRemarkRequest request) {
     Tender tender = tenderService.addRemark(id, request.text());
     Remark createdRemark = tender.getRemarks().get(tender.getRemarks().size() - 1);
     return ResponseEntity.status(HttpStatus.CREATED).body(RemarkResponse.from(createdRemark));
@@ -60,7 +60,7 @@ public class TenderController {
 
   @PostMapping("/{id}/offers")
   public ResponseEntity<OfferResponse> addOffer(
-      @PathVariable Long id, @RequestBody AddOfferRequest request) {
+      @PathVariable Long id, @Valid @RequestBody AddOfferRequest request) {
     Tender tender = tenderService.addOffer(id, request.supplierName(), request.amount());
     Offer createdOffer = tender.getOffers().get(tender.getOffers().size() - 1);
     return ResponseEntity.status(HttpStatus.CREATED).body(OfferResponse.from(createdOffer));
