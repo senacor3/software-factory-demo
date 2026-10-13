@@ -28,6 +28,8 @@ export function tenderSummary(overrides: Partial<TenderSummary> = {}): TenderSum
 }
 
 export function tenderDetail(overrides: Partial<TenderDetail> = {}): TenderDetail {
-  const { offerCount: _count, lowestOfferAmount: _lowest, ...summary } = tenderSummary();
-  return { ...summary, remarks: [], offers: [], ...overrides };
+  const summary: Partial<TenderSummary> = tenderSummary();
+  delete summary.offerCount;
+  delete summary.lowestOfferAmount;
+  return { ...summary, remarks: [], offers: [], ...overrides } as TenderDetail;
 }
