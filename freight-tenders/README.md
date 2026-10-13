@@ -46,7 +46,7 @@ Angular (standalone components, SCSS, Vitest for unit tests).
 |---|---|---|
 | `/` | `TenderOverview` | Two tables, "Offene Ausschreibungen" (open) and "Geschlossene Ausschreibungen" (closed); a row opens that tender |
 | `/tenders/new` | `TenderCreate` | A form for origin ("Von") and destination ("Nach"); on success it returns to the overview |
-| `/tenders/:id` | `TenderDetail` | The tender's status, its remarks and offers as two tables, a form to add each, and an "Ausschreibung schließen" button while the tender is open |
+| `/tenders/:id` | `TenderDetail` | A "Zurück zur Übersicht" back link, the tender's status, its remarks and offers as two tables, a form to add each, and an "Ausschreibung schließen" button while the tender is open |
 
 ```bash
 cd frontend

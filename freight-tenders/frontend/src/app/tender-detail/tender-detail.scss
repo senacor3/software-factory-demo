@@ -1,7 +1,10 @@
-.page-actions {
-  margin-bottom: calc(3 * var(--space-unit));
+.close-error {
+  margin: calc(2 * var(--space-unit)) 0 0;
+  text-align: right;
+}
 
-  .form-error {
-    margin: calc(2 * var(--space-unit)) 0 0;
+@media (max-width: 600px) {
+  .close-error {
+    text-align: left;
   }
 }

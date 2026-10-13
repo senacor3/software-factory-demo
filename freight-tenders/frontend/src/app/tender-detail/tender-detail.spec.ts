@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { TenderDetail as TenderDetailModel } from '../tender-api';
 import { TenderDetail } from './tender-detail';
@@ -104,7 +104,10 @@ describe('TenderDetail', () => {
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
-        provideRouter([{ path: 'tenders/:id', component: TenderDetail }]),
+        provideRouter([
+          { path: '', component: TenderDetail },
+          { path: 'tenders/:id', component: TenderDetail },
+        ]),
       ],
     }).compileComponents();
 
@@ -113,6 +116,60 @@ describe('TenderDetail', () => {
 
   afterEach(() => {
     httpMock.verify();
+  });
+
+  function backLink(element: HTMLElement): HTMLAnchorElement | null {
+    return element.querySelector<HTMLAnchorElement>('[data-testid="back-link"]');
+  }
+
+  it('shows the back link while loading, before the response arrives', async () => {
+    const harness = await RouterTestingHarness.create('/tenders/1');
+    const element = harness.routeNativeElement as HTMLElement;
+
+    expect(backLink(element)?.getAttribute('href')).toBe('/');
+    expect(backLink(element)?.textContent).toContain('Zurück zur Übersicht');
+    expect(element.querySelector('main')?.firstElementChild).toBe(backLink(element));
+
+    httpMock.expectOne('/api/tenders/1').flush(OPEN_TENDER);
+  });
+
+  it('shows the back link when the tender cannot be loaded', async () => {
+    const harness = await RouterTestingHarness.create('/tenders/1');
+    httpMock.expectOne('/api/tenders/1').flush('nope', { status: 404, statusText: 'Not Found' });
+    harness.detectChanges();
+
+    const element = harness.routeNativeElement as HTMLElement;
+    expect(element.querySelector('[data-testid="load-error"]')).not.toBeNull();
+    expect(backLink(element)?.getAttribute('href')).toBe('/');
+  });
+
+  it('shows the back link when the route id is not a number', async () => {
+    const harness = await RouterTestingHarness.create('/tenders/abc');
+
+    const element = harness.routeNativeElement as HTMLElement;
+    expect(backLink(element)?.getAttribute('href')).toBe('/');
+    expect(element.querySelector('main')?.firstElementChild).toBe(backLink(element));
+  });
+
+  it('shows the back link as the first element in main for an open tender', async () => {
+    const element = await render(OPEN_TENDER);
+
+    expect(element.querySelector('main')?.firstElementChild).toBe(backLink(element));
+  });
+
+  it('shows the back link as the first element in main for a closed tender', async () => {
+    const element = await render(CLOSED_TENDER);
+
+    expect(element.querySelector('main')?.firstElementChild).toBe(backLink(element));
+  });
+
+  it('navigates to the overview when the back link is clicked', async () => {
+    const element = await render(OPEN_TENDER);
+
+    backLink(element)!.click();
+    await harness.fixture.whenStable();
+
+    expect(TestBed.inject(Router).url).toBe('/');
   });
 
   it('shows a German loading message before the response arrives', async () => {
@@ -554,6 +611,9 @@ describe('TenderDetail', () => {
     expect(texts(element, 'status')).toEqual(['Geschlossen']);
     expect(element.querySelector('[data-testid="closed-explanation"]')).not.toBeNull();
     expect(closeButton(element)).toBeNull();
+    expect(document.activeElement).toBe(
+      element.querySelector('[data-testid="closed-explanation"]'),
+    );
     expect(
       element.querySelector<HTMLButtonElement>('[data-testid="remark-submit"]')!.disabled,
     ).toBe(true);
@@ -590,6 +650,9 @@ describe('TenderDetail', () => {
 
     expect(element.querySelector('[data-testid="close-error"]')?.textContent).toContain(
       'konnte nicht geschlossen werden',
+    );
+    expect(element.querySelector('[data-testid="close-error"]')?.getAttribute('role')).toBe(
+      'alert',
     );
     expect(texts(element, 'status')).toEqual(['Offen']);
     expect(closeButton(element)!.disabled).toBe(false);
