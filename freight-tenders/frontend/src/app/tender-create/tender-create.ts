@@ -245,7 +245,7 @@ export class TenderCreate {
             temperatureMaxC: value.temperatureMaxC as number,
           }
         : {}),
-      currency: value.currency,
+      currency: value.currency as Currency,
     };
   }
 }
