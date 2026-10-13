@@ -2,6 +2,8 @@ package com.senacor.freighttenders.tender;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Comparator;
+import java.util.Objects;
 
 /**
  * Response body for the tender API -- a DTO rather than the {@link Tender} entity itself, since
@@ -26,9 +28,17 @@ public record TenderResponse(
     Integer temperatureMinC,
     Integer temperatureMaxC,
     Currency currency,
-    TenderStatus status) {
+    TenderStatus status,
+    int offerCount,
+    BigDecimal lowestOfferAmount) {
 
   public static TenderResponse from(Tender tender) {
+    BigDecimal lowestOfferAmount =
+        tender.getOffers().stream()
+            .map(Offer::getAmount)
+            .filter(Objects::nonNull)
+            .min(Comparator.naturalOrder())
+            .orElse(null);
     return new TenderResponse(
         tender.getId(),
         AddressResponse.from(tender.getOrigin()),
@@ -47,6 +57,8 @@ public record TenderResponse(
         tender.getTemperatureMinC(),
         tender.getTemperatureMaxC(),
         tender.getCurrency(),
-        tender.getStatus());
+        tender.getStatus(),
+        tender.getOffers().size(),
+        lowestOfferAmount);
   }
 }

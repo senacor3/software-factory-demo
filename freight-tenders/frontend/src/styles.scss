@@ -61,6 +61,11 @@ body {
   padding: var(--space-margin-desktop);
 }
 
+/* The overview has seven columns, so it gets a wider content area than the other pages. */
+.page.page-wide {
+  --content-max-width: 1200px;
+}
+
 .page-section {
   margin-top: var(--space-section-gap);
 }
@@ -234,6 +239,34 @@ h2 {
 .row-link {
   color: inherit;
   text-decoration: none;
+}
+
+/* Wide tables scroll inside their own container, so the page itself never scrolls sideways. */
+.table-scroll {
+  overflow-x: auto;
+}
+
+.data-table.data-table-wide {
+  min-width: 100%;
+  width: max-content;
+  table-layout: auto;
+}
+
+.data-table-wide th,
+.data-table-wide td {
+  white-space: nowrap;
+}
+
+/* Two-line cell: the value, and an optional caption below it. */
+.cell-primary,
+.cell-caption {
+  display: block;
+}
+
+.cell-caption {
+  color: var(--color-on-surface-variant);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 /* Status pills */

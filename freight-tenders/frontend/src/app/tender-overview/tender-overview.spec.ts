@@ -154,12 +154,168 @@ describe('TenderOverview', () => {
     const compiled = load([tender(1, 'Hamburg', 'Rotterdam')]);
 
     const row = compiled.querySelector('[data-testid="open-tenders-row"]');
-    const cells = Array.from(row?.querySelectorAll('td') ?? []).map((cell) =>
-      cell.textContent?.trim(),
+    expect(row?.querySelector('[data-testid="open-tenders-link"]')?.textContent?.trim()).toBe(
+      'Hamburg',
     );
-    expect(cells.slice(0, 2)).toEqual(['Hamburg', 'Rotterdam']);
-    expect(row?.textContent).not.toContain('20457');
+    expect(row?.querySelector('[data-testid="origin-detail"]')?.textContent?.trim()).toBe(
+      'DE-10115',
+    );
+    expect(row?.querySelector('[data-testid="destination-detail"]')?.textContent?.trim()).toBe(
+      'DE-80331',
+    );
+    expect(row?.textContent).toContain('Rotterdam');
     expect(row?.textContent).not.toContain('[object Object]');
+  });
+
+  function textOf(compiled: HTMLElement, table: string, testId: string): string | null {
+    const row = compiled.querySelector(`[data-testid="${table}-row"]`);
+    return row?.querySelector(`[data-testid="${testId}"]`)?.textContent?.trim() ?? null;
+  }
+
+  function tendersWith(overrides: Partial<TenderSummary>): TenderSummary[] {
+    return [tenderSummary({ id: 1, ...overrides })];
+  }
+
+  it('renders the seven column headers in order, in both tables, with no status header or pill', () => {
+    const compiled = load(SORTABLE_TENDERS);
+
+    for (const table of ['open-tenders', 'closed-tenders']) {
+      const headers = Array.from(
+        compiled.querySelectorAll(`[data-testid="${table}"] thead th`),
+      ).map((th) => th.textContent?.trim());
+      expect(headers).toEqual([
+        'Von',
+        'Nach',
+        'Abholung',
+        'Ladung',
+        'Fahrzeug',
+        'Angebotsfrist',
+        'Angebote',
+      ]);
+    }
+    expect(compiled.querySelector('[class*="pill"]')).toBeFalsy();
+  });
+
+  it('shows pickup date, load line, German vehicle label, deadline and offer count in a row', () => {
+    const compiled = load(tendersWith({ offerCount: 3, lowestOfferAmount: 1450 }));
+
+    expect(textOf(compiled, 'open-tenders', 'pickup-date')).toBe('20.10.2099');
+    expect(textOf(compiled, 'open-tenders', 'load')).toBe('18.500 kg · 13,6 ldm');
+    expect(textOf(compiled, 'open-tenders', 'equipment')).toBe('Planenauflieger');
+    expect(textOf(compiled, 'open-tenders', 'bid-deadline')).toBe('16.10.2099');
+    expect(textOf(compiled, 'open-tenders', 'offer-count')).toBe('3');
+    expect(textOf(compiled, 'open-tenders', 'lowest-offer')).toBe('ab 1.450,00 €');
+  });
+
+  it('shows ADR class and temperature range as hints in the Ladung cell, and nothing for a plain tender', () => {
+    const adr = load(tendersWith({ dangerousGoods: true, adrClass: '3' }));
+    expect(textOf(adr, 'open-tenders', 'load-hint')).toBe('ADR 3');
+  });
+
+  it('shows the temperature range for a reefer tender', () => {
+    const compiled = load(
+      tendersWith({ temperatureControlled: true, temperatureMinC: 2, temperatureMaxC: 8 }),
+    );
+    expect(textOf(compiled, 'open-tenders', 'load-hint')).toBe('2 bis 8 °C');
+  });
+
+  it('shows no second line in the Ladung cell for a plain tender', () => {
+    const compiled = load(tendersWith({}));
+    expect(textOf(compiled, 'open-tenders', 'load-hint')).toBeNull();
+  });
+
+  it('shows no lowest offer and a count of 0 for a tender without offers', () => {
+    const compiled = load(tendersWith({}));
+
+    expect(textOf(compiled, 'open-tenders', 'offer-count')).toBe('0');
+    expect(textOf(compiled, 'open-tenders', 'lowest-offer')).toBeNull();
+  });
+
+  describe('deadline hints', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date(2026, 9, 16, 12, 0));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('shows "heute" for an open tender whose deadline is today', () => {
+      const compiled = load(tendersWith({ bidDeadline: '2026-10-16' }));
+      expect(textOf(compiled, 'open-tenders', 'deadline-hint')).toBe('heute');
+    });
+
+    it('shows "abgelaufen" for an open tender whose deadline has passed', () => {
+      const compiled = load(tendersWith({ bidDeadline: '2026-10-15' }));
+      expect(textOf(compiled, 'open-tenders', 'deadline-hint')).toBe('abgelaufen');
+    });
+
+    it('shows no hint for a closed tender with a deadline today or in the past', () => {
+      const compiled = load([
+        tenderSummary({ id: 1, status: 'CLOSED', bidDeadline: '2026-10-16' }),
+        tenderSummary({ id: 2, status: 'CLOSED', bidDeadline: '2026-10-15' }),
+      ]);
+      expect(compiled.querySelector('[data-testid="deadline-hint"]')).toBeFalsy();
+    });
+  });
+
+  describe('sorting by the other columns', () => {
+    const TENDERS: TenderSummary[] = [
+      tenderSummary({
+        id: 1,
+        pickupDate: '2099-03-01',
+        weightKg: 900,
+        bidDeadline: '2099-02-01',
+        offerCount: 10,
+        origin: { country: 'DE', postalCode: '1', city: 'A' },
+      }),
+      tenderSummary({
+        id: 2,
+        pickupDate: '2099-01-01',
+        weightKg: 18500,
+        bidDeadline: '2099-03-01',
+        offerCount: 2,
+        origin: { country: 'DE', postalCode: '1', city: 'B' },
+      }),
+      tenderSummary({
+        id: 3,
+        pickupDate: '2099-02-01',
+        weightKg: 5000,
+        bidDeadline: '2099-01-01',
+        offerCount: 0,
+        origin: { country: 'DE', postalCode: '1', city: 'C' },
+      }),
+    ];
+
+    it.each([
+      ['pickupDate', ['B', 'C', 'A']],
+      ['weightKg', ['A', 'C', 'B']],
+      ['bidDeadline', ['C', 'A', 'B']],
+      ['offerCount', ['C', 'B', 'A']],
+    ])('sorts by %s ascending and then descending', (column, ascending) => {
+      const compiled = load(TENDERS);
+
+      sortBy(compiled, 'open-tenders', column);
+      expect(origins(compiled, 'open-tenders')).toEqual(ascending);
+      expect(ariaSortOf(compiled, 'open-tenders', column)).toBe('ascending');
+
+      sortBy(compiled, 'open-tenders', column);
+      expect(origins(compiled, 'open-tenders')).toEqual([...ascending].reverse());
+      expect(ariaSortOf(compiled, 'open-tenders', column)).toBe('descending');
+      expect(ariaSortOf(compiled, 'closed-tenders', column)).toBe('none');
+    });
+
+    it('has no sort button on the Fahrzeug header', () => {
+      const compiled = load(TENDERS);
+
+      expect(
+        compiled.querySelector('[data-testid="open-tenders-sort-equipmentType"]'),
+      ).toBeFalsy();
+      expect(
+        compiled.querySelector('[data-testid="open-tenders-header-equipmentType"]')?.textContent,
+      ).toContain('Fahrzeug');
+    });
   });
 
   it('shows a German error message when the backend is unreachable', () => {
@@ -173,19 +329,14 @@ describe('TenderOverview', () => {
     );
   });
 
-  it("shows the page heading and each tender's status as a German pill, never the raw enum", () => {
+  it('shows the page heading and never the raw status enum', () => {
     const compiled = load(SORTABLE_TENDERS);
 
     expect(compiled.querySelector('[data-testid="page-title"]')?.textContent).toContain(
       'Ausschreibungen',
     );
-
-    const openRow = compiled.querySelector('[data-testid="open-tenders-row"]');
-    const closedRow = compiled.querySelector('[data-testid="closed-tenders-row"]');
-    expect(openRow?.textContent).toContain('Offen');
-    expect(openRow?.textContent).not.toContain('OPEN');
-    expect(closedRow?.textContent).toContain('Geschlossen');
-    expect(closedRow?.textContent).not.toContain('CLOSED');
+    expect(compiled.textContent).not.toContain('OPEN');
+    expect(compiled.textContent).not.toContain('CLOSED');
   });
 
   it('orders both tables newest-first with no sort indicator until a column is selected', () => {
@@ -255,7 +406,14 @@ describe('TenderOverview', () => {
     const compiled = load(SORTABLE_TENDERS);
 
     for (const table of ['open-tenders', 'closed-tenders']) {
-      for (const column of ['origin', 'destination']) {
+      for (const column of [
+        'origin',
+        'destination',
+        'pickupDate',
+        'weightKg',
+        'bidDeadline',
+        'offerCount',
+      ]) {
         const header = compiled.querySelector(`[data-testid="${table}-header-${column}"]`);
         const button = compiled.querySelector<HTMLButtonElement>(
           `[data-testid="${table}-sort-${column}"]`,
@@ -281,7 +439,7 @@ describe('TenderOverview', () => {
 
     const openEmpty = compiled.querySelector('[data-testid="open-tenders-empty"]');
     expect(openEmpty?.tagName).toBe('TD');
-    expect(openEmpty?.getAttribute('colspan')).toBe('3');
+    expect(openEmpty?.getAttribute('colspan')).toBe('7');
     expect(openEmpty?.textContent).toContain('Keine offenen Ausschreibungen vorhanden.');
     expect(
       compiled.querySelector('[data-testid="open-tenders"]')?.contains(openEmpty ?? null),

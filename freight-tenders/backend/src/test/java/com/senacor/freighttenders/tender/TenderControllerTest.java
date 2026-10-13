@@ -150,6 +150,54 @@ class TenderControllerTest {
   }
 
   @Test
+  void listTendersReturnsOfferCountAndLowestOfferAmountPerTender() throws Exception {
+    Tender withOffers = TenderFixtures.tender();
+    ReflectionTestUtils.setField(withOffers, "id", 1L);
+    withOffers.addOffer(new Offer("Acme Logistics", new BigDecimal("1450.00")));
+    withOffers.addOffer(new Offer("Spedition Muster", new BigDecimal("1200.50")));
+    withOffers.addOffer(new Offer("Nord Transport", new BigDecimal("1300.00")));
+    Tender withoutOffers = TenderFixtures.tender("Berlin", "Munich");
+    ReflectionTestUtils.setField(withoutOffers, "id", 2L);
+    given(tenderService.listTenders(Optional.empty()))
+        .willReturn(List.of(withOffers, withoutOffers));
+
+    mockMvc
+        .perform(get("/api/tenders"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].offerCount").value(3))
+        .andExpect(jsonPath("$[0].lowestOfferAmount").value(1200.50))
+        .andExpect(jsonPath("$[1].offerCount").value(0))
+        .andExpect(jsonPath("$[1].lowestOfferAmount").value(org.hamcrest.Matchers.nullValue()));
+  }
+
+  @Test
+  void createAndCloseResponsesCarryOfferCountAndLowestOfferAmount() throws Exception {
+    Tender tender = TenderFixtures.tender();
+    ReflectionTestUtils.setField(tender, "id", 1L);
+    given(tenderService.createTender(any(CreateTenderRequest.class))).willReturn(tender);
+    Tender closed = TenderFixtures.tender();
+    ReflectionTestUtils.setField(closed, "id", 2L);
+    closed.addOffer(new Offer("Acme Logistics", new BigDecimal("990.00")));
+    closed.close();
+    given(tenderService.closeTender(2L)).willReturn(closed);
+
+    mockMvc
+        .perform(
+            post("/api/tenders")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(TenderFixtures.VALID_REQUEST_JSON))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.offerCount").value(0))
+        .andExpect(jsonPath("$.lowestOfferAmount").value(org.hamcrest.Matchers.nullValue()));
+
+    mockMvc
+        .perform(post("/api/tenders/2/close"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.offerCount").value(1))
+        .andExpect(jsonPath("$.lowestOfferAmount").value(990.00));
+  }
+
+  @Test
   void getTenderReturns200WithNestedRemarksAndOffers() throws Exception {
     Tender tender = TenderFixtures.tender();
     ReflectionTestUtils.setField(tender, "id", 1L);

@@ -21,10 +21,13 @@ export function tenderSummary(overrides: Partial<TenderSummary> = {}): TenderSum
     temperatureMaxC: null,
     currency: 'EUR',
     status: 'OPEN',
+    offerCount: 0,
+    lowestOfferAmount: null,
     ...overrides,
   };
 }
 
 export function tenderDetail(overrides: Partial<TenderDetail> = {}): TenderDetail {
-  return { ...tenderSummary(), remarks: [], offers: [], ...overrides };
+  const { offerCount: _count, lowestOfferAmount: _lowest, ...summary } = tenderSummary();
+  return { ...summary, remarks: [], offers: [], ...overrides };
 }

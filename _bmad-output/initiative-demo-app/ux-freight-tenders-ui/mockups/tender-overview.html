@@ -17,7 +17,7 @@
   font-family: Inter, -apple-system, Segoe UI, Roboto, sans-serif;
 }
 body{margin:0;background:var(--surface-dim);color:var(--on-surface);}
-.browser-frame{max-width:1040px;margin:24px auto;background:#fff;border:1px solid var(--outline-variant);border-radius:4px;overflow:hidden;}
+.browser-frame{max-width:1296px;margin:24px auto;background:#fff;border:1px solid var(--outline-variant);border-radius:4px;overflow:hidden;}
 .chrome{background:#e9ecf1;padding:8px 16px;font-size:12px;color:#666;border-bottom:1px solid var(--outline-variant);}
 .page{padding:48px;}
 h1{font-size:20px;font-weight:700;margin:0 0 24px;}
@@ -30,6 +30,10 @@ th{background:var(--surface-container-high);font-size:13px;font-weight:600;lette
 th .sort-arrow{color:var(--primary);margin-left:4px;font-size:11px;}
 tr.row{border-bottom:1px solid var(--outline-variant);cursor:pointer;}
 tr.row:hover{background:var(--surface-dim);}
+.scroll{overflow-x:auto;}
+td,th{white-space:nowrap;}
+.cap{display:block;font-size:12px;line-height:1.4;color:var(--on-surface-variant);}
+.num{text-align:right;}
 .pill{display:inline-block;border-radius:999px;padding:3px 12px;font-size:12px;font-weight:600;}
 .pill-open{background:var(--status-open-bg);color:var(--status-open);}
 .pill-closed{background:var(--status-closed-bg);color:var(--status-closed);}
@@ -46,44 +50,32 @@ caption{text-align:left;}
 
     <section>
       <h2>Offene Ausschreibungen</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Von</th>
-            <th>Nach<span class="sort-arrow">▲</span></th>
-            <th>Status</th>
-          </tr>
-        </thead>
+      <div class="scroll"><table>
+        <thead><tr><th>Von</th><th>Nach<span class="sort-arrow">▲</span></th><th>Abholung</th><th>Ladung</th><th>Fahrzeug</th><th>Angebotsfrist</th><th class="num">Angebote</th></tr></thead>
         <tbody>
-          <tr class="row"><td>Hamburg</td><td>Rotterdam</td><td><span class="pill pill-open">Offen</span></td></tr>
-          <tr class="row"><td>Bremen</td><td>Antwerpen</td><td><span class="pill pill-open">Offen</span></td></tr>
-          <tr class="row"><td>Köln</td><td>Mailand</td><td><span class="pill pill-open">Offen</span></td></tr>
+          <tr class="row"><td>Hamburg<span class="cap">DE-20457</span></td><td>Rotterdam<span class="cap">NL-3011 AA</span></td><td>20.10.2026</td><td>18.500 kg · 13,6 ldm</td><td>Planenauflieger</td><td>16.10.2026<span class="cap">heute</span></td><td class="num">3<span class="cap">ab 1.450,00 €</span></td></tr>
+          <tr class="row"><td>Bremen<span class="cap">DE-28195</span></td><td>Antwerpen<span class="cap">BE-2000</span></td><td>21.10.2026</td><td>9.200 kg · 7,5 ldm<span class="cap">ADR 3</span></td><td>Kofferauflieger</td><td>17.10.2026</td><td class="num">0</td></tr>
+          <tr class="row"><td>Köln<span class="cap">DE-50667</span></td><td>Mailand<span class="cap">IT-20121</span></td><td>22.10.2026</td><td>4.800 kg · 6,0 ldm<span class="cap">2 bis 8 °C</span></td><td>Kühlauflieger</td><td>10.10.2026<span class="cap">abgelaufen</span></td><td class="num">1<span class="cap">ab 2.100,00 €</span></td></tr>
         </tbody>
-      </table>
+      </table></div>
     </section>
 
     <section>
       <h2>Geschlossene Ausschreibungen</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Von</th>
-            <th>Nach</th>
-            <th>Status</th>
-          </tr>
-        </thead>
+      <div class="scroll"><table>
+        <thead><tr><th>Von</th><th>Nach</th><th>Abholung</th><th>Ladung</th><th>Fahrzeug</th><th>Angebotsfrist</th><th class="num">Angebote</th></tr></thead>
         <tbody>
-          <tr class="row"><td>Stuttgart</td><td>Frankfurt</td><td><span class="pill pill-closed">Geschlossen</span></td></tr>
+          <tr class="row"><td>Stuttgart<span class="cap">DE-70173</span></td><td>Frankfurt<span class="cap">DE-60311</span></td><td>12.10.2026</td><td>12.000 kg · 13,6 ldm</td><td>Megatrailer</td><td>09.10.2026</td><td class="num">2<span class="cap">ab 780,00 €</span></td></tr>
         </tbody>
-      </table>
+      </table></div>
     </section>
 
     <section>
       <h2>Beispiel: leere Liste</h2>
-      <table>
-        <thead><tr><th>Von</th><th>Nach</th><th>Status</th></tr></thead>
-        <tbody><tr><td colspan="3" class="empty">Keine geschlossenen Ausschreibungen vorhanden.</td></tr></tbody>
-      </table>
+      <div class="scroll"><table>
+        <thead><tr><th>Von</th><th>Nach</th><th>Abholung</th><th>Ladung</th><th>Fahrzeug</th><th>Angebotsfrist</th><th class="num">Angebote</th></tr></thead>
+        <tbody><tr><td colspan="7" class="empty">Keine geschlossenen Ausschreibungen vorhanden.</td></tr></tbody>
+      </table></div>
     </section>
   </div>
 </div>

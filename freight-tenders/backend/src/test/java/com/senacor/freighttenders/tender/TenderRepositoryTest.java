@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
+import org.hibernate.Hibernate;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -37,6 +39,27 @@ class TenderRepositoryTest {
     assertThat(reloaded.getOffers().get(0).getSupplierName()).isEqualTo("Acme Logistics");
     assertThat(reloaded.getOffers().get(0).getAmount()).isEqualTo(new BigDecimal("1234.56"));
     assertThat(reloaded.getOffers().get(0).getTender().getId()).isEqualTo(reloaded.getId());
+  }
+
+  @Test
+  void listQueriesFetchOffersTogetherWithTheTenders() {
+    for (String city : List.of("Hamburg", "Berlin", "Köln")) {
+      Tender tender = TenderFixtures.tender(city, "Rotterdam");
+      tender.addOffer(new Offer("Acme Logistics", new BigDecimal("100.00")));
+      tenderRepository.save(tender);
+    }
+    entityManager.flush();
+    entityManager.clear();
+
+    assertThat(tenderRepository.findAll())
+        .hasSize(3)
+        .allSatisfy(tender -> assertThat(Hibernate.isInitialized(tender.getOffers())).isTrue());
+
+    entityManager.clear();
+
+    assertThat(tenderRepository.findByStatus(TenderStatus.OPEN))
+        .hasSize(3)
+        .allSatisfy(tender -> assertThat(Hibernate.isInitialized(tender.getOffers())).isTrue());
   }
 
   @Test
