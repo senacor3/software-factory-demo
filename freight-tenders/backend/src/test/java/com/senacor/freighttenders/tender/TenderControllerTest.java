@@ -110,6 +110,71 @@ class TenderControllerTest {
   }
 
   @Test
+  void awardTenderReturns200WithAwardedOfferId() throws Exception {
+    Tender tender = TenderFixtures.tender();
+    Offer offer = TenderFixtures.offer("Acme", new BigDecimal("100.00"));
+    ReflectionTestUtils.setField(offer, "id", 10L);
+    tender.addOffer(offer);
+    tender.award(offer);
+    given(tenderService.awardTender(1L, 10L)).willReturn(tender);
+
+    mockMvc
+        .perform(post("/api/tenders/{id}/offers/{offerId}/award", 1L, 10L))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("AWARDED"))
+        .andExpect(jsonPath("$.awardedOfferId").value(10));
+  }
+
+  @Test
+  void awardTenderMapsNotFoundAndConflictToErrorShape() throws Exception {
+    given(tenderService.awardTender(99L, 10L)).willThrow(new TenderNotFoundException(99L));
+    given(tenderService.awardTender(1L, 99L)).willThrow(new OfferNotFoundException(1L, 99L));
+    given(tenderService.awardTender(2L, 10L)).willThrow(new TenderClosedException(2L));
+    given(tenderService.awardTender(3L, 10L)).willThrow(new OfferExpiredException(10L));
+
+    mockMvc
+        .perform(post("/api/tenders/{id}/offers/{offerId}/award", 99L, 10L))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.error").value("Not Found"))
+        .andExpect(jsonPath("$.violations").doesNotExist());
+    mockMvc
+        .perform(post("/api/tenders/{id}/offers/{offerId}/award", 1L, 99L))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.path").value("/api/tenders/1/offers/99/award"));
+    mockMvc
+        .perform(post("/api/tenders/{id}/offers/{offerId}/award", 2L, 10L))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.error").value("Conflict"));
+    mockMvc
+        .perform(post("/api/tenders/{id}/offers/{offerId}/award", 3L, 10L))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.message").exists());
+  }
+
+  @Test
+  void listTendersFilteredByAwardedCarriesAwardedSupplierAndAmount() throws Exception {
+    Tender awarded = TenderFixtures.tender();
+    Offer offer = TenderFixtures.offer("Acme", new BigDecimal("100.00"));
+    awarded.addOffer(offer);
+    awarded.award(offer);
+    Tender open = TenderFixtures.tender("Berlin", "Munich");
+    given(tenderService.listTenders(Optional.of(TenderStatus.AWARDED)))
+        .willReturn(List.of(awarded));
+    given(tenderService.listTenders(Optional.empty())).willReturn(List.of(awarded, open));
+
+    mockMvc
+        .perform(get("/api/tenders").param("status", "AWARDED"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].status").value("AWARDED"))
+        .andExpect(jsonPath("$[0].awardedSupplierName").value("Acme"))
+        .andExpect(jsonPath("$[0].awardedAmount").value(100.00));
+    mockMvc
+        .perform(get("/api/tenders"))
+        .andExpect(jsonPath("$[1].awardedSupplierName").doesNotExist())
+        .andExpect(jsonPath("$[1].awardedAmount").doesNotExist());
+  }
+
+  @Test
   void listTendersFilteredByStatusReturnsOnlyOpenTenders() throws Exception {
     Tender openTender = TenderFixtures.tender();
     ReflectionTestUtils.setField(openTender, "id", 1L);
@@ -153,9 +218,9 @@ class TenderControllerTest {
   void listTendersReturnsOfferCountAndLowestOfferAmountPerTender() throws Exception {
     Tender withOffers = TenderFixtures.tender();
     ReflectionTestUtils.setField(withOffers, "id", 1L);
-    withOffers.addOffer(new Offer("Acme Logistics", new BigDecimal("1450.00")));
-    withOffers.addOffer(new Offer("Spedition Muster", new BigDecimal("1200.50")));
-    withOffers.addOffer(new Offer("Nord Transport", new BigDecimal("1300.00")));
+    withOffers.addOffer(TenderFixtures.offer("Acme Logistics", new BigDecimal("1450.00")));
+    withOffers.addOffer(TenderFixtures.offer("Spedition Muster", new BigDecimal("1200.50")));
+    withOffers.addOffer(TenderFixtures.offer("Nord Transport", new BigDecimal("1300.00")));
     Tender withoutOffers = TenderFixtures.tender("Berlin", "Munich");
     ReflectionTestUtils.setField(withoutOffers, "id", 2L);
     given(tenderService.listTenders(Optional.empty()))
@@ -177,7 +242,7 @@ class TenderControllerTest {
     given(tenderService.createTender(any(CreateTenderRequest.class))).willReturn(tender);
     Tender closed = TenderFixtures.tender();
     ReflectionTestUtils.setField(closed, "id", 2L);
-    closed.addOffer(new Offer("Acme Logistics", new BigDecimal("990.00")));
+    closed.addOffer(TenderFixtures.offer("Acme Logistics", new BigDecimal("990.00")));
     closed.close();
     given(tenderService.closeTender(2L)).willReturn(closed);
 
@@ -204,7 +269,7 @@ class TenderControllerTest {
     Remark remark = new Remark("Please expedite");
     ReflectionTestUtils.setField(remark, "id", 10L);
     tender.addRemark(remark);
-    Offer offer = new Offer("Acme Logistics", new BigDecimal("1234.56"));
+    Offer offer = TenderFixtures.offer("Acme Logistics", new BigDecimal("1234.56"));
     ReflectionTestUtils.setField(offer, "id", 20L);
     tender.addOffer(offer);
     given(tenderService.getTender(1L)).willReturn(tender);
@@ -249,17 +314,20 @@ class TenderControllerTest {
   void addOfferOnOpenTenderReturns201WithCreatedOffer() throws Exception {
     Tender tender = TenderFixtures.tender();
     ReflectionTestUtils.setField(tender, "id", 1L);
-    Offer offer = new Offer("Acme Logistics", new BigDecimal("1234.56"));
+    Offer offer = TenderFixtures.offer("Acme Logistics", new BigDecimal("1234.56"));
     ReflectionTestUtils.setField(offer, "id", 20L);
     tender.addOffer(offer);
-    given(tenderService.addOffer(eq(1L), eq("Acme Logistics"), eq(new BigDecimal("1234.56"))))
+    given(
+            tenderService.addOffer(
+                eq(1L), eq("Acme Logistics"), eq(new BigDecimal("1234.56")), any(), any(), any()))
         .willReturn(tender);
 
     mockMvc
         .perform(
             post("/api/tenders/{id}/offers", 1L)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"supplierName\":\"Acme Logistics\",\"amount\":1234.56}"))
+                .content(
+                    "{\"supplierName\":\"Acme Logistics\",\"amount\":1234.56,\"deliveryDate\":\"2026-10-21\",\"validUntil\":\"2026-10-30\"}"))
         .andExpect(status().isCreated())
         .andExpect(content().contentType(MediaType.APPLICATION_JSON))
         .andExpect(jsonPath("$.id").value(20))
@@ -284,14 +352,17 @@ class TenderControllerTest {
 
   @Test
   void addOfferOnClosedTenderReturns409NamingTheClosedTender() throws Exception {
-    given(tenderService.addOffer(eq(1L), eq("Acme Logistics"), eq(new BigDecimal("1234.56"))))
+    given(
+            tenderService.addOffer(
+                eq(1L), eq("Acme Logistics"), eq(new BigDecimal("1234.56")), any(), any(), any()))
         .willThrow(new TenderClosedException(1L));
 
     mockMvc
         .perform(
             post("/api/tenders/{id}/offers", 1L)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"supplierName\":\"Acme Logistics\",\"amount\":1234.56}"))
+                .content(
+                    "{\"supplierName\":\"Acme Logistics\",\"amount\":1234.56,\"deliveryDate\":\"2026-10-21\",\"validUntil\":\"2026-10-30\"}"))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.error").value("Conflict"))
         .andExpect(jsonPath("$.message").value("Tender 1 is closed and can no longer be modified"))
@@ -331,14 +402,17 @@ class TenderControllerTest {
 
   @Test
   void addOfferForUnknownIdReturns404NamingTheMissingId() throws Exception {
-    given(tenderService.addOffer(eq(99L), eq("Acme Logistics"), eq(new BigDecimal("1234.56"))))
+    given(
+            tenderService.addOffer(
+                eq(99L), eq("Acme Logistics"), eq(new BigDecimal("1234.56")), any(), any(), any()))
         .willThrow(new TenderNotFoundException(99L));
 
     mockMvc
         .perform(
             post("/api/tenders/{id}/offers", 99L)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"supplierName\":\"Acme Logistics\",\"amount\":1234.56}"))
+                .content(
+                    "{\"supplierName\":\"Acme Logistics\",\"amount\":1234.56,\"deliveryDate\":\"2026-10-21\",\"validUntil\":\"2026-10-30\"}"))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.error").value("Not Found"))
         .andExpect(jsonPath("$.message").value("No tender found with id 99"))
@@ -372,7 +446,8 @@ class TenderControllerTest {
         .perform(
             post("/api/tenders/{id}/offers", 1L)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"supplierName\":\"  \",\"amount\":10.00}"))
+                .content(
+                    "{\"supplierName\":\"  \",\"amount\":10.00,\"deliveryDate\":\"2026-10-21\",\"validUntil\":\"2026-10-30\"}"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.violations.length()").value(1))
         .andExpect(jsonPath("$.violations[0].field").value("supplierName"));
@@ -387,7 +462,10 @@ class TenderControllerTest {
           .perform(
               post("/api/tenders/{id}/offers", 1L)
                   .contentType(MediaType.APPLICATION_JSON)
-                  .content("{\"supplierName\":\"Acme Logistics\"" + amountJson + "}"))
+                  .content(
+                      "{\"supplierName\":\"Acme Logistics\""
+                          + amountJson
+                          + ",\"deliveryDate\":\"2026-10-21\",\"validUntil\":\"2026-10-30\"}"))
           .andExpect(status().isBadRequest())
           .andExpect(jsonPath("$.violations.length()").value(1))
           .andExpect(jsonPath("$.violations[0].field").value("amount"));
@@ -404,9 +482,10 @@ class TenderControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.violations.length()").value(2))
+        .andExpect(jsonPath("$.violations.length()").value(4))
         .andExpect(
-            jsonPath("$.violations[*].field").value(containsInAnyOrder("supplierName", "amount")));
+            jsonPath("$.violations[*].field")
+                .value(containsInAnyOrder("supplierName", "amount", "deliveryDate", "validUntil")));
 
     verifyNoInteractions(tenderService);
   }
@@ -415,24 +494,27 @@ class TenderControllerTest {
   void addOfferWithMinimumAmountReturns201() throws Exception {
     Tender tender = TenderFixtures.tender();
     ReflectionTestUtils.setField(tender, "id", 1L);
-    Offer offer = new Offer("Acme Logistics", new BigDecimal("0.01"));
+    Offer offer = TenderFixtures.offer("Acme Logistics", new BigDecimal("0.01"));
     ReflectionTestUtils.setField(offer, "id", 20L);
     tender.addOffer(offer);
-    given(tenderService.addOffer(eq(1L), eq("Acme Logistics"), eq(new BigDecimal("0.01"))))
+    given(
+            tenderService.addOffer(
+                eq(1L), eq("Acme Logistics"), eq(new BigDecimal("0.01")), any(), any(), any()))
         .willReturn(tender);
 
     mockMvc
         .perform(
             post("/api/tenders/{id}/offers", 1L)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"supplierName\":\"Acme Logistics\",\"amount\":0.01}"))
+                .content(
+                    "{\"supplierName\":\"Acme Logistics\",\"amount\":0.01,\"deliveryDate\":\"2026-10-21\",\"validUntil\":\"2026-10-30\"}"))
         .andExpect(status().isCreated());
   }
 
   @Test
   void invalidRemarkOrOfferOnClosedTenderReturns400NotConflict() throws Exception {
     given(tenderService.addRemark(eq(1L), eq(""))).willThrow(new TenderClosedException(1L));
-    given(tenderService.addOffer(eq(1L), eq(""), eq(BigDecimal.ZERO)))
+    given(tenderService.addOffer(eq(1L), eq(""), eq(BigDecimal.ZERO), any(), any(), any()))
         .willThrow(new TenderClosedException(1L));
 
     mockMvc
@@ -451,5 +533,112 @@ class TenderControllerTest {
         .andExpect(jsonPath("$.violations").exists());
 
     verifyNoInteractions(tenderService);
+  }
+
+  @Test
+  void addOfferReturnsAllFiveOfferFieldsAndNormalisesBlankNoteToNull() throws Exception {
+    Tender tender = TenderFixtures.tender();
+    ReflectionTestUtils.setField(tender, "id", 1L);
+    Offer offer = TenderFixtures.offer("Acme Logistics", new BigDecimal("1234.56"));
+    ReflectionTestUtils.setField(offer, "id", 20L);
+    tender.addOffer(offer);
+    given(tenderService.addOffer(eq(1L), eq("Acme Logistics"), any(), any(), any(), any()))
+        .willReturn(tender);
+
+    mockMvc
+        .perform(
+            post("/api/tenders/{id}/offers", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(TenderFixtures.VALID_OFFER_JSON))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.deliveryDate").value("2026-10-21"))
+        .andExpect(jsonPath("$.validUntil").value("2026-10-30"))
+        .andExpect(jsonPath("$.note").value(org.hamcrest.Matchers.nullValue()));
+  }
+
+  @Test
+  void addOfferAcceptsValidUntilEqualToTodayAndBoundaryLengths() throws Exception {
+    Tender tender = TenderFixtures.tender();
+    ReflectionTestUtils.setField(tender, "id", 1L);
+    tender.addOffer(TenderFixtures.offer("Acme Logistics", new BigDecimal("1.00")));
+    given(tenderService.addOffer(eq(1L), any(), any(), any(), any(), any())).willReturn(tender);
+
+    mockMvc
+        .perform(
+            post("/api/tenders/{id}/offers", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"supplierName\":\""
+                        + "s".repeat(100)
+                        + "\",\"amount\":1,\"deliveryDate\":\"2026-10-20\","
+                        + "\"validUntil\":\"2026-10-13\",\"note\":\""
+                        + "n".repeat(500)
+                        + "\"}"))
+        .andExpect(status().isCreated());
+  }
+
+  @Test
+  void addOfferWithInvalidTermsReturns400WithViolationForThatField() throws Exception {
+    String[][] cases = {
+      {"validUntil", "\"deliveryDate\":\"2026-10-21\",\"validUntil\":\"2026-10-12\""},
+      {"validUntil", "\"deliveryDate\":\"2026-10-21\""},
+      {"deliveryDate", "\"validUntil\":\"2026-10-30\""},
+      {
+        "note",
+        "\"deliveryDate\":\"2026-10-21\",\"validUntil\":\"2026-10-30\",\"note\":\""
+            + "n".repeat(501)
+            + "\""
+      },
+      {
+        "supplierName",
+        "\"supplierName\":\""
+            + "s".repeat(101)
+            + "\",\"deliveryDate\":\"2026-10-21\","
+            + "\"validUntil\":\"2026-10-30\""
+      },
+    };
+    for (String[] c : cases) {
+      String supplier = c[1].contains("\"supplierName\"") ? "" : "\"supplierName\":\"Acme\",";
+      mockMvc
+          .perform(
+              post("/api/tenders/{id}/offers", 1L)
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content("{" + supplier + "\"amount\":10," + c[1] + "}"))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.violations.length()").value(1))
+          .andExpect(jsonPath("$.violations[0].field").value(c[0]));
+    }
+
+    verifyNoInteractions(tenderService);
+  }
+
+  @Test
+  void addOfferAfterBidDeadlineReturns409() throws Exception {
+    given(tenderService.addOffer(eq(1L), any(), any(), any(), any(), any()))
+        .willThrow(new BidDeadlinePassedException(1L));
+
+    mockMvc
+        .perform(
+            post("/api/tenders/{id}/offers", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(TenderFixtures.VALID_OFFER_JSON))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.error").value("Conflict"))
+        .andExpect(jsonPath("$.path").value("/api/tenders/1/offers"));
+  }
+
+  @Test
+  void addOfferWithDeliveryBeforePickupReturns400WithDeliveryDateViolation() throws Exception {
+    given(tenderService.addOffer(eq(1L), any(), any(), any(), any(), any()))
+        .willThrow(new OfferDeliveryBeforePickupException(1L));
+
+    mockMvc
+        .perform(
+            post("/api/tenders/{id}/offers", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(TenderFixtures.VALID_OFFER_JSON))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.violations.length()").value(1))
+        .andExpect(jsonPath("$.violations[0].field").value("deliveryDate"));
   }
 }

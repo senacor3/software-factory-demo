@@ -37,6 +37,11 @@ public class TenderController {
     return TenderResponse.from(tender);
   }
 
+  @PostMapping("/{id}/offers/{offerId}/award")
+  public TenderDetailResponse awardTender(@PathVariable Long id, @PathVariable Long offerId) {
+    return TenderDetailResponse.from(tenderService.awardTender(id, offerId));
+  }
+
   @GetMapping("")
   public List<TenderResponse> listTenders(@RequestParam(required = false) TenderStatus status) {
     return tenderService.listTenders(Optional.ofNullable(status)).stream()
@@ -61,7 +66,14 @@ public class TenderController {
   @PostMapping("/{id}/offers")
   public ResponseEntity<OfferResponse> addOffer(
       @PathVariable Long id, @Valid @RequestBody AddOfferRequest request) {
-    Tender tender = tenderService.addOffer(id, request.supplierName(), request.amount());
+    Tender tender =
+        tenderService.addOffer(
+            id,
+            request.supplierName(),
+            request.amount(),
+            request.deliveryDate(),
+            request.validUntil(),
+            request.note());
     Offer createdOffer = tender.getOffers().get(tender.getOffers().size() - 1);
     return ResponseEntity.status(HttpStatus.CREATED).body(OfferResponse.from(createdOffer));
   }

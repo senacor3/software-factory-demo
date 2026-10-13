@@ -22,7 +22,7 @@ class TenderRepositoryTest {
   void fullLifecycleRoundTripsThroughClose() {
     Tender tender = TenderFixtures.tender();
     tender.addRemark(new Remark("Please expedite"));
-    tender.addOffer(new Offer("Acme Logistics", new BigDecimal("1234.56")));
+    tender.addOffer(TenderFixtures.offer("Acme Logistics", new BigDecimal("1234.56")));
     tender.close();
 
     Long id = tenderRepository.save(tender).getId();
@@ -38,6 +38,11 @@ class TenderRepositoryTest {
     assertThat(reloaded.getOffers()).hasSize(1);
     assertThat(reloaded.getOffers().get(0).getSupplierName()).isEqualTo("Acme Logistics");
     assertThat(reloaded.getOffers().get(0).getAmount()).isEqualTo(new BigDecimal("1234.56"));
+    assertThat(reloaded.getOffers().get(0).getDeliveryDate())
+        .isEqualTo(java.time.LocalDate.of(2026, 10, 21));
+    assertThat(reloaded.getOffers().get(0).getValidUntil())
+        .isEqualTo(java.time.LocalDate.of(2026, 10, 30));
+    assertThat(reloaded.getOffers().get(0).getNote()).isNull();
     assertThat(reloaded.getOffers().get(0).getTender().getId()).isEqualTo(reloaded.getId());
   }
 
@@ -45,7 +50,7 @@ class TenderRepositoryTest {
   void listQueriesFetchOffersTogetherWithTheTenders() {
     for (String city : List.of("Hamburg", "Berlin", "Köln")) {
       Tender tender = TenderFixtures.tender(city, "Rotterdam");
-      tender.addOffer(new Offer("Acme Logistics", new BigDecimal("100.00")));
+      tender.addOffer(TenderFixtures.offer("Acme Logistics", new BigDecimal("100.00")));
       tenderRepository.save(tender);
     }
     entityManager.flush();

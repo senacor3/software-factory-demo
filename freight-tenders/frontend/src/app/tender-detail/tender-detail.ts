@@ -9,7 +9,13 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import {
+  AbstractControl,
+  FormBuilder,
+  ReactiveFormsModule,
+  ValidationErrors,
+  Validators,
+} from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { catchError, of } from 'rxjs';
 import { SortState, UNSORTED, ariaSort, sortIndicator, sortRows, toggleSort } from '../table-sort';
@@ -29,6 +35,9 @@ import {
   formatLoadingMeters,
   formatTemperatureRange,
   formatWeight,
+  isBidDeadlinePassed,
+  isDeliveryLate,
+  isOfferExpired,
   localToday,
 } from '../tender-format';
 
@@ -40,8 +49,37 @@ const OFFER_ERROR_MESSAGE =
   'Das Angebot konnte nicht gespeichert werden. Bitte versuchen Sie es später erneut.';
 const CLOSE_ERROR_MESSAGE =
   'Die Ausschreibung konnte nicht geschlossen werden. Bitte versuchen Sie es später erneut.';
+const AWARD_ERROR_MESSAGE =
+  'Der Zuschlag konnte nicht erteilt werden. Bitte versuchen Sie es später erneut.';
+const AWARDED_EXPLANATION =
+  'Diese Ausschreibung ist vergeben, daher können keine weiteren Bemerkungen oder Angebote hinzugefügt werden.';
 const CLOSED_EXPLANATION =
   'Diese Ausschreibung ist geschlossen, daher können keine weiteren Bemerkungen oder Angebote hinzugefügt werden.';
+
+const BID_DEADLINE_PASSED_NOTICE =
+  'Die Angebotsfrist ist abgelaufen, daher können keine weiteren Angebote abgegeben werden. Bemerkungen sind weiterhin möglich.';
+
+const OFFER_FIELD_ERRORS: Record<string, Record<string, string>> = {
+  supplierName: {
+    required: 'Bitte geben Sie einen Anbieter an.',
+    maxlength: 'Der Anbieter darf höchstens 100 Zeichen lang sein.',
+  },
+  amount: {
+    required: 'Bitte geben Sie einen Betrag an.',
+    min: 'Der Betrag muss größer als 0 sein.',
+  },
+  deliveryDate: {
+    required: 'Bitte geben Sie ein Zustelldatum an.',
+    beforePickup: 'Die Zustellung darf nicht vor der Abholung der Ausschreibung liegen.',
+  },
+  validUntil: {
+    required: 'Bitte geben Sie an, bis wann das Angebot gültig ist.',
+    inPast: 'Die Gültigkeit darf nicht in der Vergangenheit liegen.',
+  },
+  note: {
+    maxlength: 'Der Hinweis darf höchstens 500 Zeichen lang sein.',
+  },
+};
 
 const NO_INFO = 'Keine Angabe';
 
@@ -67,7 +105,17 @@ export class TenderDetail implements OnInit {
   protected readonly closing = signal(false);
   protected readonly closeError = signal<string | null>(null);
 
+  private readonly awardedExplanationRef =
+    viewChild<ElementRef<HTMLElement>>('awardedExplanationRef');
+
+  protected readonly awardingOfferId = signal<number | null>(null);
+  protected readonly awarding = signal(false);
+  protected readonly awardError = signal<string | null>(null);
+
+  protected readonly isOpen = computed(() => this.tender()?.status === 'OPEN');
+  protected readonly isAwarded = computed(() => this.tender()?.status === 'AWARDED');
   protected readonly isClosed = computed(() => this.tender()?.status === 'CLOSED');
+  protected readonly showAwardColumn = computed(() => this.isOpen() || this.isAwarded());
   protected readonly statusLabel = computed(() => {
     const current = this.tender();
     return current ? STATUS_LABELS[current.status] : '';
@@ -96,7 +144,9 @@ export class TenderDetail implements OnInit {
     return hint ? `${date} (${hint})` : date;
   });
 
-  protected readonly originCountry = computed(() => this.countryLabel(this.tender()?.origin.country));
+  protected readonly originCountry = computed(() =>
+    this.countryLabel(this.tender()?.origin.country),
+  );
   protected readonly destinationCountry = computed(() =>
     this.countryLabel(this.tender()?.destination.country),
   );
@@ -131,8 +181,20 @@ export class TenderDetail implements OnInit {
     return formatTemperatureRange(current.temperatureMinC, current.temperatureMaxC);
   });
 
+  protected readonly deadlinePassed = computed(() => {
+    const current = this.tender();
+    return (
+      current !== null && isBidDeadlinePassed(current.bidDeadline, current.status, localToday())
+    );
+  });
+  protected readonly deadlinePassedNotice = BID_DEADLINE_PASSED_NOTICE;
+
   protected readonly formatDate = formatDate;
+  protected readonly isOfferExpired = isOfferExpired;
+  protected readonly isDeliveryLate = isDeliveryLate;
+  protected readonly localToday = localToday;
   protected readonly closedExplanation = CLOSED_EXPLANATION;
+  protected readonly awardedExplanation = AWARDED_EXPLANATION;
   protected readonly ariaSort = ariaSort;
   protected readonly sortIndicator = sortIndicator;
 
@@ -142,9 +204,15 @@ export class TenderDetail implements OnInit {
   );
 
   protected readonly offerSort = signal<SortState<OfferSummary>>(UNSORTED);
-  protected readonly sortedOffers = computed(() =>
-    sortRows(this.tender()?.offers ?? [], this.offerSort()),
-  );
+  // The awarded offer always leads, whatever the chosen sort.
+  protected readonly sortedOffers = computed(() => {
+    const sorted = sortRows(this.tender()?.offers ?? [], this.offerSort());
+    const awardedId = this.tender()?.awardedOfferId ?? null;
+    return [
+      ...sorted.filter((offer) => offer.id === awardedId),
+      ...sorted.filter((offer) => offer.id !== awardedId),
+    ];
+  });
 
   protected readonly remarkForm = this.formBuilder.nonNullable.group({
     text: ['', Validators.required],
@@ -153,11 +221,23 @@ export class TenderDetail implements OnInit {
   protected readonly remarkSubmitting = signal(false);
 
   protected readonly offerForm = this.formBuilder.group({
-    supplierName: this.formBuilder.nonNullable.control('', Validators.required),
+    supplierName: this.formBuilder.nonNullable.control('', [
+      Validators.required,
+      Validators.maxLength(100),
+    ]),
     amount: this.formBuilder.control<number | null>(null, [
       Validators.required,
       Validators.min(0.01),
     ]),
+    deliveryDate: this.formBuilder.nonNullable.control('', [
+      Validators.required,
+      (control) => this.deliveryNotBeforePickup(control),
+    ]),
+    validUntil: this.formBuilder.nonNullable.control('', [
+      Validators.required,
+      (control) => this.validUntilNotInPast(control),
+    ]),
+    note: this.formBuilder.nonNullable.control('', Validators.maxLength(500)),
   });
   protected readonly offerError = signal<string | null>(null);
   protected readonly offerSubmitting = signal(false);
@@ -184,9 +264,12 @@ export class TenderDetail implements OnInit {
         }
 
         this.tender.set(tender);
+        this.offerForm.controls.deliveryDate.updateValueAndValidity();
 
-        if (tender.status === 'CLOSED') {
+        if (tender.status !== 'OPEN') {
           this.remarkForm.disable();
+          this.offerForm.disable();
+        } else if (this.deadlinePassed()) {
           this.offerForm.disable();
         }
       });
@@ -198,6 +281,32 @@ export class TenderDetail implements OnInit {
 
   protected onSortOffers(column: keyof OfferSummary): void {
     this.offerSort.update((state) => toggleSort(state, column));
+  }
+
+  protected offerErrorOf(field: keyof typeof OFFER_FIELD_ERRORS): string | null {
+    const control = this.offerForm.get(field);
+
+    if (!control || !control.touched || !control.errors) {
+      return null;
+    }
+
+    for (const key of Object.keys(control.errors)) {
+      const message = OFFER_FIELD_ERRORS[field][key];
+      if (message) {
+        return message;
+      }
+    }
+
+    return null;
+  }
+
+  private deliveryNotBeforePickup(control: AbstractControl): ValidationErrors | null {
+    const pickup = this.tender()?.pickupDate;
+    return control.value && pickup && control.value < pickup ? { beforePickup: true } : null;
+  }
+
+  private validUntilNotInPast(control: AbstractControl): ValidationErrors | null {
+    return control.value && control.value < localToday() ? { inPast: true } : null;
   }
 
   protected formatAmount(amount: number): string {
@@ -242,6 +351,59 @@ export class TenderDetail implements OnInit {
       });
   }
 
+  protected canAward(offer: OfferSummary): boolean {
+    return this.isOpen() && !isOfferExpired(offer.validUntil, localToday());
+  }
+
+  protected onAskAward(offerId: number): void {
+    if (this.awarding()) {
+      return;
+    }
+    this.awardError.set(null);
+    this.awardingOfferId.set(offerId);
+  }
+
+  protected onCancelAward(): void {
+    if (this.awarding()) {
+      return;
+    }
+    this.awardingOfferId.set(null);
+  }
+
+  protected onConfirmAward(offerId: number): void {
+    const current = this.tender();
+    if (current === null || this.awarding()) {
+      return;
+    }
+
+    this.awarding.set(true);
+    this.awardError.set(null);
+
+    this.tenderApi
+      .awardTender(current.id, offerId)
+      .pipe(catchError(() => of(null)))
+      .subscribe((result) => {
+        this.awarding.set(false);
+
+        if (result === null) {
+          this.awardError.set(AWARD_ERROR_MESSAGE);
+          this.awardingOfferId.set(null);
+          return;
+        }
+
+        this.awardingOfferId.set(null);
+        this.tender.set(result);
+        this.remarkForm.disable();
+        this.offerForm.disable();
+
+        // The clicked button is removed by this change; the explanation only exists after the
+        // next render, so focus it then.
+        afterNextRender(() => this.awardedExplanationRef()?.nativeElement.focus(), {
+          injector: this.injector,
+        });
+      });
+  }
+
   protected onAddRemark(): void {
     const current = this.tender();
     if (this.remarkForm.invalid || current === null || this.remarkSubmitting()) {
@@ -278,12 +440,18 @@ export class TenderDetail implements OnInit {
 
     this.offerSubmitting.set(true);
     this.offerError.set(null);
-    const { supplierName, amount } = this.offerForm.getRawValue();
+    const { supplierName, amount, deliveryDate, validUntil, note } = this.offerForm.getRawValue();
 
     this.tenderApi
       // `amount` is guaranteed non-null here: the required validator above already blocked
       // submission (the `offerForm.invalid` check) while it is null.
-      .addOffer(current.id, supplierName, amount as number)
+      .addOffer(current.id, {
+        supplierName,
+        amount: amount as number,
+        deliveryDate,
+        validUntil,
+        ...(note.trim() === '' ? {} : { note }),
+      })
       .pipe(catchError(() => of(null)))
       .subscribe((offer) => {
         this.offerSubmitting.set(false);

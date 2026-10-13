@@ -10,13 +10,15 @@
   } @else if (tender(); as currentTender) {
     <header class="page-header">
       <div class="page-header-title">
-        <h1 data-testid="page-title">{{ currentTender.origin.city }} → {{ currentTender.destination.city }}</h1>
-        <span [class]="isClosed() ? 'pill-closed' : 'pill-open'" data-testid="status">{{
+        <h1 data-testid="page-title">
+          {{ currentTender.origin.city }} → {{ currentTender.destination.city }}
+        </h1>
+        <span [class]="'pill-' + currentTender.status.toLowerCase()" data-testid="status">{{
           statusLabel()
         }}</span>
       </div>
 
-      @if (!isClosed()) {
+      @if (isOpen()) {
         <button
           type="button"
           class="btn-secondary"
@@ -37,8 +39,16 @@
       </p>
     }
 
+    @if (isAwarded()) {
+      <p #awardedExplanationRef class="notice" tabindex="-1" data-testid="awarded-explanation">
+        {{ awardedExplanation }}
+      </p>
+    }
+
     @if (isClosed()) {
-      <p #closedExplanationRef class="notice" tabindex="-1" data-testid="closed-explanation">{{ closedExplanation }}</p>
+      <p #closedExplanationRef class="notice" tabindex="-1" data-testid="closed-explanation">
+        {{ closedExplanation }}
+      </p>
     }
 
     <section class="page-section" data-testid="shipment-data">
@@ -53,7 +63,9 @@
             </div>
             <div class="data-row">
               <dt>Abholort</dt>
-              <dd data-testid="origin-postal-city">{{ currentTender.origin.postalCode + ' ' + currentTender.origin.city }}</dd>
+              <dd data-testid="origin-postal-city">
+                {{ currentTender.origin.postalCode + ' ' + currentTender.origin.city }}
+              </dd>
             </div>
             <div class="data-row">
               <dt>Zielland</dt>
@@ -61,7 +73,9 @@
             </div>
             <div class="data-row">
               <dt>Zielort</dt>
-              <dd data-testid="destination-postal-city">{{ currentTender.destination.postalCode + ' ' + currentTender.destination.city }}</dd>
+              <dd data-testid="destination-postal-city">
+                {{ currentTender.destination.postalCode + ' ' + currentTender.destination.city }}
+              </dd>
             </div>
           </dl>
         </div>
@@ -168,6 +182,46 @@
                 }
               </button>
             </th>
+            <th
+              scope="col"
+              class="sortable"
+              [attr.aria-sort]="ariaSort(offerSort(), 'deliveryDate')"
+              data-testid="offers-header-deliveryDate"
+            >
+              <button
+                type="button"
+                class="sort-button"
+                data-testid="offers-sort-deliveryDate"
+                (click)="onSortOffers('deliveryDate')"
+              >
+                Zustellung
+                @if (sortIndicator(offerSort(), 'deliveryDate'); as indicator) {
+                  <span class="sort-indicator" aria-hidden="true">{{ indicator }}</span>
+                }
+              </button>
+            </th>
+            <th
+              scope="col"
+              class="sortable"
+              [attr.aria-sort]="ariaSort(offerSort(), 'validUntil')"
+              data-testid="offers-header-validUntil"
+            >
+              <button
+                type="button"
+                class="sort-button"
+                data-testid="offers-sort-validUntil"
+                (click)="onSortOffers('validUntil')"
+              >
+                Gültig bis
+                @if (sortIndicator(offerSort(), 'validUntil'); as indicator) {
+                  <span class="sort-indicator" aria-hidden="true">{{ indicator }}</span>
+                }
+              </button>
+            </th>
+            <th scope="col" data-testid="offers-header-note">Hinweis</th>
+            @if (showAwardColumn()) {
+              <th scope="col" data-testid="offers-header-award">Vergeben</th>
+            }
           </tr>
         </thead>
         <tbody>
@@ -175,16 +229,82 @@
             <tr data-testid="offers-row">
               <td>{{ offer.supplierName }}</td>
               <td class="numeric" data-testid="offer-amount">{{ formatAmount(offer.amount) }}</td>
+              <td>
+                <span class="cell-primary" data-testid="offer-delivery-date">{{
+                  formatDate(offer.deliveryDate)
+                }}</span>
+                @if (isDeliveryLate(offer.deliveryDate, currentTender.deliveryDate)) {
+                  <span class="cell-caption" data-testid="offer-delivery-hint"
+                    >nach Wunschtermin</span
+                  >
+                }
+              </td>
+              <td>
+                <span class="cell-primary" data-testid="offer-valid-until">{{
+                  formatDate(offer.validUntil)
+                }}</span>
+                @if (isOfferExpired(offer.validUntil, localToday())) {
+                  <span class="cell-caption" data-testid="offer-expired-hint">abgelaufen</span>
+                }
+              </td>
+              <td data-testid="offer-note">{{ offer.note }}</td>
+              @if (showAwardColumn()) {
+                <td data-testid="offer-award-cell">
+                  @if (isAwarded() && offer.id === currentTender.awardedOfferId) {
+                    <span class="cell-primary" data-testid="offer-awarded">Zuschlag</span>
+                  } @else if (canAward(offer)) {
+                    @if (awardingOfferId() === offer.id) {
+                      <button
+                        type="button"
+                        class="btn-primary btn-compact"
+                        data-testid="award-confirm"
+                        [disabled]="awarding()"
+                        (click)="onConfirmAward(offer.id)"
+                      >
+                        Zuschlag bestätigen
+                      </button>
+                      <button
+                        type="button"
+                        class="btn-secondary btn-compact"
+                        data-testid="award-cancel"
+                        [disabled]="awarding()"
+                        (click)="onCancelAward()"
+                      >
+                        Abbrechen
+                      </button>
+                    } @else {
+                      <button
+                        type="button"
+                        class="btn-secondary btn-compact"
+                        data-testid="award-offer"
+                        [disabled]="awarding()"
+                        (click)="onAskAward(offer.id)"
+                      >
+                        Vergeben
+                      </button>
+                    }
+                  }
+                </td>
+              }
             </tr>
           } @empty {
             <tr>
-              <td class="empty-cell" colspan="2" data-testid="offers-empty">
+              <td class="empty-cell" [attr.colspan]="showAwardColumn() ? 6 : 5"
+                data-testid="offers-empty">
                 Keine Angebote vorhanden.
               </td>
             </tr>
           }
         </tbody>
       </table>
+
+      @if (awardError()) {
+        <p class="form-error" role="alert" data-testid="award-error">{{ awardError() }}</p>
+      }
+
+      @if (deadlinePassed()) {
+        <p class="notice" data-testid="deadline-passed-notice">{{ deadlinePassedNotice }}</p>
+      }
 
       <form class="form-card" [formGroup]="offerForm" (ngSubmit)="onAddOffer()">
         <div class="form-field">
@@ -195,6 +315,9 @@
             formControlName="supplierName"
             data-testid="offer-supplier-input"
           />
+          @if (offerErrorOf('supplierName'); as message) {
+            <p class="form-error" data-testid="offer-supplierName-error">{{ message }}</p>
+          }
         </div>
 
         <div class="form-field">
@@ -205,6 +328,48 @@
             formControlName="amount"
             data-testid="offer-amount-input"
           />
+          @if (offerErrorOf('amount'); as message) {
+            <p class="form-error" data-testid="offer-amount-error">{{ message }}</p>
+          }
+        </div>
+
+        <div class="form-field">
+          <label for="offer-delivery-date">Zustellung am</label>
+          <input
+            id="offer-delivery-date"
+            type="date"
+            formControlName="deliveryDate"
+            data-testid="offer-delivery-date-input"
+          />
+          @if (offerErrorOf('deliveryDate'); as message) {
+            <p class="form-error" data-testid="offer-deliveryDate-error">{{ message }}</p>
+          }
+        </div>
+
+        <div class="form-field">
+          <label for="offer-valid-until">Gültig bis</label>
+          <input
+            id="offer-valid-until"
+            type="date"
+            formControlName="validUntil"
+            data-testid="offer-valid-until-input"
+          />
+          @if (offerErrorOf('validUntil'); as message) {
+            <p class="form-error" data-testid="offer-validUntil-error">{{ message }}</p>
+          }
+        </div>
+
+        <div class="form-field">
+          <label for="offer-note">Hinweis (optional)</label>
+          <input
+            id="offer-note"
+            type="text"
+            formControlName="note"
+            data-testid="offer-note-input"
+          />
+          @if (offerErrorOf('note'); as message) {
+            <p class="form-error" data-testid="offer-note-error">{{ message }}</p>
+          }
         </div>
 
         @if (offerError()) {
@@ -279,6 +444,5 @@
         </button>
       </form>
     </section>
-
   }
 </main>

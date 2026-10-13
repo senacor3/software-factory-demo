@@ -51,6 +51,18 @@ describe('TenderApiService', () => {
     expect(result).toEqual(summary);
   });
 
+  it('calls POST /api/tenders/{id}/offers/{offerId}/award and emits the returned detail', () => {
+    let result: unknown;
+    service.awardTender(5, 7).subscribe((detail) => (result = detail));
+
+    const req = httpMock.expectOne('/api/tenders/5/offers/7/award');
+    expect(req.request.method).toBe('POST');
+    const detail = tenderDetail({ id: 5, status: 'AWARDED', awardedOfferId: 7 });
+    req.flush(detail);
+
+    expect(result).toEqual(detail);
+  });
+
   it('calls POST /api/tenders with the full typed request object', () => {
     const request: CreateTenderRequest = {
       origin: { country: 'DE', postalCode: '20457', city: 'Hamburg' },
@@ -121,12 +133,19 @@ describe('TenderApiService', () => {
     req.flush({ id: 1, text: 'Bitte schnell liefern' });
   });
 
-  it('calls POST /api/tenders/:id/offers with supplierName and amount', () => {
-    service.addOffer(42, 'Spedition Muster', 1234.56).subscribe();
+  it('calls POST /api/tenders/:id/offers with all offer fields', () => {
+    const request = {
+      supplierName: 'Spedition Muster',
+      amount: 1234.56,
+      deliveryDate: '2099-10-21',
+      validUntil: '2099-10-30',
+      note: 'Inkl. Maut',
+    };
+    service.addOffer(42, request).subscribe();
 
     const req = httpMock.expectOne('/api/tenders/42/offers');
     expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ supplierName: 'Spedition Muster', amount: 1234.56 });
-    req.flush({ id: 1, supplierName: 'Spedition Muster', amount: 1234.56 });
+    expect(req.request.body).toEqual(request);
+    req.flush({ id: 1, ...request });
   });
 });

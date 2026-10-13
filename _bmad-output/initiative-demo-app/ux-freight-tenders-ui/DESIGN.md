@@ -18,6 +18,8 @@ colors:
   outline-variant: '#E0E3E8'
   status-open: '#1E7A34'
   status-open-container: '#E3F3E6'
+  status-awarded: '#0B4F8A'
+  status-awarded-container: '#E1EDF8'
   status-closed: '#6B6B6B'
   status-closed-container: '#EDEDED'
   error: '#B3261E'
@@ -88,6 +90,10 @@ components:
     background: '{colors.status-open-container}'
     color: '{colors.status-open}'
     radius: '{rounded.full}'
+  status-pill-awarded:
+    background: '{colors.status-awarded-container}'
+    color: '{colors.status-awarded}'
+    radius: '{rounded.full}'
   status-pill-closed:
     background: '{colors.status-closed-container}'
     color: '{colors.status-closed}'
@@ -105,7 +111,7 @@ Flat, not glossy. Sharp-but-softened corners (small radii, never pill-shaped exc
 - **Ford Blue (`{colors.primary}`)** is the one saturated color in the system — reserved for primary actions and active/selected states, for example an active sort column's indicator. It never appears as decoration.
 - **Near-black (`{colors.on-surface}`)** carries all body text and headings — high contrast, no brand color used for text at small sizes.
 - **Surfaces** (`{colors.surface}`, `{colors.surface-dim}`, `{colors.surface-container}`) stay white-to-light-grey; depth comes from one shade step, not shadows.
-- **Status colors** are semantic, not decorative: `{colors.status-open}` (green) and `{colors.status-closed}` (grey) back the tender-status pill and are the *only* two colors besides blue allowed to carry meaning — never reused for anything else, so a user never has to wonder whether a color means status or something else.
+- **Status colors** are semantic, not decorative: `{colors.status-open}` (green), `{colors.status-awarded}` (a darker blue, distinct from the primary action blue) and `{colors.status-closed}` (grey) back the tender-status pill and are the *only* three colors besides blue allowed to carry meaning — never reused for anything else, so a user never has to wonder whether a color means status or something else.
 - **Error (`{colors.error}`)** is reserved for form validation and failed-load messages — never for anything that isn't actually an error.
 
 ## Typography
@@ -131,14 +137,14 @@ Small, consistent corner radius (`{rounded.sm}`, 2px) on buttons, inputs, and ta
 - **Back link:** Plain text link above the page content: `{typography.label}` 13px/600, `{colors.on-surface-variant}` at rest, `{colors.on-surface}` with underline on hover, 2px `{colors.primary}` focus ring, at least 24px tall pointer target, 16px below. Behavioral rules live in EXPERIENCE.md's Component Patterns.
 - **Data card:** A flat container — 1px `{colors.outline-variant}` border, `{spacing.gutter}` padding, no shadow — with an `h3` title and a label/value list (labels in `{colors.on-surface-variant}`, values right-aligned). Laid out in a two-column grid that collapses to one column at 600px and narrower.
 - **Summary line:** One `{colors.on-surface-variant}` line under the detail header: pickup, delivery, vehicle and weight joined by " · ".
-- **Status pill:** A small rounded badge — `status-pill-open` or `status-pill-closed` — using `{rounded.full}` and the status colors from above. Placement and copy rules live in EXPERIENCE.md's Component Patterns.
+- **Status pill:** A small rounded badge — `status-pill-open`, `status-pill-awarded` or `status-pill-closed` — using `{rounded.full}` and the status colors from above. Placement and copy rules live in EXPERIENCE.md's Component Patterns.
 - **Forms:** Label above input, `{typography.label}` style. Input border `{colors.outline}`, focus ring `{colors.primary}`. Error text in `{colors.error}`: directly below the specific field for a field-level validation error, or directly below the form (above its submit button) for a submission-level failure — see EXPERIENCE.md's State Patterns for which applies where. Never a top-of-form summary alone.
 - **Empty/loading/error states:** `{typography.caption}` text, centered within the section it replaces (a table's body, a form's results area) — never a full-page takeover for a section-level state.
 
 ## Do's and Don'ts
 
 - **Do** use Ford Blue for exactly the primary action on a view. **Don't** use it for anything else — not links, not decoration, not a second button.
-- **Do** keep status color meaning fixed (green = open, grey = closed). **Don't** reuse green/grey for anything unrelated to tender status.
+- **Do** keep status color meaning fixed (green = open, blue = awarded, grey = closed). **Don't** reuse green/blue/grey for anything unrelated to tender status.
 - **Do** right-align numeric table columns. **Don't** center them — centering makes columns of numbers hard to scan.
 - **Do** show the sort indicator only on the active sort column. **Don't** show idle sort affordances on every header at once — it's visual noise on a page whose job is fast scanning.
 - **Don't** add imagery, gradients, or shadows chasing the "automotive hero" look — the industry's visual confidence comes from typography, color discipline, and layout here, not photography.

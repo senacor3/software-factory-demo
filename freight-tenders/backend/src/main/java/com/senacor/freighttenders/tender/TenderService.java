@@ -1,6 +1,8 @@
 package com.senacor.freighttenders.tender;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
@@ -15,8 +17,11 @@ public class TenderService {
 
   private final TenderRepository tenderRepository;
 
-  public TenderService(TenderRepository tenderRepository) {
+  private final Clock clock;
+
+  public TenderService(TenderRepository tenderRepository, Clock clock) {
     this.tenderRepository = tenderRepository;
+    this.clock = clock;
   }
 
   public Tender createTender(CreateTenderRequest request) {
@@ -42,7 +47,25 @@ public class TenderService {
 
   public Tender closeTender(Long id) {
     Tender tender = getTenderOrThrow(id);
+    if (tender.getStatus() == TenderStatus.AWARDED) {
+      throw new TenderClosedException(tender.getId(), tender.getStatus());
+    }
     tender.close();
+    return tenderRepository.save(tender);
+  }
+
+  public Tender awardTender(Long tenderId, Long offerId) {
+    Tender tender = getTenderOrThrow(tenderId);
+    Offer offer =
+        tender.getOffers().stream()
+            .filter(candidate -> offerId.equals(candidate.getId()))
+            .findFirst()
+            .orElseThrow(() -> new OfferNotFoundException(tenderId, offerId));
+    rejectIfClosed(tender);
+    if (offer.getValidUntil().isBefore(LocalDate.now(clock))) {
+      throw new OfferExpiredException(offerId);
+    }
+    tender.award(offer);
     return tenderRepository.save(tender);
   }
 
@@ -53,10 +76,22 @@ public class TenderService {
     return tenderRepository.save(tender);
   }
 
-  public Tender addOffer(Long id, String supplierName, BigDecimal amount) {
+  public Tender addOffer(
+      Long id,
+      String supplierName,
+      BigDecimal amount,
+      LocalDate deliveryDate,
+      LocalDate validUntil,
+      String note) {
     Tender tender = getTenderOrThrow(id);
     rejectIfClosed(tender);
-    tender.addOffer(new Offer(supplierName, amount));
+    if (tender.getBidDeadline().isBefore(LocalDate.now(clock))) {
+      throw new BidDeadlinePassedException(tender.getId());
+    }
+    if (deliveryDate.isBefore(tender.getPickupDate())) {
+      throw new OfferDeliveryBeforePickupException(tender.getId());
+    }
+    tender.addOffer(new Offer(supplierName, amount, deliveryDate, validUntil, note));
     return tenderRepository.save(tender);
   }
 
@@ -73,8 +108,8 @@ public class TenderService {
   }
 
   private void rejectIfClosed(Tender tender) {
-    if (tender.getStatus() == TenderStatus.CLOSED) {
-      throw new TenderClosedException(tender.getId());
+    if (tender.getStatus() != TenderStatus.OPEN) {
+      throw new TenderClosedException(tender.getId(), tender.getStatus());
     }
   }
 }

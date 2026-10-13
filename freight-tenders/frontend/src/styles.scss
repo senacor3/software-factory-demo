@@ -18,6 +18,8 @@
   --color-outline-variant: #e0e3e8;
   --color-status-open: #1e7a34;
   --color-status-open-container: #e3f3e6;
+  --color-status-awarded: #0b4f8a;
+  --color-status-awarded-container: #e1edf8;
   --color-status-closed: #6b6b6b;
   --color-status-closed-container: #ededed;
   --color-error: #b3261e;
@@ -110,6 +112,12 @@ h2 {
 .btn-secondary {
   background: transparent;
   color: var(--color-primary);
+}
+
+/* Compact variant for in-table row actions. */
+.btn-compact {
+  padding: 4px 12px;
+  font-size: 13px;
 }
 
 .btn-primary:disabled,
@@ -272,6 +280,7 @@ h2 {
 /* Status pills */
 
 .pill-open,
+.pill-awarded,
 .pill-closed {
   display: inline-block;
   padding: 3px 12px;
@@ -285,6 +294,11 @@ h2 {
 .pill-open {
   background: var(--color-status-open-container);
   color: var(--color-status-open);
+}
+
+.pill-awarded {
+  background: var(--color-status-awarded-container);
+  color: var(--color-status-awarded);
 }
 
 .pill-closed {

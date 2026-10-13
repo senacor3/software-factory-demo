@@ -1,4 +1,17 @@
-import { TenderDetail, TenderSummary } from './tender-api';
+import { OfferSummary, TenderDetail, TenderSummary } from './tender-api';
+
+// Shared by the specs only: a complete offer, with each spec overriding what it cares about.
+export function offerSummary(overrides: Partial<OfferSummary> = {}): OfferSummary {
+  return {
+    id: 20,
+    supplierName: 'Spedition Muster',
+    amount: 500,
+    deliveryDate: '2099-10-21',
+    validUntil: '2099-10-30',
+    note: null,
+    ...overrides,
+  };
+}
 
 // Shared by the specs only: a complete tender, with each spec overriding what it cares about.
 export function tenderSummary(overrides: Partial<TenderSummary> = {}): TenderSummary {
@@ -23,6 +36,8 @@ export function tenderSummary(overrides: Partial<TenderSummary> = {}): TenderSum
     status: 'OPEN',
     offerCount: 0,
     lowestOfferAmount: null,
+    awardedSupplierName: null,
+    awardedAmount: null,
     ...overrides,
   };
 }
@@ -31,5 +46,7 @@ export function tenderDetail(overrides: Partial<TenderDetail> = {}): TenderDetai
   const summary: Partial<TenderSummary> = tenderSummary();
   delete summary.offerCount;
   delete summary.lowestOfferAmount;
-  return { ...summary, remarks: [], offers: [], ...overrides } as TenderDetail;
+  delete summary.awardedSupplierName;
+  delete summary.awardedAmount;
+  return { ...summary, awardedOfferId: null, remarks: [], offers: [], ...overrides } as TenderDetail;
 }
