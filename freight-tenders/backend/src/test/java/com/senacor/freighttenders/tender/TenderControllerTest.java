@@ -404,18 +404,24 @@ class TenderControllerTest {
 
   @Test
   void invalidRemarkOrOfferOnClosedTenderReturns400NotConflict() throws Exception {
+    given(tenderService.addRemark(eq(1L), eq(""))).willThrow(new TenderClosedException(1L));
+    given(tenderService.addOffer(eq(1L), eq(""), eq(BigDecimal.ZERO)))
+        .willThrow(new TenderClosedException(1L));
+
     mockMvc
         .perform(
             post("/api/tenders/{id}/remarks", 1L)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"text\":\"\"}"))
-        .andExpect(status().isBadRequest());
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.violations").exists());
     mockMvc
         .perform(
             post("/api/tenders/{id}/offers", 1L)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"supplierName\":\"\",\"amount\":0}"))
-        .andExpect(status().isBadRequest());
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.violations").exists());
 
     verifyNoInteractions(tenderService);
   }
