@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,22 +35,35 @@ class TenderServiceTest {
     given(tenderRepository.save(any(Tender.class)))
         .willAnswer(invocation -> invocation.getArgument(0));
 
-    Tender result = tenderService.createTender("Hamburg", "Rotterdam");
+    Tender result = tenderService.createTender(TenderFixtures.request());
 
-    assertThat(result.getOrigin()).isEqualTo("Hamburg");
-    assertThat(result.getDestination()).isEqualTo("Rotterdam");
+    assertThat(result.getOrigin()).isEqualTo(new Address("DE", "20457", "Hamburg"));
+    assertThat(result.getDestination()).isEqualTo(new Address("NL", "3011 AA", "Rotterdam"));
     assertThat(result.getStatus()).isEqualTo(TenderStatus.OPEN);
 
     ArgumentCaptor<Tender> captor = ArgumentCaptor.forClass(Tender.class);
     verify(tenderRepository).save(captor.capture());
-    assertThat(captor.getValue().getOrigin()).isEqualTo("Hamburg");
-    assertThat(captor.getValue().getDestination()).isEqualTo("Rotterdam");
-    assertThat(captor.getValue().getStatus()).isEqualTo(TenderStatus.OPEN);
+    Tender saved = captor.getValue();
+    assertThat(saved.getOrigin().city()).isEqualTo("Hamburg");
+    assertThat(saved.getDestination().city()).isEqualTo("Rotterdam");
+    assertThat(saved.getPickupDate()).isEqualTo(LocalDate.of(2026, 10, 20));
+    assertThat(saved.getDeliveryDate()).isEqualTo(LocalDate.of(2026, 10, 22));
+    assertThat(saved.getBidDeadline()).isEqualTo(LocalDate.of(2026, 10, 16));
+    assertThat(saved.getCommodity()).isEqualTo("Maschinenteile auf Europaletten");
+    assertThat(saved.getWeightKg()).isEqualTo(18500);
+    assertThat(saved.getLoadingMeters()).isEqualTo(new BigDecimal("13.6"));
+    assertThat(saved.getPalletCount()).isEqualTo(33);
+    assertThat(saved.getEquipmentType()).isEqualTo(EquipmentType.CURTAIN_SIDER);
+    assertThat(saved.isDangerousGoods()).isFalse();
+    assertThat(saved.getAdrClass()).isNull();
+    assertThat(saved.isTemperatureControlled()).isFalse();
+    assertThat(saved.getCurrency()).isEqualTo(Currency.EUR);
+    assertThat(saved.getStatus()).isEqualTo(TenderStatus.OPEN);
   }
 
   @Test
   void closeTenderClosesAndSavesTheLoadedTender() {
-    Tender tender = new Tender("Hamburg", "Rotterdam");
+    Tender tender = TenderFixtures.tender();
     given(tenderRepository.findById(1L)).willReturn(Optional.of(tender));
     given(tenderRepository.save(any(Tender.class)))
         .willAnswer(invocation -> invocation.getArgument(0));
@@ -62,7 +76,7 @@ class TenderServiceTest {
 
   @Test
   void addRemarkOnOpenTenderIsAddedAndSaved() {
-    Tender tender = new Tender("Hamburg", "Rotterdam");
+    Tender tender = TenderFixtures.tender();
     given(tenderRepository.findById(1L)).willReturn(Optional.of(tender));
     given(tenderRepository.save(any(Tender.class)))
         .willAnswer(invocation -> invocation.getArgument(0));
@@ -76,7 +90,7 @@ class TenderServiceTest {
 
   @Test
   void addOfferOnOpenTenderIsAddedAndSaved() {
-    Tender tender = new Tender("Hamburg", "Rotterdam");
+    Tender tender = TenderFixtures.tender();
     given(tenderRepository.findById(1L)).willReturn(Optional.of(tender));
     given(tenderRepository.save(any(Tender.class)))
         .willAnswer(invocation -> invocation.getArgument(0));
@@ -90,7 +104,7 @@ class TenderServiceTest {
 
   @Test
   void addRemarkOnClosedTenderIsRejected() {
-    Tender tender = new Tender("Hamburg", "Rotterdam");
+    Tender tender = TenderFixtures.tender();
     tender.close();
     given(tenderRepository.findById(1L)).willReturn(Optional.of(tender));
 
@@ -103,7 +117,7 @@ class TenderServiceTest {
 
   @Test
   void addOfferOnClosedTenderIsRejected() {
-    Tender tender = new Tender("Hamburg", "Rotterdam");
+    Tender tender = TenderFixtures.tender();
     tender.close();
     given(tenderRepository.findById(1L)).willReturn(Optional.of(tender));
 
@@ -117,8 +131,8 @@ class TenderServiceTest {
 
   @Test
   void listTendersWithNoFilterDelegatesToFindAll() {
-    Tender openTender = new Tender("Hamburg", "Rotterdam");
-    Tender closedTender = new Tender("Berlin", "Munich");
+    Tender openTender = TenderFixtures.tender();
+    Tender closedTender = TenderFixtures.tender("Berlin", "Munich");
     closedTender.close();
     given(tenderRepository.findAll()).willReturn(List.of(openTender, closedTender));
 
@@ -130,7 +144,7 @@ class TenderServiceTest {
 
   @Test
   void listTendersFilteredByStatusDelegatesToFindByStatus() {
-    Tender openTender = new Tender("Hamburg", "Rotterdam");
+    Tender openTender = TenderFixtures.tender();
     given(tenderRepository.findByStatus(TenderStatus.OPEN)).willReturn(List.of(openTender));
 
     List<Tender> result = tenderService.listTenders(Optional.of(TenderStatus.OPEN));

@@ -1,6 +1,10 @@
 package com.senacor.freighttenders.tender;
 
+import jakarta.persistence.AttributeOverride;
+import jakarta.persistence.AttributeOverrides;
 import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -8,6 +12,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -29,9 +35,52 @@ public class Tender {
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
-  private String origin;
+  @Embedded
+  @AttributeOverrides({
+    @AttributeOverride(name = "country", column = @Column(name = "origin_country")),
+    @AttributeOverride(name = "postalCode", column = @Column(name = "origin_postal_code")),
+    @AttributeOverride(name = "city", column = @Column(name = "origin_city"))
+  })
+  private Address origin;
 
-  private String destination;
+  @Embedded
+  @AttributeOverrides({
+    @AttributeOverride(name = "country", column = @Column(name = "destination_country")),
+    @AttributeOverride(name = "postalCode", column = @Column(name = "destination_postal_code")),
+    @AttributeOverride(name = "city", column = @Column(name = "destination_city"))
+  })
+  private Address destination;
+
+  private LocalDate pickupDate;
+
+  private LocalDate deliveryDate;
+
+  private LocalDate bidDeadline;
+
+  private String commodity;
+
+  private Integer weightKg;
+
+  @Column(precision = 3, scale = 1)
+  private BigDecimal loadingMeters;
+
+  private Integer palletCount;
+
+  @Enumerated(EnumType.STRING)
+  private EquipmentType equipmentType;
+
+  private boolean dangerousGoods;
+
+  private String adrClass;
+
+  private boolean temperatureControlled;
+
+  private Integer temperatureMinC;
+
+  private Integer temperatureMaxC;
+
+  @Enumerated(EnumType.STRING)
+  private Currency currency;
 
   @Enumerated(EnumType.STRING)
   private TenderStatus status = TenderStatus.OPEN;
@@ -46,21 +95,107 @@ public class Tender {
     // required by JPA
   }
 
-  public Tender(String origin, String destination) {
+  public Tender(
+      Address origin,
+      Address destination,
+      LocalDate pickupDate,
+      LocalDate deliveryDate,
+      LocalDate bidDeadline,
+      String commodity,
+      Integer weightKg,
+      BigDecimal loadingMeters,
+      Integer palletCount,
+      EquipmentType equipmentType,
+      boolean dangerousGoods,
+      String adrClass,
+      boolean temperatureControlled,
+      Integer temperatureMinC,
+      Integer temperatureMaxC,
+      Currency currency) {
     this.origin = origin;
     this.destination = destination;
+    this.pickupDate = pickupDate;
+    this.deliveryDate = deliveryDate;
+    this.bidDeadline = bidDeadline;
+    this.commodity = commodity;
+    this.weightKg = weightKg;
+    this.loadingMeters = loadingMeters;
+    this.palletCount = palletCount;
+    this.equipmentType = equipmentType;
+    this.dangerousGoods = dangerousGoods;
+    this.adrClass = adrClass;
+    this.temperatureControlled = temperatureControlled;
+    this.temperatureMinC = temperatureMinC;
+    this.temperatureMaxC = temperatureMaxC;
+    this.currency = currency;
   }
 
   public Long getId() {
     return id;
   }
 
-  public String getOrigin() {
+  public Address getOrigin() {
     return origin;
   }
 
-  public String getDestination() {
+  public Address getDestination() {
     return destination;
+  }
+
+  public LocalDate getPickupDate() {
+    return pickupDate;
+  }
+
+  public LocalDate getDeliveryDate() {
+    return deliveryDate;
+  }
+
+  public LocalDate getBidDeadline() {
+    return bidDeadline;
+  }
+
+  public String getCommodity() {
+    return commodity;
+  }
+
+  public Integer getWeightKg() {
+    return weightKg;
+  }
+
+  public BigDecimal getLoadingMeters() {
+    return loadingMeters;
+  }
+
+  public Integer getPalletCount() {
+    return palletCount;
+  }
+
+  public EquipmentType getEquipmentType() {
+    return equipmentType;
+  }
+
+  public boolean isDangerousGoods() {
+    return dangerousGoods;
+  }
+
+  public String getAdrClass() {
+    return adrClass;
+  }
+
+  public boolean isTemperatureControlled() {
+    return temperatureControlled;
+  }
+
+  public Integer getTemperatureMinC() {
+    return temperatureMinC;
+  }
+
+  public Integer getTemperatureMaxC() {
+    return temperatureMaxC;
+  }
+
+  public Currency getCurrency() {
+    return currency;
   }
 
   public TenderStatus getStatus() {

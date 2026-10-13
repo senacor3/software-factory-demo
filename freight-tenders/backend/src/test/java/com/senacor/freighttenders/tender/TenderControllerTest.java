@@ -1,8 +1,11 @@
 package com.senacor.freighttenders.tender;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -14,14 +17,17 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(TenderController.class)
+@Import(FixedClockConfiguration.class)
 class TenderControllerTest {
 
   @Autowired private MockMvc mockMvc;
@@ -29,80 +35,41 @@ class TenderControllerTest {
   @MockitoBean private TenderService tenderService;
 
   @Test
-  void createTenderReturns201WithOpenTender() throws Exception {
-    Tender tender = new Tender("Hamburg", "Rotterdam");
+  void createTenderReturns201WithOpenTenderAndEveryField() throws Exception {
+    Tender tender = TenderFixtures.tender();
     ReflectionTestUtils.setField(tender, "id", 1L);
-    given(tenderService.createTender(eq("Hamburg"), eq("Rotterdam"))).willReturn(tender);
+    given(tenderService.createTender(any(CreateTenderRequest.class))).willReturn(tender);
 
     mockMvc
         .perform(
             post("/api/tenders")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"origin\":\"Hamburg\",\"destination\":\"Rotterdam\"}"))
+                .content(TenderFixtures.VALID_REQUEST_JSON))
         .andExpect(status().isCreated())
         .andExpect(content().contentType(MediaType.APPLICATION_JSON))
         .andExpect(jsonPath("$.id").value(1))
-        .andExpect(jsonPath("$.origin").value("Hamburg"))
-        .andExpect(jsonPath("$.destination").value("Rotterdam"))
+        .andExpect(jsonPath("$.origin.country").value("DE"))
+        .andExpect(jsonPath("$.origin.postalCode").value("20457"))
+        .andExpect(jsonPath("$.origin.city").value("Hamburg"))
+        .andExpect(jsonPath("$.destination.country").value("NL"))
+        .andExpect(jsonPath("$.destination.postalCode").value("3011 AA"))
+        .andExpect(jsonPath("$.destination.city").value("Rotterdam"))
+        .andExpect(jsonPath("$.pickupDate").value("2026-10-20"))
+        .andExpect(jsonPath("$.deliveryDate").value("2026-10-22"))
+        .andExpect(jsonPath("$.bidDeadline").value("2026-10-16"))
+        .andExpect(jsonPath("$.commodity").value("Maschinenteile auf Europaletten"))
+        .andExpect(jsonPath("$.weightKg").value(18500))
+        .andExpect(jsonPath("$.loadingMeters").value(13.6))
+        .andExpect(jsonPath("$.palletCount").value(33))
+        .andExpect(jsonPath("$.equipmentType").value("CURTAIN_SIDER"))
+        .andExpect(jsonPath("$.dangerousGoods").value(false))
+        .andExpect(jsonPath("$.temperatureControlled").value(false))
+        .andExpect(jsonPath("$.currency").value("EUR"))
         .andExpect(jsonPath("$.status").value("OPEN"));
-  }
 
-  @Test
-  void createTenderWithBlankOriginReturns400WithViolationAndSkipsService() throws Exception {
-    mockMvc
-        .perform(
-            post("/api/tenders")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"origin\":\"\",\"destination\":\"Rotterdam\"}"))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.error").value("Bad Request"))
-        .andExpect(jsonPath("$.message").exists())
-        .andExpect(jsonPath("$.path").value("/api/tenders"))
-        .andExpect(jsonPath("$.timestamp").exists())
-        .andExpect(jsonPath("$.violations.length()").value(1))
-        .andExpect(jsonPath("$.violations[0].field").value("origin"))
-        .andExpect(jsonPath("$.violations[0].message").exists());
-
-    verifyNoInteractions(tenderService);
-  }
-
-  @Test
-  void createTenderWithBlankDestinationReturns400WithViolation() throws Exception {
-    mockMvc
-        .perform(
-            post("/api/tenders")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"origin\":\"Hamburg\",\"destination\":\"\"}"))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.violations.length()").value(1))
-        .andExpect(jsonPath("$.violations[0].field").value("destination"));
-
-    verifyNoInteractions(tenderService);
-  }
-
-  @Test
-  void createTenderWithMissingFieldsReturns400WithViolationForEachField() throws Exception {
-    mockMvc
-        .perform(post("/api/tenders").contentType(MediaType.APPLICATION_JSON).content("{}"))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.violations.length()").value(2))
-        .andExpect(
-            jsonPath("$.violations[*].field").value(containsInAnyOrder("origin", "destination")));
-
-    verifyNoInteractions(tenderService);
-  }
-
-  @Test
-  void createTenderWithNullOrWhitespaceValuesReturns400() throws Exception {
-    mockMvc
-        .perform(
-            post("/api/tenders")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"origin\":null,\"destination\":\"   \"}"))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.violations.length()").value(2));
-
-    verifyNoInteractions(tenderService);
+    ArgumentCaptor<CreateTenderRequest> captor = ArgumentCaptor.forClass(CreateTenderRequest.class);
+    verify(tenderService).createTender(captor.capture());
+    assertThat(captor.getValue()).isEqualTo(TenderFixtures.request());
   }
 
   @Test
@@ -130,7 +97,7 @@ class TenderControllerTest {
 
   @Test
   void closeTenderReturns200WithClosedTender() throws Exception {
-    Tender tender = new Tender("Hamburg", "Rotterdam");
+    Tender tender = TenderFixtures.tender();
     tender.close();
     given(tenderService.closeTender(1L)).willReturn(tender);
 
@@ -138,12 +105,13 @@ class TenderControllerTest {
         .perform(post("/api/tenders/{id}/close", 1L))
         .andExpect(status().isOk())
         .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-        .andExpect(jsonPath("$.status").value("CLOSED"));
+        .andExpect(jsonPath("$.status").value("CLOSED"))
+        .andExpect(jsonPath("$.origin.city").value("Hamburg"));
   }
 
   @Test
   void listTendersFilteredByStatusReturnsOnlyOpenTenders() throws Exception {
-    Tender openTender = new Tender("Hamburg", "Rotterdam");
+    Tender openTender = TenderFixtures.tender();
     ReflectionTestUtils.setField(openTender, "id", 1L);
     given(tenderService.listTenders(Optional.of(TenderStatus.OPEN)))
         .willReturn(List.of(openTender));
@@ -158,10 +126,10 @@ class TenderControllerTest {
   }
 
   @Test
-  void listTendersWithNoFilterReturnsOpenAndClosedTenders() throws Exception {
-    Tender openTender = new Tender("Hamburg", "Rotterdam");
+  void listTendersWithNoFilterReturnsOpenAndClosedTendersWithEveryField() throws Exception {
+    Tender openTender = TenderFixtures.tender();
     ReflectionTestUtils.setField(openTender, "id", 1L);
-    Tender closedTender = new Tender("Berlin", "Munich");
+    Tender closedTender = TenderFixtures.tender("Berlin", "Munich");
     ReflectionTestUtils.setField(closedTender, "id", 2L);
     closedTender.close();
     given(tenderService.listTenders(Optional.empty()))
@@ -172,12 +140,18 @@ class TenderControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.length()").value(2))
         .andExpect(jsonPath("$[0].status").value("OPEN"))
-        .andExpect(jsonPath("$[1].status").value("CLOSED"));
+        .andExpect(jsonPath("$[0].origin.city").value("Hamburg"))
+        .andExpect(jsonPath("$[0].destination.city").value("Rotterdam"))
+        .andExpect(jsonPath("$[0].pickupDate").value("2026-10-20"))
+        .andExpect(jsonPath("$[0].weightKg").value(18500))
+        .andExpect(jsonPath("$[0].currency").value("EUR"))
+        .andExpect(jsonPath("$[1].status").value("CLOSED"))
+        .andExpect(jsonPath("$[1].origin.city").value("Berlin"));
   }
 
   @Test
   void getTenderReturns200WithNestedRemarksAndOffers() throws Exception {
-    Tender tender = new Tender("Hamburg", "Rotterdam");
+    Tender tender = TenderFixtures.tender();
     ReflectionTestUtils.setField(tender, "id", 1L);
     Remark remark = new Remark("Please expedite");
     ReflectionTestUtils.setField(remark, "id", 10L);
@@ -192,15 +166,20 @@ class TenderControllerTest {
         .andExpect(status().isOk())
         .andExpect(content().contentType(MediaType.APPLICATION_JSON))
         .andExpect(jsonPath("$.id").value(1))
-        .andExpect(jsonPath("$.origin").value("Hamburg"))
-        .andExpect(jsonPath("$.destination").value("Rotterdam"))
+        .andExpect(jsonPath("$.origin.city").value("Hamburg"))
+        .andExpect(jsonPath("$.destination.city").value("Rotterdam"))
+        .andExpect(jsonPath("$.pickupDate").value("2026-10-20"))
+        .andExpect(jsonPath("$.deliveryDate").value("2026-10-22"))
+        .andExpect(jsonPath("$.bidDeadline").value("2026-10-16"))
+        .andExpect(jsonPath("$.equipmentType").value("CURTAIN_SIDER"))
+        .andExpect(jsonPath("$.currency").value("EUR"))
         .andExpect(jsonPath("$.remarks[0].text").value("Please expedite"))
         .andExpect(jsonPath("$.offers[0].supplierName").value("Acme Logistics"));
   }
 
   @Test
   void addRemarkOnOpenTenderReturns201WithCreatedRemark() throws Exception {
-    Tender tender = new Tender("Hamburg", "Rotterdam");
+    Tender tender = TenderFixtures.tender();
     ReflectionTestUtils.setField(tender, "id", 1L);
     Remark remark = new Remark("Please expedite");
     ReflectionTestUtils.setField(remark, "id", 10L);
@@ -220,7 +199,7 @@ class TenderControllerTest {
 
   @Test
   void addOfferOnOpenTenderReturns201WithCreatedOffer() throws Exception {
-    Tender tender = new Tender("Hamburg", "Rotterdam");
+    Tender tender = TenderFixtures.tender();
     ReflectionTestUtils.setField(tender, "id", 1L);
     Offer offer = new Offer("Acme Logistics", new BigDecimal("1234.56"));
     ReflectionTestUtils.setField(offer, "id", 20L);
@@ -386,7 +365,7 @@ class TenderControllerTest {
 
   @Test
   void addOfferWithMinimumAmountReturns201() throws Exception {
-    Tender tender = new Tender("Hamburg", "Rotterdam");
+    Tender tender = TenderFixtures.tender();
     ReflectionTestUtils.setField(tender, "id", 1L);
     Offer offer = new Offer("Acme Logistics", new BigDecimal("0.01"));
     ReflectionTestUtils.setField(offer, "id", 20L);

@@ -6,6 +6,8 @@ import java.time.Instant;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -35,15 +37,34 @@ public class TenderExceptionHandler {
   @ExceptionHandler(MethodArgumentNotValidException.class)
   public ResponseEntity<ErrorResponse> handleInvalidRequest(
       MethodArgumentNotValidException exception, HttpServletRequest request) {
+    // Global (object-level) errors are kept too, named by the validated object, so a constraint
+    // without a field name is never silently dropped.
     List<Violation> violations =
-        exception.getBindingResult().getFieldErrors().stream()
-            .map(fieldError -> new Violation(fieldError.getField(), fieldError.getDefaultMessage()))
+        exception.getBindingResult().getAllErrors().stream()
+            .map(
+                error ->
+                    new Violation(
+                        error instanceof FieldError fieldError
+                            ? fieldError.getField()
+                            : error.getObjectName(),
+                        error.getDefaultMessage()))
             .toList();
+    return badRequest("Request validation failed", violations, request);
+  }
+
+  @ExceptionHandler(HttpMessageNotReadableException.class)
+  public ResponseEntity<ErrorResponse> handleUnreadableRequest(
+      HttpMessageNotReadableException exception, HttpServletRequest request) {
+    return badRequest("Request body is malformed or invalid", List.of(), request);
+  }
+
+  private static ResponseEntity<ErrorResponse> badRequest(
+      String message, List<Violation> violations, HttpServletRequest request) {
     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
         .body(
             new ErrorResponse(
                 HttpStatus.BAD_REQUEST.getReasonPhrase(),
-                "Request validation failed",
+                message,
                 request.getRequestURI(),
                 Instant.now(),
                 violations));

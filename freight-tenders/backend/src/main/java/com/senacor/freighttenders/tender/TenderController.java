@@ -27,7 +27,7 @@ public class TenderController {
   @PostMapping("")
   public ResponseEntity<TenderResponse> createTender(
       @Valid @RequestBody CreateTenderRequest request) {
-    Tender tender = tenderService.createTender(request.origin(), request.destination());
+    Tender tender = tenderService.createTender(request);
     return ResponseEntity.status(HttpStatus.CREATED).body(TenderResponse.from(tender));
   }
 

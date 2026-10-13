@@ -4,27 +4,23 @@ import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { TenderDetail as TenderDetailModel } from '../tender-api';
+import { tenderDetail, tenderSummary } from '../tender-test-data';
 import { TenderDetail } from './tender-detail';
 
-const OPEN_TENDER: TenderDetailModel = {
-  id: 1,
-  origin: 'Hamburg',
-  destination: 'Berlin',
-  status: 'OPEN',
+const BERLIN = { country: 'DE', postalCode: '10115', city: 'Berlin' };
+
+const OPEN_TENDER: TenderDetailModel = tenderDetail({
+  destination: BERLIN,
   remarks: [{ id: 10, text: 'Bestehende Bemerkung' }],
   offers: [{ id: 20, supplierName: 'Spedition Muster', amount: 500 }],
-};
+});
 
 const CLOSED_TENDER: TenderDetailModel = {
   ...OPEN_TENDER,
   status: 'CLOSED',
 };
 
-const SORTABLE_TENDER: TenderDetailModel = {
-  id: 1,
-  origin: 'Hamburg',
-  destination: 'Rotterdam',
-  status: 'OPEN',
+const SORTABLE_TENDER: TenderDetailModel = tenderDetail({
   remarks: [
     { id: 10, text: 'Bitte schnell liefern' },
     { id: 11, text: 'Angebot angenommen' },
@@ -35,7 +31,7 @@ const SORTABLE_TENDER: TenderDetailModel = {
     { id: 21, supplierName: 'Acme Logistics', amount: 1234.56 },
     { id: 22, supplierName: 'Nordfracht', amount: 99 },
   ],
-};
+});
 
 const EMPTY_TENDER: TenderDetailModel = {
   ...OPEN_TENDER,
@@ -296,6 +292,9 @@ describe('TenderDetail', () => {
       'Hamburg → Rotterdam',
     );
     expect(texts(element, 'status')).toEqual(['Offen']);
+    expect(element.querySelector('[data-testid="page-title"]')?.textContent).not.toContain(
+      '[object Object]',
+    );
   });
 
   it('orders remarks and offers newest-first with no sort indicator until a column is selected', async () => {
@@ -605,7 +604,7 @@ describe('TenderDetail', () => {
 
     const req = httpMock.expectOne('/api/tenders/1/close');
     expect(req.request.method).toBe('POST');
-    req.flush({ id: 1, origin: 'Hamburg', destination: 'Berlin', status: 'CLOSED' });
+    req.flush(tenderSummary({ destination: BERLIN, status: 'CLOSED' }));
     harness.detectChanges();
 
     expect(texts(element, 'status')).toEqual(['Geschlossen']);
@@ -635,7 +634,7 @@ describe('TenderDetail', () => {
 
     httpMock
       .expectOne('/api/tenders/1/close')
-      .flush({ id: 1, origin: 'Hamburg', destination: 'Berlin', status: 'CLOSED' });
+      .flush(tenderSummary({ destination: BERLIN, status: 'CLOSED' }));
   });
 
   it('shows a German error and keeps the tender open when closing fails', async () => {

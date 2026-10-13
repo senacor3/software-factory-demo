@@ -50,10 +50,10 @@
                     class="row-link"
                     [routerLink]="['/tenders', tender.id]"
                     [attr.data-testid]="table.testId + '-link'"
-                    >{{ tender.origin }}</a
+                    >{{ tender.origin.city }}</a
                   >
                 </td>
-                <td>{{ tender.destination }}</td>
+                <td>{{ tender.destination.city }}</td>
                 <td>
                   <span [class]="tender.status === 'OPEN' ? 'pill-open' : 'pill-closed'">{{
                     statusLabels[tender.status]
