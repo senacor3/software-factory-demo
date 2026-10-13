@@ -2,8 +2,8 @@
 schema_version: 1
 story_slug: tender-overview-shipment-columns
 stage: checks
-status: findings-open
-updated: 2026-10-13T09:44:46Z
+status: unresolved-after-cap
+updated: 2026-10-13T09:45:02Z
 fix_cycle: 2
 ---
 
