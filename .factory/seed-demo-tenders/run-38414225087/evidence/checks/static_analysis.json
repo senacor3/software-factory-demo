@@ -1,17 +1,26 @@
 {
-  "status": "fail",
+  "status": "pass",
   "command": [
-    "bash",
-    "-c",
-    "JAVA_HOME=\"$JAVA_HOME_25_X64\" mvn -B -f freight-tenders/backend/pom.xml spotbugs:check"
+    "npm",
+    "--prefix",
+    "freight-tenders/frontend",
+    "run",
+    "static-analysis"
   ],
-  "returncode": 1,
-  "detail": "[INFO] Scanning for projects...\n[INFO] Loaded 24073 auto-discovered prefixes for remote repository central (prefixes-central.txt)\n[INFO] \n[INFO] ---------< com.senacor.freighttenders:freight-tenders-backend >---------\n[INFO] Building freight-tenders-backend 0.0.1-SNAPSHOT\n[INFO]   from pom.xml\n[INFO] --------------------------------[ jar ]---------------------------------\n[INFO] \n[INFO] >>> spotbugs:4.10.5.0:check (default-cli) > :spotbugs @ freight-tenders-backend >>>\n[INFO] \n[INFO] --- spotbugs:4.10.5.0:spotbugs (spotbugs) @ freight-tenders-backend ---\n[INFO] Loaded 74 auto-discovered prefixes for remote repository apache.snapshots (prefixes-apache.snapshots.txt)\n[INFO] Done SpotBugs Analysis....\n[INFO] Skipping com.github.spotbugs:spotbugs-maven-plugin:4.10.5.0:spotbugs report goal\n[INFO] \n[INFO] <<< spotbugs:4.10.5.0:check (default-cli) < :spotbugs @ freight-tenders-backend <<<\n[INFO] \n[INFO] \n[INFO] --- spotbugs:4.10.5.0:check (default-cli) @ freight-tenders-backend ---\n[INFO] BugInstance size is 1\n[INFO] Error size is 0\n[INFO] Total bugs: 1\n[ERROR] Medium: new com.senacor.freighttenders.tender.DemoDataSeeder(TenderRepository, TenderService, Clock) may expose internal representation by storing an externally mutable object into DemoDataSeeder.tenderService [com.senacor.freighttenders.tender.DemoDataSeeder] At DemoDataSeeder.java:[line 32] EI_EXPOSE_REP2\n[INFO] \n\n\nTo see bug detail using the Spotbugs GUI, use the following command \"mvn spotbugs:gui\"\n\n\n\n[INFO] ------------------------------------------------------------------------\n[ERROR] BUILD FAILURE\n[INFO] ------------------------------------------------------------------------\n[INFO] Total time:  8.777 s\n[INFO] Finished at: 2026-10-13T14:37:32Z\n[INFO] ------------------------------------------------------------------------\n[ERROR] Failed to execute goal com.github.spotbugs:spotbugs-maven-plugin:4.10.5.0:check (default-cli) on project freight-tenders-backend: failed with 1 bugs and 0 errors -> [Help 1]\n[ERROR] \n[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.\n[ERROR] Re-run Maven using the -X switch to enable full debug logging.\n[ERROR] \n[ERROR] For more information about the errors and possible solutions, please read the following articles:\n[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException",
+  "returncode": 0,
+  "detail": "",
   "commands": [
     [
       "bash",
       "-c",
       "JAVA_HOME=\"$JAVA_HOME_25_X64\" mvn -B -f freight-tenders/backend/pom.xml spotbugs:check"
+    ],
+    [
+      "npm",
+      "--prefix",
+      "freight-tenders/frontend",
+      "run",
+      "static-analysis"
     ]
   ],
   "config_source": "origin/main"
