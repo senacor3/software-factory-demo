@@ -1,21 +1,17 @@
 name: freight-tenders
 
 # CI for the freight-tenders demo app, independent of light-factory's own
-# workflow (.github/workflows/light-factory.yml) and tooling. Two jobs, each
-# building/testing/linting its own project -- see freight-tenders/README.md.
+# workflow and tooling. Two jobs, each building/testing/linting its own
+# project -- see freight-tenders/README.md.
 #
-# No `on.push.paths`/`on.pull_request.paths` filter: GitHub's native path
-# filter is evaluated from the push event's own before/after compare, which is
-# unreliable in practice (observed 2026-10-12: several pushes to main that
-# touched zero files under freight-tenders/** still ran the full Backend +
-# Frontend build, even though the filter was in place from the very first
-# commit). The `changes` job below re-derives the changed paths itself via
-# dorny/paths-filter (a real git diff against the correct base for both push
-# and pull_request), and backend/frontend are gated on that instead.
+# push-to-main only; PR-time checks are already covered by its own `checks` job
+#
+# No `on.push.paths` filter; The `changes` job re-derives changed paths
+# via dorny/paths-filter instead, and backend/frontend are gated on that.
 
 on:
   push:
-  pull_request:
+    branches: [main]
 
 jobs:
   changes:
