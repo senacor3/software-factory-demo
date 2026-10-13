@@ -10,7 +10,7 @@
   } @else if (tender(); as currentTender) {
     <header class="page-header">
       <div class="page-header-title">
-        <h1 data-testid="page-title">{{ currentTender.origin }} → {{ currentTender.destination }}</h1>
+        <h1 data-testid="page-title">{{ currentTender.origin.city }} → {{ currentTender.destination.city }}</h1>
         <span [class]="isClosed() ? 'pill-closed' : 'pill-open'" data-testid="status">{{
           statusLabel()
         }}</span>

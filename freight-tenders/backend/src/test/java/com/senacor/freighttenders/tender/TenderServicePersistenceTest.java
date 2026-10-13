@@ -2,7 +2,12 @@ package com.senacor.freighttenders.tender;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
+import java.util.List;
+import java.util.Optional;
+import org.hibernate.SessionFactory;
+import org.hibernate.stat.Statistics;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -16,9 +21,11 @@ import org.springframework.context.annotation.Import;
  * {@code spring.jpa.open-in-view=true} keeping the service's {@code findById} and {@code save} in
  * one persistence context, since {@link TenderService} has no {@code @Transactional} of its own.
  */
-@DataJpaTest
+@DataJpaTest(properties = "spring.jpa.properties.hibernate.generate_statistics=true")
 @Import(TenderService.class)
 class TenderServicePersistenceTest {
+
+  @Autowired private EntityManager entityManager;
 
   @Autowired private TenderService tenderService;
 
@@ -26,7 +33,7 @@ class TenderServicePersistenceTest {
 
   @Test
   void addRemarkAppendsTheNewRemarkAsTheLastElementAfterRealPersistence() {
-    Tender tender = new Tender("Hamburg", "Rotterdam");
+    Tender tender = TenderFixtures.tender();
     tender.addRemark(new Remark("First remark"));
     Long id = tenderRepository.save(tender).getId();
 
@@ -38,8 +45,30 @@ class TenderServicePersistenceTest {
   }
 
   @Test
+  void listingTendersFetchesOffersWithAConstantNumberOfQueries() {
+    for (int i = 0; i < 5; i++) {
+      Tender tender = TenderFixtures.tender();
+      tender.addOffer(new Offer("Supplier " + i, new BigDecimal("100.00")));
+      tender.addOffer(new Offer("Other Supplier " + i, new BigDecimal("200.00")));
+      tenderRepository.save(tender);
+    }
+    entityManager.flush();
+    entityManager.clear();
+    Statistics statistics =
+        entityManager.getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
+    statistics.clear();
+
+    List<Tender> tenders = tenderService.listTenders(Optional.empty());
+    int offerCount = tenders.stream().mapToInt(t -> t.getOffers().size()).sum();
+
+    assertThat(tenders).hasSize(5);
+    assertThat(offerCount).isEqualTo(10);
+    assertThat(statistics.getPrepareStatementCount()).isEqualTo(1);
+  }
+
+  @Test
   void addOfferAppendsTheNewOfferAsTheLastElementAfterRealPersistence() {
-    Tender tender = new Tender("Hamburg", "Rotterdam");
+    Tender tender = TenderFixtures.tender();
     tender.addOffer(new Offer("First Supplier", new BigDecimal("100.00")));
     Long id = tenderRepository.save(tender).getId();
 

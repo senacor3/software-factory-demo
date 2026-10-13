@@ -19,8 +19,25 @@ public class TenderService {
     this.tenderRepository = tenderRepository;
   }
 
-  public Tender createTender(String origin, String destination) {
-    return tenderRepository.save(new Tender(origin, destination));
+  public Tender createTender(CreateTenderRequest request) {
+    return tenderRepository.save(
+        new Tender(
+            request.origin().toAddress(),
+            request.destination().toAddress(),
+            request.pickupDate(),
+            request.deliveryDate(),
+            request.bidDeadline(),
+            request.commodity(),
+            request.weightKg(),
+            request.loadingMeters(),
+            request.palletCount(),
+            request.equipmentType(),
+            request.dangerousGoods(),
+            request.adrClass(),
+            request.temperatureControlled(),
+            request.temperatureMinC(),
+            request.temperatureMaxC(),
+            request.currency()));
   }
 
   public Tender closeTender(Long id) {

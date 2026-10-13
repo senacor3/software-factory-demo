@@ -1,0 +1,68 @@
+/* The create form is wider than the shared form card, so three fields fit in a row. */
+.form-card {
+  max-width: 800px;
+}
+
+.form-group {
+  min-width: 0;
+  margin: 0 0 var(--space-gutter);
+  padding: 0;
+  border: 0;
+}
+
+/* Legends carry DESIGN.md's {typography.title}. */
+.form-group legend {
+  margin-bottom: calc(2 * var(--space-unit));
+  padding: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.form-row-title {
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+}
+
+.form-row {
+  display: grid;
+  gap: 0 calc(2 * var(--space-unit));
+}
+
+.columns-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.columns-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.form-field .form-error {
+  margin: 4px 0 0;
+}
+
+.checkbox-label {
+  display: flex;
+  gap: var(--space-unit);
+  align-items: center;
+  margin-top: 28px;
+}
+
+.checkbox-label input[type='checkbox'] {
+  width: auto;
+  margin: 0;
+}
+
+@media (max-width: 600px) {
+  .columns-2,
+  .columns-3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .checkbox-label {
+    margin-top: 0;
+  }
+}

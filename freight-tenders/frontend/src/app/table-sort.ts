@@ -15,7 +15,15 @@ export function toggleSort<T>(state: SortState<T>, column: keyof T): SortState<T
   return { column, direction: 'ascending' };
 }
 
-export function sortRows<T extends { id: number }>(rows: readonly T[], state: SortState<T>): T[] {
+// Reads the value a column sorts by, for columns whose displayed value is not the row's own
+// property (e.g. a nested object).
+export type SortAccessors<T> = Partial<Record<keyof T, (row: T) => unknown>>;
+
+export function sortRows<T extends { id: number }>(
+  rows: readonly T[],
+  state: SortState<T>,
+  accessors: SortAccessors<T> = {},
+): T[] {
   const newestFirst = (a: T, b: T) => b.id - a.id;
   const { column, direction } = state;
 
@@ -23,8 +31,9 @@ export function sortRows<T extends { id: number }>(rows: readonly T[], state: So
     return [...rows].sort(newestFirst);
   }
 
+  const valueOf = accessors[column] ?? ((row: T) => row[column]);
   const sign = direction === 'ascending' ? 1 : -1;
-  return [...rows].sort((a, b) => sign * compareValues(a[column], b[column]) || newestFirst(a, b));
+  return [...rows].sort((a, b) => sign * compareValues(valueOf(a), valueOf(b)) || newestFirst(a, b));
 }
 
 export function ariaSort<T>(state: SortState<T>, column: keyof T): SortDirection | 'none' {

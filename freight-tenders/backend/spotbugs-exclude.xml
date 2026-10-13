@@ -28,4 +28,12 @@
     <Method name="&lt;init&gt;" />
     <Bug pattern="EI_EXPOSE_REP2" />
   </Match>
+
+  <!-- Spring constructor injection of the shared Clock bean into the constraint validator; the
+       Clock is a singleton collaborator that is deliberately not copied. -->
+  <Match>
+    <Class name="com.senacor.freighttenders.tender.CreateTenderRequestValidator" />
+    <Method name="&lt;init&gt;" />
+    <Bug pattern="EI_EXPOSE_REP2" />
+  </Match>
 </FindBugsFilter>

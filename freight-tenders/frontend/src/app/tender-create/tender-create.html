@@ -2,20 +2,279 @@
   <h1>Neue Ausschreibung erstellen</h1>
 
   <form class="form-card" [formGroup]="form" (ngSubmit)="onSubmit()">
-    <div class="form-field">
-      <label for="origin">Von</label>
-      <input id="origin" type="text" formControlName="origin" data-testid="origin-input" />
-    </div>
+    <fieldset class="form-group" data-testid="group-route">
+      <legend>Strecke</legend>
 
-    <div class="form-field">
-      <label for="destination">Nach</label>
-      <input
-        id="destination"
-        type="text"
-        formControlName="destination"
-        data-testid="destination-input"
-      />
-    </div>
+      <div class="form-row-title" id="origin-title">Von</div>
+      <div class="form-row columns-3" role="group" aria-labelledby="origin-title" formGroupName="origin">
+        <div class="form-field">
+          <label for="origin-country">Land</label>
+          <select id="origin-country" formControlName="country" data-testid="origin-country">
+            @for (country of countries; track country.code) {
+              <option [value]="country.code">{{ country.label }}</option>
+            }
+          </select>
+          @if (errorOf('origin.country'); as message) {
+            <p class="form-error" data-testid="origin-country-error">{{ message }}</p>
+          }
+        </div>
+        <div class="form-field">
+          <label for="origin-postalCode">PLZ</label>
+          <input
+            id="origin-postalCode"
+            type="text"
+            formControlName="postalCode"
+            data-testid="origin-postalCode"
+          />
+          @if (errorOf('origin.postalCode'); as message) {
+            <p class="form-error" data-testid="origin-postalCode-error">{{ message }}</p>
+          }
+        </div>
+        <div class="form-field">
+          <label for="origin-city">Ort</label>
+          <input id="origin-city" type="text" formControlName="city" data-testid="origin-city" />
+          @if (errorOf('origin.city'); as message) {
+            <p class="form-error" data-testid="origin-city-error">{{ message }}</p>
+          }
+        </div>
+      </div>
+
+      <div class="form-row-title" id="destination-title">Nach</div>
+      <div
+        class="form-row columns-3"
+        role="group"
+        aria-labelledby="destination-title"
+        formGroupName="destination"
+      >
+        <div class="form-field">
+          <label for="destination-country">Land</label>
+          <select
+            id="destination-country"
+            formControlName="country"
+            data-testid="destination-country"
+          >
+            @for (country of countries; track country.code) {
+              <option [value]="country.code">{{ country.label }}</option>
+            }
+          </select>
+          @if (errorOf('destination.country'); as message) {
+            <p class="form-error" data-testid="destination-country-error">{{ message }}</p>
+          }
+        </div>
+        <div class="form-field">
+          <label for="destination-postalCode">PLZ</label>
+          <input
+            id="destination-postalCode"
+            type="text"
+            formControlName="postalCode"
+            data-testid="destination-postalCode"
+          />
+          @if (errorOf('destination.postalCode'); as message) {
+            <p class="form-error" data-testid="destination-postalCode-error">{{ message }}</p>
+          }
+        </div>
+        <div class="form-field">
+          <label for="destination-city">Ort</label>
+          <input
+            id="destination-city"
+            type="text"
+            formControlName="city"
+            data-testid="destination-city"
+          />
+          @if (errorOf('destination.city'); as message) {
+            <p class="form-error" data-testid="destination-city-error">{{ message }}</p>
+          }
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset class="form-group" data-testid="group-dates">
+      <legend>Termine</legend>
+
+      <div class="form-row columns-2">
+        <div class="form-field">
+          <label for="pickupDate">Abholung am</label>
+          <input id="pickupDate" type="date" formControlName="pickupDate" data-testid="pickupDate" />
+          @if (errorOf('pickupDate'); as message) {
+            <p class="form-error" data-testid="pickupDate-error">{{ message }}</p>
+          }
+        </div>
+        <div class="form-field">
+          <label for="deliveryDate">Zustellung bis</label>
+          <input
+            id="deliveryDate"
+            type="date"
+            formControlName="deliveryDate"
+            data-testid="deliveryDate"
+          />
+          @if (errorOf('deliveryDate'); as message) {
+            <p class="form-error" data-testid="deliveryDate-error">{{ message }}</p>
+          }
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset class="form-group" data-testid="group-cargo">
+      <legend>Ladung</legend>
+
+      <div class="form-field">
+        <label for="commodity">Warenbeschreibung</label>
+        <input id="commodity" type="text" formControlName="commodity" data-testid="commodity" />
+        @if (errorOf('commodity'); as message) {
+          <p class="form-error" data-testid="commodity-error">{{ message }}</p>
+        }
+      </div>
+
+      <div class="form-row columns-3">
+        <div class="form-field">
+          <label for="weightKg">Gewicht (kg)</label>
+          <input id="weightKg" type="number" formControlName="weightKg" data-testid="weightKg" />
+          @if (errorOf('weightKg'); as message) {
+            <p class="form-error" data-testid="weightKg-error">{{ message }}</p>
+          }
+        </div>
+        <div class="form-field">
+          <label for="loadingMeters">Lademeter</label>
+          <input
+            id="loadingMeters"
+            type="number"
+            step="0.1"
+            formControlName="loadingMeters"
+            data-testid="loadingMeters"
+          />
+          @if (errorOf('loadingMeters'); as message) {
+            <p class="form-error" data-testid="loadingMeters-error">{{ message }}</p>
+          }
+        </div>
+        <div class="form-field">
+          <label for="palletCount">Anzahl Paletten (optional)</label>
+          <input
+            id="palletCount"
+            type="number"
+            formControlName="palletCount"
+            data-testid="palletCount"
+          />
+          @if (errorOf('palletCount'); as message) {
+            <p class="form-error" data-testid="palletCount-error">{{ message }}</p>
+          }
+        </div>
+      </div>
+
+      <div class="form-row columns-2">
+        <div class="form-field">
+          <label class="checkbox-label" for="dangerousGoods">
+            <input
+              id="dangerousGoods"
+              type="checkbox"
+              formControlName="dangerousGoods"
+              data-testid="dangerousGoods"
+            />
+            Gefahrgut (ADR)
+          </label>
+        </div>
+        @if (form.controls.dangerousGoods.value) {
+          <div class="form-field">
+            <label for="adrClass">ADR-Klasse</label>
+            <select id="adrClass" formControlName="adrClass" data-testid="adrClass">
+              <option value="">Bitte wählen</option>
+              @for (adrClass of adrClasses; track adrClass) {
+                <option [value]="adrClass">{{ adrClass }}</option>
+              }
+            </select>
+            @if (errorOf('adrClass'); as message) {
+              <p class="form-error" data-testid="adrClass-error">{{ message }}</p>
+            }
+          </div>
+        }
+      </div>
+
+      <div class="form-row columns-3">
+        <div class="form-field">
+          <label class="checkbox-label" for="temperatureControlled">
+            <input
+              id="temperatureControlled"
+              type="checkbox"
+              formControlName="temperatureControlled"
+              data-testid="temperatureControlled"
+            />
+            Temperaturgeführt
+          </label>
+        </div>
+        @if (form.controls.temperatureControlled.value) {
+          <div class="form-field">
+            <label for="temperatureMinC">Temperatur von (°C)</label>
+            <input
+              id="temperatureMinC"
+              type="number"
+              formControlName="temperatureMinC"
+              data-testid="temperatureMinC"
+            />
+            @if (errorOf('temperatureMinC'); as message) {
+              <p class="form-error" data-testid="temperatureMinC-error">{{ message }}</p>
+            }
+          </div>
+          <div class="form-field">
+            <label for="temperatureMaxC">Temperatur bis (°C)</label>
+            <input
+              id="temperatureMaxC"
+              type="number"
+              formControlName="temperatureMaxC"
+              data-testid="temperatureMaxC"
+            />
+            @if (errorOf('temperatureMaxC'); as message) {
+              <p class="form-error" data-testid="temperatureMaxC-error">{{ message }}</p>
+            }
+          </div>
+        }
+      </div>
+    </fieldset>
+
+    <fieldset class="form-group" data-testid="group-vehicle">
+      <legend>Fahrzeug</legend>
+
+      <div class="form-field">
+        <label for="equipmentType">Fahrzeugtyp</label>
+        <select id="equipmentType" formControlName="equipmentType" data-testid="equipmentType">
+          <option value="">Bitte wählen</option>
+          @for (equipment of equipmentTypes; track equipment.code) {
+            <option [value]="equipment.code">{{ equipment.label }}</option>
+          }
+        </select>
+        @if (errorOf('equipmentType'); as message) {
+          <p class="form-error" data-testid="equipmentType-error">{{ message }}</p>
+        }
+      </div>
+    </fieldset>
+
+    <fieldset class="form-group" data-testid="group-tender">
+      <legend>Ausschreibung</legend>
+
+      <div class="form-row columns-2">
+        <div class="form-field">
+          <label for="bidDeadline">Angebotsfrist</label>
+          <input
+            id="bidDeadline"
+            type="date"
+            formControlName="bidDeadline"
+            data-testid="bidDeadline"
+          />
+          @if (errorOf('bidDeadline'); as message) {
+            <p class="form-error" data-testid="bidDeadline-error">{{ message }}</p>
+          }
+        </div>
+        <div class="form-field">
+          <label for="currency">Währung</label>
+          <select id="currency" formControlName="currency" data-testid="currency">
+            @for (currency of currencies; track currency) {
+              <option [value]="currency">{{ currency }}</option>
+            }
+          </select>
+          @if (errorOf('currency'); as message) {
+            <p class="form-error" data-testid="currency-error">{{ message }}</p>
+          }
+        </div>
+      </div>
+    </fieldset>
 
     @if (submitError()) {
       <p class="form-error" data-testid="submit-error">{{ submitError() }}</p>

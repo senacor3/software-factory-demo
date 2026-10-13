@@ -1,8 +1,11 @@
 # freight-tenders
 
 The freight tender demo app: a Spring Boot backend and an Angular frontend,
-each independently buildable/testable/lintable. A tender is a freight route
-(origin, destination) that is open or closed; while it is open, remarks and
+each independently buildable/testable/lintable. A tender is a spot tender for
+one European road shipment -- origin and destination address, pickup, delivery
+and bid-deadline dates, the cargo (commodity, weight, loading meters, optional
+pallet count, dangerous goods, temperature range), the vehicle type and the
+currency offers are quoted in -- that is open or closed; while it is open, remarks and
 offers can be recorded against it. The frontend lists the tenders, creates new
 ones, and shows one tender with its remarks and offers.
 
@@ -22,8 +25,8 @@ gone on restart.
 
 | Endpoint | Does | Success |
 |---|---|---|
-| `POST /api/tenders` | Creates an open tender from `origin` and `destination` | `201` |
-| `GET /api/tenders` | Lists tenders; optional `?status=OPEN` or `?status=CLOSED` | `200` |
+| `POST /api/tenders` | Creates an open tender from the shipment data (`origin`/`destination` as `{country, postalCode, city}`, `pickupDate`, `deliveryDate`, `bidDeadline`, `commodity`, `weightKg`, `loadingMeters`, optional `palletCount`, `equipmentType`, `dangerousGoods` with `adrClass`, `temperatureControlled` with `temperatureMinC`/`temperatureMaxC`, `currency`); invalid data returns `400` with `violations` | `201` |
+| `GET /api/tenders` | Lists tenders, each with `offerCount` and `lowestOfferAmount` (`null` without offers); optional `?status=OPEN` or `?status=CLOSED` | `200` |
 | `GET /api/tenders/{id}` | Returns one tender with its remarks and offers | `200` |
 | `POST /api/tenders/{id}/close` | Closes the tender | `200` |
 | `POST /api/tenders/{id}/remarks` | Adds a remark (`text`) | `201` |
@@ -46,8 +49,8 @@ Angular (standalone components, SCSS, Vitest for unit tests).
 
 | Route | Page | Shows |
 |---|---|---|
-| `/` | `TenderOverview` | Two tables, "Offene Ausschreibungen" (open) and "Geschlossene Ausschreibungen" (closed); a row opens that tender |
-| `/tenders/new` | `TenderCreate` | A form for origin ("Von") and destination ("Nach"); on success it returns to the overview |
+| `/` | `TenderOverview` | Two tables, "Offene Ausschreibungen" (open) and "Geschlossene Ausschreibungen" (closed); each row shows the route, pickup date, load, vehicle, bid deadline and offer count with the lowest offer; the tables scroll horizontally on narrow screens; a row opens that tender |
+| `/tenders/new` | `TenderCreate` | A form with five field groups (route "Strecke", dates "Termine", cargo "Ladung", vehicle "Fahrzeug", tender "Ausschreibung") for the full shipment data, validated with the backend's rules; on success it returns to the overview |
 | `/tenders/:id` | `TenderDetail` | A "Zurück zur Übersicht" back link, the tender's status, its remarks and offers as two tables, a form to add each, and an "Ausschreibung schließen" button while the tender is open |
 
 ```bash

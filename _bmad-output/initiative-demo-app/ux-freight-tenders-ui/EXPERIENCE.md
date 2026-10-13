@@ -14,8 +14,8 @@ Responsive web, desktop-primary. Angular (standalone components) on the existing
 
 | Surface | Reached from | Purpose |
 |---|---|---|
-| Tender overview (`/`) | App open, "Abbrechen" from either other surface | Two sortable tables — open tenders, closed tenders — and the entry point to create a new one |
-| Create tender (`/tenders/new`) | "Neue Ausschreibung erstellen" link on overview | Form: origin, destination → creates an open tender, returns to overview |
+| Tender overview (`/`) | App open, "Abbrechen" from either other surface | Two sortable tables — open tenders, closed tenders — each with the shipment at a glance (Von, Nach, Abholung, Ladung, Fahrzeug, Angebotsfrist, Angebote), and the entry point to create a new one |
+| Create tender (`/tenders/new`) | "Neue Ausschreibung erstellen" link on overview | Form with five field groups (Strecke, Termine, Ladung, Fahrzeug, Ausschreibung) for the full shipment data → creates an open tender, returns to overview |
 | Tender detail (`/tenders/:id`) | Selecting a row in either overview table; "Zurück zur Übersicht" back link returns to the overview | One tender's full picture: identity, status, a sortable remarks table with an add-form, a sortable offers table with an add-form — both forms disabled once closed |
 
 No surface beyond these three; this redesign changes how they look and how their lists are presented (table vs. plain list), not what they do. → Composition reference: `mockups/tender-overview.html`, `mockups/tender-detail.html`. Spine wins on conflict.
@@ -39,8 +39,8 @@ Behavioral. Visual specs live in `DESIGN.md.Components`.
 |---|---|---|
 | Sortable table | Overview (open/closed tender lists), detail page (remarks, offers) | Select a column header to sort ascending by that column; select the same header again to reverse to descending; select a different header to switch the sort column (always single-column, per the recorded decision). Default sort: newest-first by id until a user sorts, so a newly added row appears at the top. Sort state is page-local — not persisted across navigation. |
 | Back link | Detail page, first element in `<main>`, in every state (loading, error, loaded) | "← Zurück zur Übersicht" navigates to `/`; the arrow is decorative (`aria-hidden`), the German text is the accessible name. |
-| Status pill | Overview table row, detail-page header (inline right of the title, on the same row as the close button) | `status-pill-open`/`status-pill-closed` per `DESIGN.md`; label is "Offen"/"Geschlossen", never the raw backend value. |
-| Create-tender form | `/tenders/new` | Origin/destination required; submit disabled until both are filled. Success navigates to `/`; failure handled per State Patterns → Form submit failed, form state preserved so the user can retry without retyping. |
+| Status pill | Detail-page header only; the overview rows carry no status, their table already says it (inline right of the title, on the same row as the close button) | `status-pill-open`/`status-pill-closed` per `DESIGN.md`; label is "Offen"/"Geschlossen", never the raw backend value. |
+| Create-tender form | `/tenders/new` | Five `<fieldset>` groups with a `<legend>` in `{typography.title}`; fields within a group sit side by side and stack at 600px and narrower. "ADR-Klasse" and the two temperature fields appear only while "Gefahrgut (ADR)" / "Temperaturgeführt" is checked. The same rules as the backend apply: a touched, invalid field shows a German message directly below it in `{colors.error}`, cross-field messages under the field to fix; submit disabled until the form is valid. Success navigates to `/`; failure handled per State Patterns → Form submit failed, form state preserved so the user can retry without retyping. |
 | Add-remark / add-offer form | Detail page, inside each table's own section | One field-set per table (remark: free text; offer: supplier + amount). Submitting adds the new row to that table without a full page reload — at the top by default, or at its sorted position when a column is active. Both forms disable (fields + submit) together when the tender is closed, replaced by one shared explanation line above both — not duplicated per form. |
 | Empty state | Any table with no rows | Centered `{typography.caption}` text inside the table's body area (not a full-page takeover), for example "Keine Bemerkungen vorhanden." |
 
@@ -77,9 +77,9 @@ Behavioral; visual contrast lives in `DESIGN.md` (palette chosen for WCAG AA tex
 
 ### Flow 1 — Lena checks and closes out a tender (Lena, Dispositionsmitarbeiterin, Tuesday morning)
 
-1. Lena opens the app and lands on the overview. Two tables: "Offene Ausschreibungen" above "Geschlossene Ausschreibungen", each with sortable columns (Von, Nach).
+1. Lena opens the app and lands on the overview. Two tables: "Offene Ausschreibungen" above "Geschlossene Ausschreibungen", each with seven columns — Von, Nach, Abholung, Ladung, Fahrzeug, Angebotsfrist, Angebote — all but Fahrzeug sortable, so she sees route, dates, load and offer count without opening a tender.
 2. She selects the "Nach" header on the open-tenders table to sort by destination — she's looking for everything headed to Rotterdam today.
-3. She finds the Hamburg → Rotterdam row and selects it, landing on its detail page: status pill "Offen", one existing remark, two offers in a sortable table.
+3. She finds the Hamburg → Rotterdam row, checks its pickup date, load and lowest offer in the row itself, and selects it, landing on its detail page: status pill "Offen", one existing remark, two offers in a sortable table.
 4. She selects the offers table's "Betrag" header to sort by amount, confirms the lowest offer is reasonable, and adds a remark noting she's accepted it.
 5. **Climax:** the remark appears in the table instantly — no reload, no navigation away — and she can see her note sitting right above the offer she referenced, both still visible, before she moves to the next tender in her queue.
 
@@ -88,10 +88,10 @@ Failure: the remark submission fails (backend hiccup) — inline error appears b
 ### Flow 2 — Creating a new tender and watching it land (Lena, later that morning)
 
 1. From the overview, Lena selects "Neue Ausschreibung erstellen".
-2. She fills "Von" with "Bremen" and "Nach" with "Antwerpen", then selects "Erstellen".
+2. She fills the five groups: "Strecke" with Bremen (DE) as "Von" and Antwerpen (BE) as "Nach", "Termine" with pickup and delivery dates, "Ladung" with the commodity, weight and loading meters, "Fahrzeug" with a vehicle type, and "Ausschreibung" with the bid deadline and currency. Then she selects "Erstellen".
 3. **Climax:** she's returned to the overview, and the new Bremen → Antwerpen tender is already sitting at the top of the open-tenders table — in the default newest-first order, since sort state is page-local and resets on every visit — so she sees her own action land without having to look for it.
 
-Failure: she leaves "Nach" empty and selects "Erstellen" — nothing happens (button was disabled until both fields were filled), so there's no error to recover from in the first place.
+Failure: she sets the delivery date before the pickup date — "Die Zustellung darf nicht vor der Abholung liegen." appears under "Zustellung bis" and "Erstellen" stays disabled until she corrects it, so there's no failed request to recover from in the first place.
 
 ## Inspiration & Anti-patterns
 

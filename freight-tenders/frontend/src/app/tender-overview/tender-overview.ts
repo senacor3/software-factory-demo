@@ -1,11 +1,35 @@
 import { Component, inject, OnInit, WritableSignal, computed, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { catchError, of } from 'rxjs';
-import { SortState, UNSORTED, ariaSort, sortIndicator, sortRows, toggleSort } from '../table-sort';
-import { STATUS_LABELS, TenderApiService, TenderStatus, TenderSummary } from '../tender-api';
+import {
+  SortAccessors,
+  SortState,
+  UNSORTED,
+  ariaSort,
+  sortIndicator,
+  sortRows,
+  toggleSort,
+} from '../table-sort';
+import { EQUIPMENT_LABELS, TenderApiService, TenderStatus, TenderSummary } from '../tender-api';
+import {
+  cargoHint,
+  deadlineHint,
+  formatAmount,
+  formatDate,
+  formatLoadingMeters,
+  formatWeight,
+  localToday,
+} from '../tender-format';
 
 const LOAD_ERROR_MESSAGE =
   'Die Ausschreibungen konnten nicht geladen werden. Bitte versuchen Sie es später erneut.';
+
+// Each column sorts by the underlying value of its first line: Von and Nach by city, the rest by
+// their own property (ISO dates sort correctly as strings, weightKg and offerCount as numbers).
+const SORT_ACCESSORS: SortAccessors<TenderSummary> = {
+  origin: (tender) => tender.origin.city,
+  destination: (tender) => tender.destination.city,
+};
 
 @Component({
   selector: 'app-tender-overview',
@@ -21,13 +45,35 @@ export class TenderOverview implements OnInit {
   protected readonly loadError = signal<string | null>(null);
   protected readonly loading = signal<boolean>(true);
 
-  protected readonly statusLabels = STATUS_LABELS;
+  protected readonly equipmentLabels = EQUIPMENT_LABELS;
   protected readonly ariaSort = ariaSort;
   protected readonly sortIndicator = sortIndicator;
+  protected readonly formatDate = formatDate;
+  protected readonly formatWeight = formatWeight;
+  protected readonly formatLoadingMeters = formatLoadingMeters;
+  protected readonly formatAmount = formatAmount;
+  protected readonly cargoHint = cargoHint;
+  protected readonly deadlineHint = deadlineHint;
 
-  protected readonly sortableColumns: { key: 'origin' | 'destination'; label: string }[] = [
-    { key: 'origin', label: 'Von' },
-    { key: 'destination', label: 'Nach' },
+  // The browser's local date, read once per render pass of the template.
+  protected today(): string {
+    return localToday();
+  }
+
+  // Ladung sorts by weightKg and Angebote by offerCount; Fahrzeug is the one plain header.
+  protected readonly columns: {
+    key: keyof TenderSummary;
+    label: string;
+    sortable: boolean;
+    numeric?: boolean;
+  }[] = [
+    { key: 'origin', label: 'Von', sortable: true },
+    { key: 'destination', label: 'Nach', sortable: true },
+    { key: 'pickupDate', label: 'Abholung', sortable: true },
+    { key: 'weightKg', label: 'Ladung', sortable: true },
+    { key: 'equipmentType', label: 'Fahrzeug', sortable: false },
+    { key: 'bidDeadline', label: 'Angebotsfrist', sortable: true },
+    { key: 'offerCount', label: 'Angebote', sortable: true, numeric: true },
   ];
 
   protected readonly tables = [
@@ -93,6 +139,7 @@ export class TenderOverview implements OnInit {
       sortRows(
         this.tenders().filter((tender) => tender.status === status),
         sort(),
+        SORT_ACCESSORS,
       ),
     );
 
