@@ -42,7 +42,12 @@ mvn -B verify        # build + test
 mvn spotless:check   # lint (formatting)
 mvn spotbugs:check   # static analysis (bug patterns)
 mvn spring-boot:run  # run locally on :8080
+mvn spring-boot:run -Dspring-boot.run.profiles=demo  # same, seeded with eight demo tenders
 ```
+
+With the `demo` profile, `DemoDataSeeder` fills an empty database at startup with eight
+tenders (six open, one awarded, one closed) whose dates are relative to today. Without
+the profile, nothing is seeded.
 
 ## Frontend (`frontend/`)
 
@@ -67,8 +72,8 @@ npm start                # run locally on :4200, proxying /api to localhost:8080
 ## Running both together
 
 ```bash
-# terminal 1
-cd backend && mvn spring-boot:run
+# terminal 1 (the demo profile seeds sample tenders)
+cd backend && mvn spring-boot:run -Dspring-boot.run.profiles=demo
 
 # terminal 2
 cd frontend && npm start
