@@ -2,8 +2,8 @@
 schema_version: 1
 story_slug: award-tender-to-offer
 stage: checks
-status: findings-open
-updated: 2026-10-13T11:14:33Z
+status: unresolved-after-cap
+updated: 2026-10-13T11:14:59Z
 fix_cycle: 2
 ---
 
