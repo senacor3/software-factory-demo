@@ -1,7 +1,7 @@
 ---
 title: 'freight-tenders gets real static_analysis commands -- SpotBugs backend, ESLint bug-pattern frontend, both pipelines'
 type: 'feature'
-ticket: '2'
+split_from_ticket: '2' # second of ticket 2's two plans; not named 'ticket' so tickets.py joins only story-static-analysis-check-plan.md
 created: '2026-10-12'
 status: 'done'
 route: 'full'

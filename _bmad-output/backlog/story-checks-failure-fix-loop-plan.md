@@ -3,7 +3,7 @@ title: 'A failed mechanical check retries through a bounded agent fix loop, not 
 type: 'feature'
 ticket: '1'
 created: '2026-10-12'
-status: 'built'
+status: done
 baseline_revision: '747e31ed863013905fabe5788458999e4f877346'
 route: 'full'
 route_source: 'auto'
