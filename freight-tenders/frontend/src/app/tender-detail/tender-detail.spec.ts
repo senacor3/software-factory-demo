@@ -849,14 +849,15 @@ describe('TenderDetail', () => {
       click(element, 'award-offer', 0);
       click(element, 'award-confirm');
 
-      const req = httpMock.expectOne('/api/tenders/1/offers/20/award');
+      // Offers are listed newest-first, so row 0 is offer 21.
+      const req = httpMock.expectOne('/api/tenders/1/offers/21/award');
       expect(
         element.querySelector<HTMLButtonElement>('[data-testid="award-confirm"]')?.disabled,
       ).toBe(true);
       expect(
         element.querySelector<HTMLButtonElement>('[data-testid="award-cancel"]')?.disabled,
       ).toBe(true);
-      req.flush({ ...AWARD_TENDER, status: 'AWARDED', awardedOfferId: 20 });
+      req.flush({ ...AWARD_TENDER, status: 'AWARDED', awardedOfferId: 21 });
     });
 
     it('shows a German alert and keeps the tender open when awarding fails', async () => {
@@ -865,8 +866,8 @@ describe('TenderDetail', () => {
       click(element, 'award-offer', 0);
       click(element, 'award-confirm');
       httpMock
-        .expectOne('/api/tenders/1/offers/20/award')
-        .flush({}, { status: 409, statusText: 'Conflict' });
+        .expectOne('/api/tenders/1/offers/21/award')
+        .flush({},{ status: 409, statusText: 'Conflict' });
       harness.detectChanges();
 
       const error = element.querySelector('[data-testid="award-error"]');
@@ -879,7 +880,7 @@ describe('TenderDetail', () => {
     it('updates the page in place after a successful award', async () => {
       const element = await render(AWARD_TENDER);
 
-      click(element, 'award-offer', 1);
+      click(element, 'award-offer', 0);
       click(element, 'award-confirm');
       httpMock
         .expectOne('/api/tenders/1/offers/21/award')

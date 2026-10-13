@@ -176,24 +176,20 @@ describe('TenderOverview', () => {
     return [tenderSummary({ id: 1, ...overrides })];
   }
 
-  it('renders the seven column headers in order, in both tables, with no status header or pill', () => {
+  it('renders the seven column headers in the open table and an extra Status header in the second table', () => {
     const compiled = load(SORTABLE_TENDERS);
+    const base = ['Von', 'Nach', 'Abholung', 'Ladung', 'Fahrzeug', 'Angebotsfrist', 'Angebote'];
 
-    for (const table of ['open-tenders', 'closed-tenders']) {
+    for (const [table, expected] of [
+      ['open-tenders', base],
+      ['closed-tenders', [...base, 'Status']],
+    ] as const) {
       const headers = Array.from(
         compiled.querySelectorAll(`[data-testid="${table}"] thead th`),
       ).map((th) => th.textContent?.trim());
-      expect(headers).toEqual([
-        'Von',
-        'Nach',
-        'Abholung',
-        'Ladung',
-        'Fahrzeug',
-        'Angebotsfrist',
-        'Angebote',
-      ]);
+      expect(headers).toEqual(expected);
     }
-    expect(compiled.querySelector('[class*="pill"]')).toBeFalsy();
+    expect(compiled.querySelector('[data-testid="open-tenders"] [class*="pill"]')).toBeFalsy();
   });
 
   it('shows pickup date, load line, German vehicle label, deadline and offer count in a row', () => {
