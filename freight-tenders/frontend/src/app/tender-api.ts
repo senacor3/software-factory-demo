@@ -130,11 +130,10 @@ export interface AddOfferRequest {
 }
 
 // The detail response lists the offers themselves instead of summarising them.
-export interface TenderDetail
-  extends Omit<
-    TenderSummary,
-    'offerCount' | 'lowestOfferAmount' | 'awardedSupplierName' | 'awardedAmount'
-  > {
+export interface TenderDetail extends Omit<
+  TenderSummary,
+  'offerCount' | 'lowestOfferAmount' | 'awardedSupplierName' | 'awardedAmount'
+> {
   awardedOfferId: number | null;
   remarks: RemarkSummary[];
   offers: OfferSummary[];
@@ -152,6 +151,10 @@ export class TenderApiService {
 
   create(request: CreateTenderRequest): Observable<TenderSummary> {
     return this.http.post<TenderSummary>('/api/tenders', request);
+  }
+
+  update(id: number, data: CreateTenderRequest): Observable<TenderSummary> {
+    return this.http.put<TenderSummary>(`/api/tenders/${id}`, data);
   }
 
   detail(id: number): Observable<TenderDetail> {

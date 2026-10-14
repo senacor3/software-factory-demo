@@ -599,6 +599,23 @@ describe('TenderDetail', () => {
     return element.querySelector<HTMLButtonElement>('[data-testid="close-tender"]');
   }
 
+  it('shows a Bearbeiten link to the edit page, left of the close button, for an open tender', async () => {
+    const element = await render(OPEN_TENDER);
+
+    const link = element.querySelector<HTMLAnchorElement>('[data-testid="edit-tender"]')!;
+    expect(link.textContent?.trim()).toBe('Bearbeiten');
+    expect(link.getAttribute('href')).toBe('/tenders/1/edit');
+    expect(link.classList.contains('btn-secondary')).toBe(true);
+    expect(
+      link.compareDocumentPosition(closeButton(element)!) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('shows no Bearbeiten link for an awarded or a closed tender', async () => {
+    const closed = await render(CLOSED_TENDER);
+    expect(closed.querySelector('[data-testid="edit-tender"]')).toBeNull();
+  });
+
   it('shows a secondary German close button for an open tender', async () => {
     const element = await render(OPEN_TENDER);
 
@@ -867,7 +884,7 @@ describe('TenderDetail', () => {
       click(element, 'award-confirm');
       httpMock
         .expectOne('/api/tenders/1/offers/21/award')
-        .flush({},{ status: 409, statusText: 'Conflict' });
+        .flush({}, { status: 409, statusText: 'Conflict' });
       harness.detectChanges();
 
       const error = element.querySelector('[data-testid="award-error"]');
@@ -895,12 +912,12 @@ describe('TenderDetail', () => {
       );
       expect(element.querySelector('[data-testid="close-tender"]')).toBeNull();
       expect(element.querySelector('[data-testid="award-offer"]')).toBeNull();
-      expect(element.querySelector<HTMLButtonElement>('[data-testid="offer-submit"]')?.disabled).toBe(
-        true,
-      );
-      expect(element.querySelector<HTMLButtonElement>('[data-testid="remark-submit"]')?.disabled).toBe(
-        true,
-      );
+      expect(
+        element.querySelector<HTMLButtonElement>('[data-testid="offer-submit"]')?.disabled,
+      ).toBe(true);
+      expect(
+        element.querySelector<HTMLButtonElement>('[data-testid="remark-submit"]')?.disabled,
+      ).toBe(true);
       const explanation = element.querySelector('[data-testid="awarded-explanation"]');
       expect(explanation?.textContent).toContain('vergeben');
       expect(document.activeElement).toBe(explanation);

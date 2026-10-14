@@ -19,15 +19,23 @@
       </div>
 
       @if (isOpen()) {
-        <button
-          type="button"
-          class="btn-secondary"
-          data-testid="close-tender"
-          [disabled]="closing()"
-          (click)="onClose()"
-        >
-          Ausschreibung schließen
-        </button>
+        <div class="page-header-actions">
+          <a
+            class="btn-secondary"
+            [routerLink]="'/tenders/' + currentTender.id + '/edit'"
+            data-testid="edit-tender"
+            >Bearbeiten</a
+          >
+          <button
+            type="button"
+            class="btn-secondary"
+            data-testid="close-tender"
+            [disabled]="closing()"
+            (click)="onClose()"
+          >
+            Ausschreibung schließen
+          </button>
+        </div>
       }
     </header>
 
@@ -289,8 +297,11 @@
             </tr>
           } @empty {
             <tr>
-              <td class="empty-cell" [attr.colspan]="showAwardColumn() ? 6 : 5"
-                data-testid="offers-empty">
+              <td
+                class="empty-cell"
+                [attr.colspan]="showAwardColumn() ? 6 : 5"
+                data-testid="offers-empty"
+              >
                 Keine Angebote vorhanden.
               </td>
             </tr>

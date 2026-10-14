@@ -39,6 +39,33 @@ describe('TenderApiService', () => {
     req.flush([]);
   });
 
+  it('calls PUT /api/tenders/{id} with the request and emits the returned summary', () => {
+    const request: CreateTenderRequest = {
+      origin: { country: 'DE', postalCode: '20457', city: 'Hamburg' },
+      destination: { country: 'NL', postalCode: '3011 AA', city: 'Rotterdam' },
+      pickupDate: '2099-10-20',
+      deliveryDate: '2099-10-22',
+      bidDeadline: '2099-10-16',
+      commodity: 'Maschinenteile',
+      weightKg: 18500,
+      loadingMeters: 13.6,
+      equipmentType: 'CURTAIN_SIDER',
+      dangerousGoods: false,
+      temperatureControlled: false,
+      currency: 'EUR',
+    };
+    let result: unknown;
+    service.update(5, request).subscribe((summary) => (result = summary));
+
+    const req = httpMock.expectOne('/api/tenders/5');
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual(request);
+    const summary = tenderSummary({ id: 5 });
+    req.flush(summary);
+
+    expect(result).toEqual(summary);
+  });
+
   it('calls POST /api/tenders/{id}/close and emits the returned summary', () => {
     let result: unknown;
     service.close(5).subscribe((summary) => (result = summary));
