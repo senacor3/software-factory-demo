@@ -1,0 +1,28 @@
+<main class="page">
+  <a class="back-link" [routerLink]="detailLink()" data-testid="back-link"
+    ><span aria-hidden="true">←</span> Zurück zur Ausschreibung</a
+  >
+
+  @if (loading()) {
+    <p class="state-message" data-testid="loading">Ausschreibung wird geladen…</p>
+  } @else if (loadError()) {
+    <p class="state-message state-message-error" data-testid="load-error">{{ loadError() }}</p>
+  } @else if (!editable()) {
+    <p class="notice" data-testid="not-editable">{{ notEditableMessage }}</p>
+  } @else {
+    <h1>Ausschreibung bearbeiten</h1>
+
+    @if (hasOffers()) {
+      <p class="notice" data-testid="locked-fields-notice">{{ lockedFieldsNotice }}</p>
+    }
+
+    <app-tender-form
+      [form]="form"
+      submitLabel="Speichern"
+      [cancelLink]="detailLink()"
+      [submitDisabled]="submitting() || unchanged()"
+      [submitError]="submitError()"
+      (submitted)="onSubmit()"
+    />
+  }
+</main>

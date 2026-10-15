@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -640,5 +641,87 @@ class TenderControllerTest {
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.violations.length()").value(1))
         .andExpect(jsonPath("$.violations[0].field").value("deliveryDate"));
+  }
+
+  @Test
+  void updateTenderReturns200WithTheUpdatedTender() throws Exception {
+    Tender tender = TenderFixtures.tender();
+    ReflectionTestUtils.setField(tender, "id", 1L);
+    given(tenderService.updateTender(eq(1L), any(CreateTenderRequest.class))).willReturn(tender);
+
+    mockMvc
+        .perform(
+            put("/api/tenders/1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(TenderFixtures.VALID_REQUEST_JSON))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value(1))
+        .andExpect(jsonPath("$.commodity").value("Maschinenteile auf Europaletten"))
+        .andExpect(jsonPath("$.status").value("OPEN"));
+
+    ArgumentCaptor<CreateTenderRequest> captor = ArgumentCaptor.forClass(CreateTenderRequest.class);
+    verify(tenderService).updateTender(eq(1L), captor.capture());
+    assertThat(captor.getValue().pickupDate().toString()).isEqualTo("2026-10-20");
+  }
+
+  @Test
+  void updateTenderOnUnknownIdReturns404() throws Exception {
+    given(tenderService.updateTender(eq(9L), any(CreateTenderRequest.class)))
+        .willThrow(new TenderNotFoundException(9L));
+
+    mockMvc
+        .perform(
+            put("/api/tenders/9")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(TenderFixtures.VALID_REQUEST_JSON))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  void updateTenderOnClosedTenderReturns409() throws Exception {
+    given(tenderService.updateTender(eq(1L), any(CreateTenderRequest.class)))
+        .willThrow(new TenderClosedException(1L));
+
+    mockMvc
+        .perform(
+            put("/api/tenders/1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(TenderFixtures.VALID_REQUEST_JSON))
+        .andExpect(status().isConflict());
+  }
+
+  @Test
+  void updateTenderChangingLockedFieldsReturns409NamingThem() throws Exception {
+    given(tenderService.updateTender(eq(1L), any(CreateTenderRequest.class)))
+        .willThrow(new TenderLockedFieldsException(1L, List.of("currency", "commodity")));
+
+    mockMvc
+        .perform(
+            put("/api/tenders/1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(TenderFixtures.VALID_REQUEST_JSON))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("currency")))
+        .andExpect(jsonPath("$.path").value("/api/tenders/1"));
+  }
+
+  @Test
+  void updateTenderWithViolationsReturns400InTheStandardShape() throws Exception {
+    given(tenderService.updateTender(eq(1L), any(CreateTenderRequest.class)))
+        .willThrow(
+            new TenderRequestInvalidException(
+                List.of(
+                    new TenderExceptionHandler.Violation(
+                        "bidDeadline", "must not be in the past"))));
+
+    mockMvc
+        .perform(
+            put("/api/tenders/1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(TenderFixtures.VALID_REQUEST_JSON))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error").value("Bad Request"))
+        .andExpect(jsonPath("$.violations[0].field").value("bidDeadline"))
+        .andExpect(jsonPath("$.path").value("/api/tenders/1"));
   }
 }

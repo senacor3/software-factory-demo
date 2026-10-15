@@ -1,0 +1,19 @@
+{
+  "status": "pass",
+  "command": [
+    "npm",
+    "--prefix",
+    "freight-tenders/frontend",
+    "ci"
+  ],
+  "returncode": 0,
+  "detail": "",
+  "commands": [
+    [
+      "npm",
+      "--prefix",
+      "freight-tenders/frontend",
+      "ci"
+    ]
+  ]
+}

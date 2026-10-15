@@ -5,15 +5,20 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** REST API for creating, closing, listing and inspecting tenders, and recording remarks/offers. */
+/**
+ * REST API for creating, updating, closing, listing and inspecting tenders, and recording
+ * remarks/offers.
+ */
 @RestController
 @RequestMapping("/api/tenders")
 public class TenderController {
@@ -26,9 +31,15 @@ public class TenderController {
 
   @PostMapping("")
   public ResponseEntity<TenderResponse> createTender(
-      @Valid @RequestBody CreateTenderRequest request) {
+      @Validated(CreateChecks.class) @RequestBody CreateTenderRequest request) {
     Tender tender = tenderService.createTender(request);
     return ResponseEntity.status(HttpStatus.CREATED).body(TenderResponse.from(tender));
+  }
+
+  @PutMapping("/{id}")
+  public TenderResponse updateTender(
+      @PathVariable Long id, @RequestBody CreateTenderRequest request) {
+    return TenderResponse.from(tenderService.updateTender(id, request));
   }
 
   @PostMapping("/{id}/close")

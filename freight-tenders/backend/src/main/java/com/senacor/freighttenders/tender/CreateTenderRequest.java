@@ -21,7 +21,7 @@ import java.time.LocalDate;
  * validator reports on let Spring's binding result read the rejected value of a class-level
  * violation on a record, which has no JavaBean getters of its own.
  */
-@ValidCreateTenderRequest
+@ValidCreateTenderRequest(groups = CreateChecks.class)
 public record CreateTenderRequest(
     @NotNull @Valid AddressRequest origin,
     @NotNull @Valid AddressRequest destination,
