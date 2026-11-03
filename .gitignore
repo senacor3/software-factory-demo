@@ -28,3 +28,17 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+# Terraform local state and provider cache -- never committed.
+# .terraform.lock.hcl is deliberately NOT listed here: Terraform's own
+# convention is to commit it, pinning provider versions reproducibly
+# across machines/runs.
+.terraform/
+*.tfstate
+*.tfstate.backup
+
+# infra/main.tf's own packaging-step outputs (unzipped build dir + deployable
+# zip, from local.build_dir / archive_file's output_path) -- reproducible
+# from orchestrator/ on every `terraform apply`, never deliverables.
+infra/build/
+infra/lambda_package.zip
