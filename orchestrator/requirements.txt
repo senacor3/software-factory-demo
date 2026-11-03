@@ -1,0 +1,3 @@
+# Deliberately empty: the stub handler is stdlib-only (json). boto3 is
+# pre-bundled in the Lambda Python runtime, so it needs no pin here either.
+# Add real pins only when a dependency is actually imported by orchestrator/ code.
