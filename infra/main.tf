@@ -24,6 +24,9 @@ locals {
   build_dir     = "${path.module}/build"
   function_name = "light-factory-orchestrator"
   table_name    = "light-factory-orchestrator-state"
+  # Must match `_GITHUB_APP_SECRET_NAME` in orchestrator/handler.py -- the
+  # Lambda's IAM role is scoped to read only this one secret's ARN (AD-18).
+  github_app_secret_name = "light-factory-orchestrator-github-app"
 }
 
 # Packaging: install the (currently empty) requirements.txt pins alongside
@@ -33,6 +36,7 @@ resource "null_resource" "install_dependencies" {
   triggers = {
     requirements_hash = filesha256("${path.module}/../orchestrator/requirements.txt")
     handler_hash      = filesha256("${path.module}/../orchestrator/handler.py")
+    github_app_hash   = filesha256("${path.module}/../orchestrator/github_app.py")
   }
 
   provisioner "local-exec" {
@@ -40,7 +44,9 @@ resource "null_resource" "install_dependencies" {
       rm -rf "${local.build_dir}"
       mkdir -p "${local.build_dir}"
       cp "${path.module}/../orchestrator/handler.py" "${local.build_dir}/"
-      pip install --quiet -r "${path.module}/../orchestrator/requirements.txt" -t "${local.build_dir}"
+      cp "${path.module}/../orchestrator/github_app.py" "${local.build_dir}/"
+      pip install --quiet -r "${path.module}/../orchestrator/requirements.txt" -t "${local.build_dir}" \
+        --platform manylinux2014_x86_64 --implementation cp --python-version 3.13 --only-binary=:all:
     EOT
   }
 }
@@ -100,6 +106,47 @@ resource "aws_iam_role_policy" "lambda_dynamodb" {
         "dynamodb:PutItem",
       ]
       Resource = aws_dynamodb_table.orchestrator_state.arn
+    }]
+  })
+}
+
+# GitHub App credentials: human creates and installs the App via GitHub's
+# web UI (no Terraform provider can create the App resource itself), then
+# supplies App ID / installation ID / private key as the three sensitive
+# variables below. One secret, one JSON blob -- never hardcoded, never
+# committed.
+resource "aws_secretsmanager_secret" "github_app" {
+  name = local.github_app_secret_name
+
+  # No data-loss risk from skipping AWS's default 30-day soft-delete
+  # window -- the secret's content is always re-suppliable from the same
+  # GitHub App credentials. Without this, a destroy+re-apply cycle during
+  # local iteration would fail trying to recreate a secret with the same
+  # name until that window elapsed.
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "github_app" {
+  secret_id = aws_secretsmanager_secret.github_app.id
+  secret_string = jsonencode({
+    app_id          = var.github_app_id
+    installation_id = var.github_app_installation_id
+    private_key_pem = var.github_app_private_key_pem
+  })
+}
+
+# Least-privilege: this Lambda's role can read only this one secret's ARN,
+# never any other secret in the account (AD-18).
+resource "aws_iam_role_policy" "lambda_github_app_secret" {
+  name = "lambda-github-app-secret"
+  role = aws_iam_role.lambda_exec.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["secretsmanager:GetSecretValue"]
+      Resource = aws_secretsmanager_secret.github_app.arn
     }]
   })
 }

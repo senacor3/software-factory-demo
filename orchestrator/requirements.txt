@@ -1,3 +1,8 @@
-# Deliberately empty: the stub handler is stdlib-only (json). boto3 is
-# pre-bundled in the Lambda Python runtime, so it needs no pin here either.
-# Add real pins only when a dependency is actually imported by orchestrator/ code.
+# boto3 is pre-bundled in the Lambda Python runtime, so it needs no pin
+# here. Add real pins only when a dependency is actually imported by
+# orchestrator/ code.
+
+# GitHub App auth requires RS256-signed JWTs; Python's stdlib has no
+# RSA-signing primitive suitable for this without a crypto backend, and
+# `cryptography` is PyJWT's standard one (see github_app.py).
+PyJWT[crypto]
