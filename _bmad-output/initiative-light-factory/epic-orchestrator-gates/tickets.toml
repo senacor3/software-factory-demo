@@ -1,0 +1,152 @@
+# tickets.toml — epic-orchestrator-gates's agreed children.
+# Two lanes converge at entry 5: the AWS/orchestrator lane (1 -> 2 -> 3) and the
+# GitHub Actions workflow-split lane (4), which can build in parallel with 1-3.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Orchestrator skeleton: Lambda, Function URL, DynamoDB via Terraform"
+description = "Stands up the AWS side from scratch via Terraform: a stateless Lambda fronted by a Lambda Function URL (not API Gateway), and a DynamoDB table keyed on the composite partition key story_slug#run_id for orchestrator control-plane state. Single environment/single AWS account, applied from a developer's local machine."
+verify = "A request to the deployed Function URL gets a response; a manually-inserted DynamoDB item round-trips through a read."
+covers = ["CAP-3", "CAP-8"]
+after = []
+hitl = true
+risk = "medium"
+unknown = "Exact DynamoDB item schema beyond the composite key, and Terraform's own state backend (local tfstate, consistent with deploying from local for now) -- settled as this entry builds."
+references = ["architecture-light-factory/architecture-light-factory.md#ad-17", "architecture-light-factory/architecture-light-factory.md#ad-22"]
+
+[[entry]]
+id = 2
+type = "story"
+title = "GitHub App registration and orchestrator-to-GitHub auth"
+description = "Registers a dedicated GitHub App (scoped permissions: pull_requests, issues, actions -- no admin), installs it on this repo, stores its private key in AWS Secrets Manager, and wires the Lambda to mint short-lived installation tokens and call the GitHub API with them."
+verify = "The Lambda posts a real comment on a test PR using a freshly minted installation token."
+covers = ["CAP-3", "CAP-8"]
+after = [1]
+hitl = true
+risk = "high"
+notes = ["Names a check outside its own criteria: the user confirms the App's exact permission scopes before install."]
+references = ["architecture-light-factory/architecture-light-factory.md#ad-18"]
+
+[[entry]]
+id = 3
+type = "story"
+title = "Webhook-signature verification and the 3-caller auth model"
+description = "The Function URL's handler distinguishes and authenticates three caller types: GitHub webhooks (signature verification), stage-completion callbacks (a distinct shared secret), and the UI (GitHub OAuth session token) -- the third stubbed/reserved here per AD-17/AD-23 so epic-pipeline-dashboard doesn't have to reopen this file."
+verify = "An unsigned/forged webhook is rejected; a correctly-signed GitHub webhook and a correctly-authenticated stage-callback both succeed; an unrecognized caller is rejected with a clear reason."
+covers = ["CAP-3", "CAP-8"]
+after = [1, 2]
+hitl = false
+risk = "high"
+notes = ["Names a check outside its own criteria: a deliberate forged-signature attempt is tested, not just reviewed."]
+references = ["architecture-light-factory/architecture-light-factory.md#ad-17", "architecture-light-factory/architecture-light-factory.md#ad-20", "architecture-light-factory/architecture-light-factory.md#ad-23"]
+
+[[entry]]
+id = 4
+type = "story"
+title = "Split the single workflow into three dispatchable files"
+description = "Splits .github/workflows/software-factory.yml into three separate workflow files (analysis / implementation-checks-review / merge), each triggered by workflow_dispatch and accepting story-slug/run-id as inputs instead of deriving them internally. The implementation-checks-review file keeps its internal needs: chaining unchanged. No gate-mechanism change in this entry -- the old Environments still gate exactly as before, just now scoped to jobs living in three files instead of one."
+verify = "A manual workflow_dispatch of each of the three files, in sequence, produces the same result as today's single-workflow run on a real test story."
+covers = ["CAP-9"]
+after = []
+hitl = false
+risk = "medium"
+notes = ["Names a check outside its own criteria: a full real story run end to end before this entry is considered done, since a mistake here blocks every future run."]
+references = ["architecture-light-factory/architecture-light-factory.md#ad-8", "architecture-light-factory/architecture-light-factory.md#structural-seed"]
+
+[[entry]]
+id = 5
+type = "story"
+title = "Gate 1 comment grammar wired live; plan-approval Environment removed"
+description = "The orchestrator receives issue_comment webhooks on the PR and parses /approve, /rework <feedback>, /reject. /approve workflow_dispatches the implementation-checks-review workflow (entry 4) with the correlation branch name; /rework appends the feedback to the story file and re-dispatches analysis; /reject marks the run terminal in DynamoDB and comments. The plan-approval GitHub Environment is removed from this gate's path (not yet deleted from repo settings -- that's entry 10)."
+verify = "Posting /approve on a real test PR triggers the implementation-checks-review dispatch; /rework appends feedback and re-dispatches analysis; /reject halts the run and comments, with no plan-approval Environment review requested anywhere in the path."
+covers = ["CAP-3"]
+after = [3, 4]
+hitl = false
+risk = "high"
+notes = ["Names a check outside its own criteria: a human watches a real run exercise all three commands before trusting it unattended."]
+references = ["architecture-light-factory/architecture-light-factory.md#ad-2", "architecture-light-factory/architecture-light-factory.md#ad-13"]
+
+[[entry]]
+id = 6
+type = "story"
+title = "Stage-completion callback"
+description = "Adds a final step to each of the three workflows that POSTs its own concrete stage status (AD-10's enum) to the orchestrator's Function URL, authenticated via entry 3's shared secret. The orchestrator updates its DynamoDB row and advances or halts accordingly, rather than relying on GitHub's generic workflow_run event. Owns posting the plan-approval gate summary PR comment (AD-4) when the analysis workflow's callback reports ready-for-review/awaiting-clarification/clarification-cap-reached -- the Lambda orchestrator posts it directly (via entry 2's GitHub App token), since the analysis job's own token is scoped only to AD-12's branch/PR-open script, not to posting a summary. Serialized after entry 5 (same orchestrator/handler.py file)."
+verify = "A real dispatch of the analysis workflow leaves the orchestrator's DynamoDB row correctly reflecting ready-for-review or awaiting-clarification, matching the git-committed state file, and the plan-approval summary appears as a PR comment."
+covers = ["CAP-3", "CAP-8"]
+after = [3, 4, 5]
+hitl = false
+risk = "medium"
+references = ["architecture-light-factory/architecture-light-factory.md#ad-17", "architecture-light-factory/architecture-light-factory.md#ad-20"]
+
+[[entry]]
+id = 7
+type = "story"
+title = "Gate 2 comment grammar wired live; evidence-approval Environment removed"
+description = "Same comment-grammar mechanism as entry 5, now on the evidence-approval summary's PR comment thread: /approve workflow_dispatches the merge workflow (entry 4's split-out merge.yml, still a plain deterministic merge at this point -- conflict resolution lands in entry 8); /reject is terminal. The evidence-approval GitHub Environment is removed from this gate's path. Reuses entry 5's PR-comment-command-parsing helper rather than reimplementing it."
+verify = "Posting /approve on the evidence-approval comment triggers the merge workflow and the branch merges; /reject halts the run and comments, with no evidence-approval Environment review requested anywhere in the path."
+covers = ["CAP-8", "CAP-9"]
+after = [5, 6]
+hitl = false
+risk = "high"
+notes = ["Names a check outside its own criteria: a human watches a real run merge through this path before trusting it unattended."]
+references = ["architecture-light-factory/architecture-light-factory.md#ad-2", "architecture-light-factory/architecture-light-factory.md#ad-4"]
+
+[[entry]]
+id = 8
+type = "story"
+title = "Bounded merge-conflict-resolution loop"
+description = "Adds detect-conflict -> (conditional) resolve-conflict -> merge as needs:-chained internal jobs inside merge.yml. The conflict-resolution agent is scoped only to the feature branch -- no access to the target branch, no merge/admin tool -- hard-capped at 2 attempts. On cap-out the job fails and surfaces the unresolved conflict to the developer instead of merging or looping again."
+verify = "Dispatching merge on a branch deliberately made to conflict with the target triggers the agent, which resolves it and the merge proceeds; a branch engineered to still conflict after 2 attempts stops the job and surfaces to the developer rather than merging."
+covers = ["CAP-11"]
+after = [7]
+hitl = false
+risk = "high"
+notes = ["Names a check outside its own criteria: a human reviews the agent's actual conflict-resolution diff on the first real run before trusting it unattended."]
+references = ["architecture-light-factory/architecture-light-factory.md#ad-14", "architecture-light-factory/architecture-light-factory.md#ad-19"]
+
+[[entry]]
+id = 9
+type = "story"
+title = "Idempotency and correlation hardening"
+description = "Applies AD-20's atomic DynamoDB conditional writes (condition expression on expected prior status/version, not Get-then-Put) consistently across every orchestrator entry point built in entries 1, 3, 5, 6, 7, 8; and extends the deterministic PR-supersession script to check the orchestrator's DynamoDB state before closing/superseding a PR (AD-15 addendum), closing the two-credential PR-close race."
+verify = "Firing the same GitHub webhook twice (simulating at-least-once delivery) produces exactly one state transition, not two; a concurrent dispatch for the same story-slug is safely rejected rather than racing."
+covers = ["CAP-3", "CAP-8"]
+after = [5, 6, 7, 8]
+hitl = false
+risk = "medium"
+notes = ["Names a check outside its own criteria: a deliberate duplicate-delivery test, not just code review."]
+references = ["architecture-light-factory/architecture-light-factory.md#ad-15", "architecture-light-factory/architecture-light-factory.md#ad-20"]
+
+[[entry]]
+id = 10
+type = "story"
+title = "Remove the old gate mechanism"
+description = "Deletes the plan-approval and evidence-approval GitHub Environments from repo settings, and removes the dead close_rejected_pr.py reject-detection path and its trailing job (AD-16, superseded) from the repo entirely."
+verify = "A repo-wide search finds zero references to either Environment name or close_rejected_pr.py; a fresh run exercises both gates purely via PR comments with nothing left to fall back on."
+covers = ["CAP-3", "CAP-8"]
+after = [9]
+hitl = true
+risk = "medium"
+references = ["architecture-light-factory/architecture-light-factory.md#ad-16"]
+
+[[entry]]
+id = 11
+type = "story"
+title = "Live end-to-end proof"
+description = "No new code. Dispatches a real story through both orchestrator-driven gates to merge, exercised via actual PR comments by the developer -- ideally one run also engineers a real conflict so entry 8's resolution loop is proven live, not just tested."
+verify = "The run's own evidence (PR comments, merge commit, orchestrator DynamoDB trace) shows both gates and, ideally, the conflict-resolution loop, exercised for real."
+covers = ["CAP-3", "CAP-8", "CAP-9", "CAP-11"]
+after = [10]
+hitl = true
+risk = "low"
+
+[[entry]]
+id = 12
+type = "story"
+title = "Refactor sweep"
+description = "Cleanup only, scope set from the build records and review findings deferred during entries 1-11 -- no new behavior."
+verify = "No new behavior; existing verifications from entries 1-11 still pass after the sweep."
+covers = []
+after = [11]
+hitl = false

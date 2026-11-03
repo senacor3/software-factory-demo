@@ -4,18 +4,18 @@ key: ""
 type: initiative
 title: "light-factory"
 parent: none
-covers: [CAP-1, CAP-2, CAP-3, CAP-4, CAP-5, CAP-6, CAP-7, CAP-8, CAP-9]
+covers: [CAP-1, CAP-2, CAP-3, CAP-4, CAP-5, CAP-6, CAP-7, CAP-8, CAP-9, CAP-10, CAP-11]
 after: []
 assignee: ""
 risk: medium
 estimate: ""
 estimate_basis: ""
-status: done
+status: in-progress
 ---
 
 # light-factory
 
-> **Status:** done (2026-10-11). Three epics, 24 tickets; ten stories dispatched live, five merged through the pipeline. Not reached live: either loop's cap. `security` is a skipped placeholder by decision. Three low findings stay open in `deferred-work.md` — see the closure note at the end of Notes.
+> **Status:** in-progress (reopened 2026-11-03). Three epics done, 24 tickets, closed 2026-10-11 (see closure note below) — then reopened to replace the GitHub-Environment-based gates with an orchestrator the blueprint can run on a non-Enterprise private repo. Two new epics added: `epic-orchestrator-gates` (CAP-3, CAP-8, CAP-9, CAP-11) and `epic-pipeline-dashboard` (CAP-10, follow-on).
 
 ## Description
 
@@ -42,6 +42,7 @@ The pipeline itself — not any application it is later used to build (that live
 - spec — _bmad-output/initiative-light-factory/spec-light-factory/spec-light-factory.md, section Capabilities
 - architecture — _bmad-output/initiative-light-factory/architecture-light-factory/architecture-light-factory.md (companion, AD-1..AD-15)
 - brief — _bmad-output/initiative-light-factory/brief-light-factory/brief-light-factory.md, for history only
+- brainstorm — _bmad-output/initiative-demo-app/brainstorm-quality-gate-alternatives/brainstorm-quality-gate-alternatives.md, the orchestrator decision's origin (2026-11-03)
 
 ## Notes
 
@@ -56,6 +57,7 @@ The pipeline itself — not any application it is later used to build (that live
 - Decision (2026-10-11): the demo app is built inside this repo under `freight-tenders/`, still as its own initiative (user's call). Boundaries are unchanged: the pipeline's tickets stay here, the app's stay in `initiative-demo-app`.
 - Decision (2026-10-11): the fix loop's first live engagement — the open half of Done-when 3, CAP-7 — moved out of `epic-pipeline-hardening` to `initiative-demo-app`'s `epic-demo-app`, entry 10 (user's call), after two pipeline stories gave 0 fix cycles. That entry also strengthens the review agent's instructions. No epic in this initiative covers CAP-7's live proof now; Done-when 3 closes when that demo entry does.
 - Done-when 3 met for both loops (2026-10-11): the fix loop engaged live for the first time on run `38150142797` (`stories/one-input-path-per-story-slug.md`, PR #12, merged as `c60279b`) — one finding, one fix cycle, resolved within the cap of 2 — on an unticketed run during `epic-pipeline-hardening`. The clarification loop was shown on the same story (one round, then resolved). Neither cap has been reached live. `epic-demo-app` entry 10 no longer carries this proof; it is narrowed to extending the review agent's instructions.
+- Decision (2026-11-03): reopened after a brainstorming session found GitHub's required-reviewers-on-environments gate is restricted to Enterprise/public repos — a blocker for copying this blueprint into a private, non-Enterprise target repo (AD-1's whole premise). `architecture-light-factory.md` and `spec-light-factory.md` were both updated in place (AD-17..AD-23; CAP-10, CAP-11 added, CAP-3/8/9 updated) to replace the GitHub-Environment gate mechanism with an AWS Lambda orchestrator reading a PR-comment command grammar. Two new epics added: `epic-orchestrator-gates` (the orchestrator, both gates, bounded merge-conflict resolution) and `epic-pipeline-dashboard` (the UI front door onto the same mechanism, follow-on, not a dependency of the first epic's Done when).
 - Closure (2026-10-11, user's call), checked against Done when:
   1. **Met** — real stories ran end to end to merge with both gates approved by a person: run `38076319765` (PR #3) on the three-job pipeline, then PRs #8, #9, #10, and #12 on the six-job pipeline.
   2. **Met as reworded** — build/test/lint run as direct pipeline steps from `.github/post-implementation-checks.yml` with zero agent turns; `security` reports `"skipped"` here by decision.

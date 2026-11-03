@@ -1,104 +1,96 @@
-# Adversarial Divergence Review — architecture-light-factory.md (AD-12/AD-13 pass)
-
-**Lens:** construct two independent, spec-compliant units one level down that each obey every AD to the letter yet build incompatibly. Scope: AD-12 (PR opened at Job 2 branch creation) and AD-13 (clarification loop capped at 2 rounds), their interaction with the unchanged AD-1..AD-11, and internal consistency of the updated Structural Seed `stateDiagram-v2`. AD-1..AD-11 themselves are out of scope except where AD-12/AD-13 newly stress them; see `review-adversarial.md`'s prior pass (git history / project memory) for the AD-1..AD-11-only findings, not restated here.
-
-**Verdict:** AD-12 and AD-13 close the two gaps they were written for (PR-existence timing, unbounded clarification spend) but each opens a new, narrower gap of the same shape as the ones already fixed elsewhere in the spine: AD-12 hands the implementation agent a brand-new write capability (branch/PR creation) that AD-5's least-privilege enumeration never names, and leaves PR lifecycle across the reject-and-re-trigger path (AD-2) completely unspecified; AD-13 claims parity with AD-11's bounded-loop pattern (the Consistency Conventions table says so explicitly) but its trigger wording and persistence requirements are measurably looser than AD-11's, so two to-the-letter-compliant implementations of the two loops would behave asymmetrically despite the claimed symmetry.
-
+---
+name: 'review-adversarial'
+type: review
+reviews: '_bmad-output/initiative-light-factory/architecture-light-factory/architecture-light-factory.md'
+reviewed-ads: 'AD-1 through AD-22, Design Paradigm, Consistency Conventions, Structural Seed, Deferred'
+posture: adversarial — each pair below is constructed to obey every binding AD to the letter while still producing an incompatible build
+created: '2026-11-03'
 ---
 
-## Divergent pairs constructed
+# Adversarial Review — architecture-light-factory.md
 
-### Pair 1 — PR lifecycle across the reject/re-trigger path is unspecified (HIGH)
+## Verdict
 
-**Binds:** AD-12, AD-2.
+The spine pins the *shape* of the orchestrator confidently (one Lambda, one Function URL, DynamoDB control-plane, GitHub App, hand-rolled FSM, three dispatched workflows, two gate mechanisms, a bounded conflict loop) but leaves almost every *wire format* at the new serverless/webhook boundary unpinned — DynamoDB item/key schema, the stage-completion webhook's event type and payload, the GitHub App's granular permission set, the UI→orchestrator auth story, and the conflict-resolution agent's exact write-scope are all asserted in prose and then explicitly or implicitly deferred — so two engineers can each satisfy every AD that binds them and still hand back incompatible systems. Eight concrete adversarial pairs are documented below, two of them (the DynamoDB key-schema mismatch and the UI-vs-webhook auth contradiction) severe enough to silently defeat AD-19's hard cap or AD-21's entire feature respectively.
 
-AD-12's Rule describes exactly one PR, created unconditionally as "the implementation agent's first action in Job 2." AD-2 separately establishes that a reviewer **reject** at either gate is terminal for that run, and the human "re-triggers the pipeline's first job as a new run." Nothing in AD-12 says what happens to the PR from a rejected run when a new run starts, or whether the new run's Job 2 is allowed to find and resume a prior run's PR instead of opening a fresh one.
+## Findings
 
-- **Unit A — literal AD-12 reading:** every Job 2 execution, including Job 2 of a re-triggered run after an `evidence-approval` reject, performs "open the PR" as its unconditional first action with no existence check. Each reject-and-retry cycle for the same story leaves the previous run's PR open and orphaned (never closed, AD-12 gives no closing instruction) and creates a new one — a story that gets rejected twice now has three open PRs, one of which Job 3 must correctly ignore.
-- **Unit B — idempotent/reuse reading:** also AD-12-compliant (AD-12 never forbids reuse, it only describes the sequence for a fresh instantiation) — the implementation agent checks whether a PR already exists for this story-slug's branch before creating one, reusing/reopening it if so, to avoid PR accumulation.
+### 1. [CRITICAL] DynamoDB item/key schema is asserted, never specified — AD-19's hard cap can silently become unbounded
 
-Both satisfy AD-12's text. They produce incompatible repo states: N open PRs per story vs. exactly one. This matters operationally — AD-12 itself calls the PR "the single artifact for the rest of the run," but "the run" is scoped to one attempt, while AD-2's re-trigger pattern is the spine's own designed mechanism for a story to span multiple runs. Job 3 (`Job3_Merge`) has no documented way to know which of several open PRs is current if Unit A's behavior is what ships.
+**Pair:** the engineer implementing the `/approve` · `/reject` stage-transition handling in `orchestrator/handler.py` vs. the engineer implementing AD-19's merge-conflict-resolution attempt counter in the same file.
 
-**Close with:** state explicitly in AD-12 (or a cross-reference to AD-2) whether a re-triggered run's Job 2 must reuse an existing open PR/branch for the same story-slug or close out the prior one before opening a new one, and who/what is responsible for that cleanup.
+- AD-17 says DynamoDB holds "current stage/status, branch name, retry/cycle counters." AD-10's addendum repeats the same prose. AD-19 says the conflict-loop's attempt counter is "owned solely by the orchestrator's own control-plane state (AD-17), never by the agent." None of these — nor the Consistency Conventions table, nor the Structural Seed — gives a partition key, sort key, attribute name, or item-per-entity vs. item-per-counter shape. The Deferred section confirms this explicitly: *"DynamoDB table schema specifics... none of these were decided at this altitude; left for implementation (AD-17...)."*
+- Engineer A, building the gate-transition logic, reasonably keys the table by `story_slug` alone (AD-15 guarantees at most one run in flight per story, so one row per story is a defensible reading) and stores `{stage, status, branch}` on it, overwriting on every transition.
+- Engineer B, building AD-19's bounded loop, needs a counter scoped to *this run* specifically (a new run must start the conflict-attempt count back at zero — this is the entire point of AD-15's run isolation) and therefore keys by `story_slug#run_id` composite, writing `{conflict_attempts: int}` under that key.
+- Both engineers satisfy their own AD to the letter. But Engineer B's reads against `story_slug#run_id` never find a row Engineer A never wrote under that key shape — the GetItem comes back empty every time, `conflict_attempts` is always treated as 0/absent, and AD-19's hard cap of 2 never actually trips. The defect is invisible in isolation: each engineer's unit tests (against their own schema) pass.
+- **Close with:** a new AD pinning the DynamoDB table's exact key schema (partition/sort key, one item per `story_slug#run_id`, explicit attribute names for stage, status, branch, and each of the three counters) before any orchestrator code is written — not left as an implementation detail.
 
----
+### 2. [CRITICAL] The UI's direct calls to the Function URL are not GitHub webhooks — AD-17's literal signature-verification rule, applied uniformly, rejects every legitimate UI action
 
-### Pair 2 — Branch/PR-creation is a new permission surface AD-5 never enumerates (HIGH)
+**Pair:** the engineer implementing AD-17's Lambda entry point (`handler.py`'s request-validation front door) vs. the engineer implementing AD-21's React SPA actions.
 
-**Binds:** AD-12, AD-5.
+- AD-17: "GitHub's webhook signature is verified inside the function itself **before any action is taken**." Read literally and uniformly — the natural way to implement a single shared Lambda entry point — every inbound request to the one Function URL must carry a valid `X-Hub-Signature-256` HMAC before the function does anything.
+- AD-21: the SPA's approve/rework/reject buttons "call the orchestrator's Lambda Function URL" directly, and by AD-18 "the UI never holds any GitHub credential of any kind." The SPA therefore has no webhook secret and cannot produce that signature.
+- AD-17's Function URL auth type is `NONE` and nothing in AD-17, AD-18, or AD-21 defines a *second* authentication mechanism for the non-GitHub caller (no API key, no session token, no shared secret for the UI path specifically). Two implementers reading only their own AD build mutually exclusive things: the handler-side engineer, following AD-17 to the letter, rejects every UI request as an invalid/missing signature; the UI-side engineer, following AD-21 to the letter, never attempts to sign anything because AD-18/AD-21 told them the SPA holds no credential at all. One of them is wrong, but nothing in the spine says which, and both are individually AD-compliant.
+- **Close with:** a new AD (or a tightened AD-17/AD-21) defining the *second* authentication path for UI-originated calls to the shared Function URL — e.g. a per-developer bearer token, Cognito/IAM-authenticated Function URL mode for the UI path only, or a dedicated `ui/` route distinguished from the webhook route with its own auth — and state explicitly that AD-17's signature check applies only to the GitHub-sourced path.
 
-AD-5's two-layer least-privilege model names exactly two kinds of agent capability: a Claude Code tool-allowlist for *edits*, scoped to the isolated branch and specific state-file paths, and GitHub token/branch-protection scoping. It never mentions branch creation or PR creation as a capability any agent holds. AD-12 now requires *something* to create a branch and open a PR as literally the first action of Job 2 — a git/GitHub-API write operation categorically different from editing a file inside an already-existing branch.
+### 3. [HIGH] "New input" to a re-invoked analysis stage means two different things in AD-2 and AD-13
 
-- **Unit A:** reads AD-12's "the implementation agent's first action" loosely — a deterministic Actions workflow step (not an LLM tool call) creates the branch and opens the PR via `gh pr create` before the LangGraph implementation agent is ever invoked. The agent's tool-allowlist stays exactly as AD-5 describes it: edit tools scoped to files, no git-push or PR-create capability granted to the model at all.
-- **Unit B:** reads AD-12 literally — "the implementation agent's first action" means the LLM agent itself issues the branch-creation and `gh pr create` calls via a Bash/git tool in its allowlist, since AD-12 names the *agent*, not a pipeline script, as the actor. This requires granting the agent push and PR-creation capability, which is strictly broader than anything AD-5 scopes or excludes.
+**Pair:** the engineer implementing `/rework`'s workflow_dispatch in `handler.py` + `analysis.yml`'s `inputs:` block vs. the engineer implementing `analysis_graph.py`'s clarification loop per AD-13.
 
-Both are faithful readings of AD-12's actor ("the implementation agent"). They produce materially different attack surfaces: in Unit A the LLM never holds git-push/PR-create tools; in Unit B it does, and AD-5's "defense-in-depth, neither sufficient alone" framing was written without this capability in view, so there's no stated restriction on it (e.g., nothing says the agent's PR-create capability is limited to one call, to the target branch only, or can't be reused mid-run to open additional PRs).
+- AD-2: `/rework (feedback text)` "loops back to re-invoke the analysis stage **with the comment text as new input**."
+- AD-13: "the developer answers by editing the story file itself (**the only input `run_analysis` ever reads**) and re-triggers the pipeline as a new run."
+- These are two different data paths into the same function. Engineer A (gate/dispatch side) adds a `feedback_text` `workflow_dispatch` input and threads it as an argument into `run_analysis`. Engineer B (graph side), implementing AD-13's explicit constraint that the story file is "the only input `run_analysis` ever reads," gives `run_analysis` no such parameter at all. Both are individually faithful to the AD that binds their unit. The result: `/rework`'s feedback text is dispatched into a function signature that has nowhere to put it — either dropped silently, or `analysis.yml` (built by whichever of the two, or a third, owns the workflow YAML) never declares the input in the first place and the dispatch call itself fails.
+- **Close with:** reconcile AD-2 and AD-13 — either `/rework` must append the feedback text into the story file (or a sibling file) deterministically before re-dispatch, matching AD-13's "file is the only input" invariant, or AD-13 must be amended to admit a second, dispatch-input-sourced form of new input, with `run_analysis`'s signature pinned accordingly.
 
-**Close with:** state explicitly whether branch/PR creation in AD-12 is performed by a deterministic workflow/script step or by the LLM agent's own tool call, and if the latter, extend AD-5 to scope that capability (one-shot, target-branch-only, no re-use) the same way it scopes edit tools.
+### 4. [HIGH] Stage-completion "webhook" — event type and payload shape never pinned; a generic `workflow_run` conclusion cannot carry the status AD-13 requires
 
----
+**Pair:** the engineer implementing each workflow file's final step (`analysis.yml`, `implementation-checks-review.yml`) vs. the engineer implementing the Lambda's completion-event handler.
 
-### Pair 3 — AD-13's cap-trigger wording is looser than AD-11's, despite claimed parity (MEDIUM)
+- The Structural Seed labels every exit edge "webhook to orchestrator" (e.g. "analysis complete," "clarification halt," "clarification cap reached" — three *different* outcomes). AD-20 binds "every webhook/completion event the orchestrator receives" but never names the GitHub event type or payload.
+- A `workflow_run` (or `check_run`) completion webhook only reports the *job/workflow's* own exit conclusion (`success`/`failure`/`cancelled`) — in all three of analysis's outcomes above, the job itself exits 0 and the conclusion is `success`. A generic workflow-completion webhook cannot by itself distinguish "ready-for-review" from "awaiting-clarification" from "clarification-cap-reached" — that distinction lives only in `plan.md`'s frontmatter `status` field (AD-10), committed to the branch.
+- Engineer A (workflow-file owner), taking "webhook to orchestrator" literally, relies on GitHub's native `workflow_run` webhook and does nothing else — no custom callback step.
+- Engineer B (Lambda owner), needing to actually distinguish the three outcomes, assumes the *workflow* will tell it directly — e.g. a final `curl` step posting `{status: ...}` to the Function URL — and writes handler logic keyed off a JSON field that engineer A's workflow never sends.
+- Neither engineer is wrong per the text they were given; "webhook to orchestrator" was never pinned to a concrete event + payload, so whichever of (native GitHub event + Lambda re-reads `.factory/.../plan.md` via the GitHub Contents API) vs. (custom callback step with an explicit status payload) was intended is genuinely ambiguous, and the two implementations are not interoperable.
+- **Close with:** pin the completion signal explicitly — either "every dispatched workflow's final step POSTs `{story_slug, run_id, stage, status}` to the Function URL" (custom callback, needs its own lightweight auth — ties to Finding 2) or "the orchestrator subscribes to `workflow_run` and re-reads the relevant `.factory/<slug>/<run-id>/*.md` frontmatter via the GitHub Contents API to learn `status`" — and state it as a Rule, not an inference from a diagram label.
 
-**Binds:** AD-13, AD-11, Consistency Conventions ("State & cross-cutting (bounded loops)" row).
+### 5. [HIGH] Duplicate-webhook race: AD-20's idempotency claim depends on an atomic check-and-set that is never mandated
 
-The Consistency Conventions table asserts: "Both agent loops are hard-capped and counted the same way." But the two ADs don't actually use the same trigger phrasing:
+**Pair:** the engineer implementing the `/approve` → dispatch-implementation path vs. the engineer implementing the Gate-2-approved → dispatch-conflict-check path.
 
-- AD-11: "hard cap of 2 fix cycles: **on the second unresolved review**, it must not loop again." This pins the exact event (the 2nd cycle completing unresolved) that halts the loop — unambiguous, allows exactly 2 cycles, never a 3rd.
-- AD-13: "hard-capped at 2 rounds... **on exceeding the cap**, the graph halts intake." "Exceeding 2" is satisfied only once the count reaches 3 — a literal reading permits a 3rd round to be *attempted* before the halt fires, since round 2 alone (count = 2) does not yet "exceed" a cap of 2.
+- AD-20: "checks the actual current state... before acting, rather than trusting the triggering event alone — this makes a duplicate or double invocation safe without needing to be prevented outright." This is true only if the read-check-then-write is a single atomic operation (e.g., a DynamoDB `ConditionExpression` on the expected prior stage). GitHub explicitly delivers webhooks at-least-once and can redeliver.
+- Nothing in AD-20 (or anywhere else) requires the state transition to be an atomic conditional write. Engineer A implements `/approve` handling with a plain `GetItem` → business logic → `PutItem` (the natural, simpler reading of "check state, then act"). Engineer B, working the other transition, independently implements theirs with a proper `UpdateItem`+`ConditionExpression` guard. Both satisfy AD-20's prose ("checks actual current state before acting"); only one is actually race-safe. Two near-simultaneous duplicate `/approve` deliveries hitting Engineer A's path both read "plan-approval, not yet dispatched" before either write lands, and both call `workflow_dispatch` — two concurrent `implementation-checks-review.yml` runs against the same branch, racing each other's commits and evidence files (which AD-10 assumes are written by exactly one live job).
+- **Close with:** tighten AD-20 to require the state-check-and-transition to be a single atomic conditional write (name the DynamoDB mechanism explicitly: conditional `PutItem`/`UpdateItem` with `ConditionExpression` on expected prior stage), not merely "check before acting."
 
-- **Unit A** implements AD-13 by analogy to AD-11's precise pattern: halts after the 2nd round is still unresolved, never starts a 3rd round. Matches the diagram's "cap 2 rounds" annotation and AD-11's sibling behavior.
-- **Unit B** implements AD-13's literal text: increments the counter, and only halts once the counter's value *exceeds* 2 — i.e., after a 3rd round is reached. Equally defensible from AD-13's wording alone, and nothing in AD-13 cross-references AD-11's "on the second X" phrasing to disambiguate.
+### 6. [MEDIUM] GitHub App permission scope omits the scope PR *comments* actually require
 
-Both claim compliance with "counted the same way." One spends one full extra agent-turn round-trip (a real-human-wait round, not a cheap retry) before halting — directly undermining AD-13's own stated purpose ("Prevents: an unbounded pre-approval loop burning agent turns waiting on a slow or unavailable human").
+**Pair:** the engineer writing `infra/main.tf`'s GitHub App resource (AD-22) vs. the engineer writing `orchestrator/github_app.py` / the comment-posting code path (AD-18, AD-2, AD-4).
 
-**Close with:** reword AD-13's halt condition to mirror AD-11's exactly — e.g., "on the second unresolved clarification round, the graph must not loop again" — removing "exceeding the cap" as the trigger phrase.
+- AD-18: "The App's permissions are scoped (PR read/write, Actions write — no admin)." This maps naturally to GitHub's `pull_requests` and `actions` granular permissions. But every comment this pipeline posts or reads — the `/approve`/`/rework`/`/reject` command grammar (AD-2) and both gate summaries (AD-4) — goes through the Issue Comments API, which is gated by GitHub's `issues` permission, not `pull_requests` (a PR *review* is `pull_requests`; a PR *comment* is `issues` in GitHub's App permission model).
+- Engineer A (Terraform), reading AD-18's "PR read/write" literally, provisions only `pull_requests: write` + `actions: write`. Engineer B (orchestrator code), assuming the App can already read/post comments because AD-18 said "PR read/write" covers it, writes `/approve`-reading and comment-posting code with no additional check. The integration only fails at runtime (403 from GitHub) — exactly the kind of mismatch that two implementers working from the same under-specified AD would not catch at review time, since each unit is internally consistent with the text they were given.
+- **Close with:** list the exact granular GitHub App permissions by name in AD-18 or AD-22: `pull_requests: write` (for branch-protection/review state, PR close), `issues: write` (for comment read/post — the actual mechanism behind AD-2's command grammar and AD-4's summaries), `actions: write` (dispatch), `contents: read` (if the orchestrator ever reads repo content directly) — plus the webhook event subscriptions (`issue_comment`, `pull_request_review`, `workflow_run`/`check_run`, `pull_request`) that must be enabled on the App for AD-2/AD-20 to receive anything at all.
 
----
+### 7. [MEDIUM] Two independent PR-close code paths, two credentials, no shared lock — AD-20's idempotency guard does not reach one of them
 
-### Pair 4 — Clarification-round counter has no mandated persisted field, unlike the fix-cycle counter (MEDIUM)
+**Pair:** the engineer implementing the orchestrator's `/reject`-webhook handler (AD-2, runs as a Lambda invocation, GitHub-App-credentialed) vs. the engineer implementing `open_implementation_pr.py`'s supersession-close logic (AD-12/AD-15, runs as a step inside the `analysis` GitHub Actions job, job-token-credentialed).
 
-**Binds:** AD-13, AD-11, AD-10.
+- Both paths can close the same PR for the same story-slug. AD-20 explicitly scopes its idempotent-state-check-on-entry to "every Lambda invocation" — `open_implementation_pr.py` is not a Lambda invocation, it runs inside a dispatched GitHub Actions job, so AD-20's guard does not cover it at all.
+- Concrete race: a human posts `/reject` on the currently-open PR for story X at the same moment a re-trigger for story X has already been dispatched (its `analysis.yml` run is mid-flight, about to reach `open_implementation_pr.py`'s supersession search). The Lambda closes the PR with a "rejected" comment and (per Finding 1's schema ambiguity) marks the DynamoDB row terminal. Seconds later, the in-flight analysis job's supersession script finds that same PR (by branch-prefix search, AD-15) and closes it again with a "superseded by #N" comment — leaving a self-contradictory comment trail (rejected and superseded), and now the DynamoDB control-plane row (terminal/rejected) disagrees with git reality (a new branch/PR/run now exists and is proceeding). Each engineer's own code is correct per the AD that binds their own unit (AD-2 for the Lambda path, AD-12/AD-15 for the script path); neither AD requires the two to coordinate, and AD-20's text makes it easy to believe (wrongly) that this race is already closed.
+- **Close with:** extend AD-20's idempotency/correlation-key coverage explicitly to non-Lambda deterministic scripts that mutate PR state (name `open_implementation_pr.py`'s close/supersede action specifically), or centralize all PR-closing mutations behind the orchestrator so there is exactly one writer of "this PR is closed."
 
-AD-11 is explicit about where its counter lives durably: "`review.md`'s frontmatter tracks a fix-cycle counter." AD-10's shared-frontmatter-field list and status enum are written with this in mind. AD-13 describes the *ownership* of its counter in the same terms ("the round counter lives in the orchestration graph's own loop-control node, never incremented by the analysis agent itself") but never states that the count is written into `plan.md`/`decisions.md` frontmatter at all — it only specifies what gets written *at cap-out* (`status: awaiting-clarification`), not per-round.
+### 8. [MEDIUM] "Identical permission shape" for the conflict-resolution agent is ambiguous between two very different scopes
 
-- **Unit A:** persists a `clarification_round` field in `plan.md`/`decisions.md` frontmatter after every round, symmetric with AD-11's `review.md` counter — durable, auditable, survives a job crash mid-loop.
-- **Unit B:** keeps the round counter purely as in-process LangGraph graph state (a field in the graph's internal state schema), exactly as AD-13's literal text permits — since Job 1's graph "lives and dies within that job's own runner process" (Design Paradigm) and AD-13 never requires writing it to disk. `plan.md`'s frontmatter never records how many rounds occurred, in the resolved case or the cap-out case; the only place that information surfaces is the (non-git, non-durable) PostSummaryCapA comment at the moment of cap-out, and nowhere in the resolved-case path.
+**Pair:** the engineer implementing AD-19's conflict-resolution agent invocation vs. the engineer implementing the pre-existing implementation agent's AD-5 tool-allowlist, read as the template to copy.
 
-Both are AD-13-compliant. The asymmetry breaks the parity the Consistency Conventions table claims, and more concretely: a `resolved` `plan.md` in Unit B carries no audit trail of whether it took 0, 1, or 2 clarification rounds to reach `ready-for-review` — a strictly weaker record than `review.md` ever has for the fix loop, for no stated reason.
+- AD-19: the conflict agent is "scoped ONLY to the feature branch — no `main` access, no merge/admin tool, identical permission shape to the existing implementation agent under AD-5."
+- AD-5's actual implementation-agent scoping is two-dimensional: a git-ref boundary (the branch) **and** a specific state-file-path allowlist (that story's own implementation subtask files, explicitly excluding `plan.md`/`decisions.md`/`review.md`). "Identical permission shape" is ambiguous about which dimension travels: Engineer A reads it as "same two-layer *philosophy*" and gives the conflict agent Edit/Write across the whole branch (any file, since a merge conflict can land in any file touched by a concurrent change to the target branch — including files the original implementation subtask never touched). Engineer B reads "identical" literally and reuses the *same narrow path allowlist* computed for the implementation agent's own subtask — which means the conflict agent is unable to edit any conflicting file outside that original subtask's file list, i.e. it cannot resolve a large class of real conflicts (any conflict in a file the implementation agent didn't itself write), silently failing or cycling to cap-out on conflicts it was never permissioned to touch.
+- Both are defensible readings of "identical permission shape," and they produce agents with very different (and differently risky) blast radii — Engineer A's is branch-wide write (broader, matches what the task actually needs, but wider than "implementation agent" literally was scoped); Engineer B's is narrower but functionally broken for its stated purpose.
+- **Close with:** state explicitly in AD-19 whether the conflict agent's write scope is "the whole feature branch, any path" (functionally required) or "only the paths already touched by this story's own commits" (AD-5's literal template) — these are not the same guarantee and AD-19 currently reads as both.
 
-**Close with:** either name a `clarification_round` frontmatter field in AD-13 (and register it as a shared field alongside AD-10's list, since AD-10 says "no stage invents its own naming for the same concept"), or state explicitly that the clarification loop's counter is intentionally ephemeral/in-memory-only and that this is an accepted asymmetry with AD-11, not an oversight.
+## Supporting observation (not a pair, pre-existing inconsistency)
 
----
+AD-10's Rule pins the content-state `stage` field enum to exactly `analysis | implementation | review`, yet AD-10's own 2026-10-13 addendum calls `checks.md` "the state file of stage `checks`" — a fourth value the Rule's own enum doesn't list. This self-contradiction already exists in the document independent of this update, but it is exactly the pattern that invites Findings 1 and 8 above: nothing stops two implementers of the new `merge` stage / conflict-resolution sub-stage from independently inventing yet more stage-name strings (`merge`, `conflict-resolution`, `merge-conflict-check`, …) for the DynamoDB control-plane `stage` field, none of them reconciled against AD-10's enum or each other.
 
-### Pair 5 — AD-12 doesn't pin the branch name to AD-8's propagated slug (LOW/MEDIUM)
+## File
 
-**Binds:** AD-12, AD-8.
-
-AD-8 requires the story-slug be "derived exactly once, in the workflow's first job," exposed as a job output, and consumed (never re-derived) by every downstream job — but its Rule only binds this explicitly to the `.light-factory/<story-slug>/` state directory. AD-12 introduces a second artifact that plausibly needs the same identifier — the isolated branch name — but never cross-references AD-8's propagation requirement for it.
-
-- **Unit A:** names the branch from `needs.<job1>.outputs.story-slug` (the same propagated value AD-8 mandates for the state directory), so branch name and state directory always agree.
-- **Unit B:** equally AD-12-compliant — the Job 2 implementation agent derives the branch name by re-slugifying the triggering story file's name itself (AD-12 never says the branch name must come from the AD-8 output), which can diverge from the propagated slug on any edge case where two slugification implementations disagree (unicode, length truncation, punctuation).
-
-If Unit B ships, the PR's branch name and the `.light-factory/<story-slug>/` directory it's meant to report on can silently drift apart — the same class of hole the prior adversarial pass already flagged for the state directory (slug computation/propagation), now reopened by AD-12 in a second place AD-8 doesn't cover.
-
-**Close with:** add one clause to AD-12 (or AD-8): the branch name is derived from the same AD-8-propagated `story-slug` job output, not independently recomputed.
-
----
-
-## Diagram-internal-consistency check
-
-The updated `stateDiagram-v2` is internally consistent with the AD text on the points it labels explicitly (status values used — `ready-for-review`, `awaiting-clarification`, `unresolved-after-cap` — all match AD-10's enum; "no PR yet" / "commit comment" vs. "PR comment" placement matches AD-12's temporal split; `FixLoop --> Checks: re-run affected checks` matches AD-11's "only the checks relevant to the finding(s)"). Two softer issues:
-
-- The three terminal-state labels (`RunEndsA`, `RunEndsB`, `RunEndsClarify`) use inconsistent phrasing for the same re-trigger action — "re-triggers Job 1 as a NEW run," "re-triggers pipeline as a NEW run," "re-triggers Job 1 as a NEW run" — cosmetic, but a diagram meant to be the canonical structural reference for three near-identical terminal paths should use one wording so a reader doesn't go looking for a meaningful difference between "Job 1" and "pipeline" as re-trigger targets.
-- `Job1_Analysis`'s two internal exits (`PostSummary1`, `PostSummaryCapA`) both flow to the same internal `[*]`, with the branch to `GateA` vs. `RunEndsClarify` expressed only via edge labels on the two *external* transitions out of the composite state. This is standard Mermaid shorthand and not a defect, but it means the diagram's graph structure alone (stripped of prose labels) cannot distinguish the two exits — worth a one-line note if the diagram is ever used as a codegen source rather than documentation.
-
----
-
-## Severity-ranked summary
-
-1. **HIGH** — Pair 1: PR lifecycle across AD-2's reject/re-trigger path is unspecified; literal AD-12 compliance accumulates orphaned PRs per story.
-2. **HIGH** — Pair 2: AD-12's branch/PR-creation actor is ambiguous (script vs. agent tool call), and AD-5's least-privilege model never scopes this capability either way.
-3. **MEDIUM** — Pair 3: AD-13's "on exceeding the cap" is an off-by-one looser trigger than AD-11's "on the second unresolved review," contradicting the Consistency Conventions table's claimed parity.
-4. **MEDIUM** — Pair 4: AD-13 never mandates a persisted round-counter field (unlike AD-11's explicit `review.md` counter), leaving the clarification loop's audit trail strictly weaker with no stated justification.
-5. **LOW/MEDIUM** — Pair 5: AD-12 doesn't tie the new branch name to AD-8's propagated story-slug output, reopening the slug-propagation gap in a second location.
+Review written to `/Users/Andreas.Guenzel/dev/workspaces/light-factory/_bmad-output/initiative-light-factory/architecture-light-factory/reviews/review-adversarial.md`.
