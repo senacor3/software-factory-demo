@@ -37,6 +37,7 @@ resource "null_resource" "install_dependencies" {
     requirements_hash = filesha256("${path.module}/../orchestrator/requirements.txt")
     handler_hash      = filesha256("${path.module}/../orchestrator/handler.py")
     github_app_hash   = filesha256("${path.module}/../orchestrator/github_app.py")
+    auth_hash         = filesha256("${path.module}/../orchestrator/auth.py")
   }
 
   provisioner "local-exec" {
@@ -45,6 +46,7 @@ resource "null_resource" "install_dependencies" {
       mkdir -p "${local.build_dir}"
       cp "${path.module}/../orchestrator/handler.py" "${local.build_dir}/"
       cp "${path.module}/../orchestrator/github_app.py" "${local.build_dir}/"
+      cp "${path.module}/../orchestrator/auth.py" "${local.build_dir}/"
       pip install --quiet -r "${path.module}/../orchestrator/requirements.txt" -t "${local.build_dir}" \
         --platform manylinux2014_x86_64 --implementation cp --python-version 3.13 --only-binary=:all:
     EOT
@@ -110,11 +112,16 @@ resource "aws_iam_role_policy" "lambda_dynamodb" {
   })
 }
 
-# GitHub App credentials: human creates and installs the App via GitHub's
-# web UI (no Terraform provider can create the App resource itself), then
-# supplies App ID / installation ID / private key as the three sensitive
-# variables below. One secret, one JSON blob -- never hardcoded, never
-# committed.
+# GitHub App credentials, plus the webhook and stage-callback shared
+# secrets (story 3): human creates and installs the App via GitHub's web
+# UI (no Terraform provider can create the App resource itself), then
+# supplies App ID / installation ID / private key, and separately chooses
+# the two caller-auth shared secrets, as the five sensitive variables
+# below. One secret, one JSON blob -- never hardcoded, never committed. A
+# second secret for webhook_secret/stage_callback_secret was considered
+# and rejected (see story 3's Design Notes): it would double the
+# `get_secret_value` call on every request, and the existing IAM policy is
+# already scoped to exactly this one ARN.
 resource "aws_secretsmanager_secret" "github_app" {
   name = local.github_app_secret_name
 
@@ -129,9 +136,11 @@ resource "aws_secretsmanager_secret" "github_app" {
 resource "aws_secretsmanager_secret_version" "github_app" {
   secret_id = aws_secretsmanager_secret.github_app.id
   secret_string = jsonencode({
-    app_id          = var.github_app_id
-    installation_id = var.github_app_installation_id
-    private_key_pem = var.github_app_private_key_pem
+    app_id                = var.github_app_id
+    installation_id       = var.github_app_installation_id
+    private_key_pem       = var.github_app_private_key_pem
+    webhook_secret        = var.github_webhook_secret
+    stage_callback_secret = var.stage_callback_secret
   })
 }
 
