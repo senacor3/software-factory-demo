@@ -1,7 +1,9 @@
 """Local unit test of the stub handler's response shape.
 
-Run via `cd orchestrator && uv run --with pytest pytest tests/ -v` (per the
-story's Verification section) -- no deploy, no AWS credentials needed.
+Run via `cd orchestrator && uv run --with pytest --with "PyJWT[crypto]"
+pytest tests/ -v` (per the story's Verification section) -- no deploy, no
+AWS credentials needed. PyJWT[crypto] is required even for this module:
+`handler.py` imports `github_app.py`, which imports `jwt` at module level.
 """
 
 import json

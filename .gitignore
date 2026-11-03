@@ -37,6 +37,13 @@ __pycache__/
 *.tfstate
 *.tfstate.backup
 
+# Terraform variable files -- may carry real secrets (e.g.
+# github_app_private_key_pem), so never committed regardless of name.
+*.tfvars
+*.tfvars.json
+*.auto.tfvars
+*.auto.tfvars.json
+
 # infra/main.tf's own packaging-step outputs (unzipped build dir + deployable
 # zip, from local.build_dir / archive_file's output_path) -- reproducible
 # from orchestrator/ on every `terraform apply`, never deliverables.
