@@ -23,7 +23,7 @@ import org.springframework.context.annotation.Import;
  * one persistence context, since {@link TenderService} has no {@code @Transactional} of its own.
  */
 @DataJpaTest(properties = "spring.jpa.properties.hibernate.generate_statistics=true")
-@Import({TenderService.class, FixedClockConfiguration.class})
+@Import({TenderService.class, FixedClockConfiguration.class, ValidatorTestConfiguration.class})
 class TenderServicePersistenceTest {
 
   @Autowired private EntityManager entityManager;

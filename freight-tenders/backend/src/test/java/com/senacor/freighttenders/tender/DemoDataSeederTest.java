@@ -16,7 +16,12 @@ import org.springframework.test.context.ActiveProfiles;
 
 @DataJpaTest
 @ActiveProfiles("demo")
-@Import({TenderService.class, DemoDataSeeder.class, FixedClockConfiguration.class})
+@Import({
+  TenderService.class,
+  DemoDataSeeder.class,
+  FixedClockConfiguration.class,
+  ValidatorTestConfiguration.class
+})
 class DemoDataSeederTest {
 
   private static final LocalDate TODAY = LocalDate.of(2026, 10, 13);
