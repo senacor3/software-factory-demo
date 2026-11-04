@@ -1,10 +1,19 @@
 name: implementation-checks-review
 
 # Second of the software-factory pipeline's three dispatchable files (AD-2): runs
-# `implementation` (gated by the plan-approval Environment) -> `checks` ->
-# `checks-fix-loop` -> `review`, in the same internal order as the old single
-# workflow's own needs: chain, now fed by workflow_dispatch inputs instead of a
-# cross-job needs: from an `analysis` job that lives in a separate file.
+# `implementation` -> `checks` -> `checks-fix-loop` -> `review`, in the same
+# internal order as the old single workflow's own needs: chain, now fed by
+# workflow_dispatch inputs instead of a cross-job needs: from an `analysis` job
+# that lives in a separate file.
+#
+# `implementation` is no longer gated by a `plan-approval` GitHub Environment --
+# that gate is now owned entirely by the orchestrator's PR-comment command
+# grammar (`/approve`/`/rework`/`/reject`, AD-2), read off the one GitHub webhook
+# event the App subscribes to and acted on directly by `orchestrator/handler.py`
+# before this workflow is ever dispatched. This file only ever runs once
+# `/approve` has already triggered the `workflow_dispatch` call; nothing
+# GitHub-native gates it anymore. (The repo-settings `plan-approval` Environment
+# resource itself is left in place until a later entry removes it.)
 #
 # `implementation`'s own `outputs:` re-expose its two workflow_dispatch inputs
 # (`story-slug`/`run-id`) as job outputs purely so every later job in this file
@@ -16,7 +25,10 @@ name: implementation-checks-review
 # Also carries a `close-rejected-pr`-equivalent job for this file's own gate
 # (plan-approval): cross-file `needs:` is impossible, so AD-16's existing
 # reject-cleanup mechanism is duplicated per downstream file rather than removed
-# (superseded by a later story's direct /reject webhook handling).
+# (superseded by this entry's direct /reject webhook handling -- this job is now
+# effectively dead weight on the Gate-1 reject path, since `/reject` closes the
+# PR itself before this file is ever dispatched again; left in place per this
+# entry's own boundaries -- removing it is entry 10's scope, not this one's).
 #
 # See _bmad-output/initiative-light-factory/architecture-light-factory/
 # architecture-light-factory.md for the decisions (AD-n) the comments below cite.
@@ -44,7 +56,6 @@ concurrency:
 jobs:
   implementation:
     name: "Implementation"
-    environment: plan-approval
     runs-on: ubuntu-24.04
     # AD-5/AD-6: contents:write scopes checkout_branch.py's git fetch/checkout and
     # commit_push_implementation.py's git add/commit/push, nothing else -- the

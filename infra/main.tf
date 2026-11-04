@@ -34,10 +34,12 @@ locals {
 # orchestrator/ on every apply -- never a deliverable itself.
 resource "null_resource" "install_dependencies" {
   triggers = {
-    requirements_hash = filesha256("${path.module}/../orchestrator/requirements.txt")
-    handler_hash      = filesha256("${path.module}/../orchestrator/handler.py")
-    github_app_hash   = filesha256("${path.module}/../orchestrator/github_app.py")
-    auth_hash         = filesha256("${path.module}/../orchestrator/auth.py")
+    requirements_hash     = filesha256("${path.module}/../orchestrator/requirements.txt")
+    handler_hash          = filesha256("${path.module}/../orchestrator/handler.py")
+    github_app_hash       = filesha256("${path.module}/../orchestrator/github_app.py")
+    auth_hash             = filesha256("${path.module}/../orchestrator/auth.py")
+    comment_commands_hash = filesha256("${path.module}/../orchestrator/comment_commands.py")
+    dynamodb_state_hash   = filesha256("${path.module}/../orchestrator/dynamodb_state.py")
   }
 
   provisioner "local-exec" {
@@ -47,6 +49,8 @@ resource "null_resource" "install_dependencies" {
       cp "${path.module}/../orchestrator/handler.py" "${local.build_dir}/"
       cp "${path.module}/../orchestrator/github_app.py" "${local.build_dir}/"
       cp "${path.module}/../orchestrator/auth.py" "${local.build_dir}/"
+      cp "${path.module}/../orchestrator/comment_commands.py" "${local.build_dir}/"
+      cp "${path.module}/../orchestrator/dynamodb_state.py" "${local.build_dir}/"
       pip install --quiet -r "${path.module}/../orchestrator/requirements.txt" -t "${local.build_dir}" \
         --platform manylinux2014_x86_64 --implementation cp --python-version 3.13 --only-binary=:all:
     EOT
