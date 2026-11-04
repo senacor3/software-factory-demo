@@ -1,0 +1,27 @@
+{
+  "status": "pass",
+  "command": [
+    "npm",
+    "--prefix",
+    "freight-tenders/frontend",
+    "run",
+    "static-analysis"
+  ],
+  "returncode": 0,
+  "detail": "",
+  "commands": [
+    [
+      "bash",
+      "-c",
+      "JAVA_HOME=\"$JAVA_HOME_25_X64\" mvn -B -f freight-tenders/backend/pom.xml spotbugs:check"
+    ],
+    [
+      "npm",
+      "--prefix",
+      "freight-tenders/frontend",
+      "run",
+      "static-analysis"
+    ]
+  ],
+  "config_source": "origin/main"
+}

@@ -1,0 +1,36 @@
+{
+  "status": "pass",
+  "command": [
+    "npm",
+    "--prefix",
+    "freight-tenders/frontend",
+    "run",
+    "lint"
+  ],
+  "returncode": 0,
+  "detail": "",
+  "commands": [
+    [
+      "uv",
+      "run",
+      "--with",
+      "ruff",
+      "ruff",
+      "check",
+      "factory/"
+    ],
+    [
+      "bash",
+      "-c",
+      "JAVA_HOME=\"$JAVA_HOME_25_X64\" mvn -B -f freight-tenders/backend/pom.xml spotless:check"
+    ],
+    [
+      "npm",
+      "--prefix",
+      "freight-tenders/frontend",
+      "run",
+      "lint"
+    ]
+  ],
+  "config_source": "origin/main"
+}
