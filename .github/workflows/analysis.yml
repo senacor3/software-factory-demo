@@ -89,3 +89,25 @@ jobs:
             --story-file "${{ github.event.inputs.story_file }}" \
             --story-slug "${{ steps.derive.outputs.story-slug }}" \
             --run-id "${{ steps.derive.outputs.run-id }}"
+
+      # Entry 6 (AD-17 caller type c): reports this job's own concrete stage status
+      # (plan.md's `status` field -- ready-for-review, awaiting-clarification, or
+      # clarification-cap-reached) to the orchestrator's Function URL, authenticated
+      # via entry 3's shared stage-callback secret. handler.py's stage-callback branch
+      # records it in DynamoDB and, only for `ready-for-review`, renders and posts the
+      # AD-4 plan-approval summary itself -- replacing the old in-job post_summary call
+      # site. Only runs once `analyze` itself succeeded: a halted/crashed run posts no
+      # callback (same scope line entry 5 drew for /approve//reject).
+      # ORCHESTRATOR_FUNCTION_URL (a plain repo variable) and STAGE_CALLBACK_SECRET (a
+      # repo secret, matching entry 3's Secrets-Manager field) are human-supplied repo
+      # configuration, not asserted as done here.
+      - name: Report stage status to orchestrator
+        if: steps.analyze.outcome == 'success'
+        run: |
+          uv run factory/scripts/post_stage_callback.py \
+            --url "${{ vars.ORCHESTRATOR_FUNCTION_URL }}" \
+            --secret "${{ secrets.STAGE_CALLBACK_SECRET }}" \
+            --stage analysis \
+            --story-slug "${{ steps.derive.outputs.story-slug }}" \
+            --run-id "${{ steps.derive.outputs.run-id }}" \
+            --status-file ".factory/${{ steps.derive.outputs.story-slug }}/${{ steps.derive.outputs.run-id }}/plan.md"

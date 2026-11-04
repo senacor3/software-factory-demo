@@ -28,7 +28,6 @@ import analysis_graph
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
 import open_implementation_pr
-import post_summary
 import state_io
 
 
@@ -62,8 +61,7 @@ def test_complete_no_open_questions_writes_ready_for_review(tmp_path):
     fake_pr = {"branch": "software-factory/foo/run-1", "pr_number": 1, "pr_url": "https://example/1"}
     with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))), \
          patch("analysis_graph.open_implementation_pr.open_pr_for_story", return_value=fake_pr) as mock_open_pr, \
-         patch("analysis_graph.open_implementation_pr.close_for_clarification") as mock_close, \
-         patch("analysis_graph.post_summary.post_comment") as mock_post_summary:
+         patch("analysis_graph.open_implementation_pr.close_for_clarification") as mock_close:
         outcome = analysis_graph.run_analysis(
             "stories/software-factory/foo.md", "foo", "run-1", state_base=tmp_path
         )
@@ -82,12 +80,6 @@ def test_complete_no_open_questions_writes_ready_for_review(tmp_path):
     mock_open_pr.assert_called_once_with("foo", "run-1", state_base=tmp_path, cwd=None)
     mock_close.assert_not_called()
 
-    mock_post_summary.assert_called_once()
-    posted_pr_number, posted_body = mock_post_summary.call_args[0]
-    assert posted_pr_number == 1
-    assert "do the thing" in posted_body
-    assert mock_post_summary.call_args[1] == {"cwd": None}
-
 
 # --- I/O Matrix row 2: complete, in-scope, open questions remain --------------------------
 
@@ -103,8 +95,7 @@ def test_complete_with_open_questions_writes_awaiting_clarification(tmp_path):
          patch("analysis_graph.open_implementation_pr.open_pr_for_story", return_value=fake_pr) as mock_open_pr, \
          patch("analysis_graph.open_implementation_pr.label_clarification_round") as mock_label, \
          patch("analysis_graph.open_implementation_pr.close_for_clarification") as mock_close, \
-         patch("analysis_graph.open_implementation_pr.post_clarification_cap_notice") as mock_cap_notice, \
-         patch("analysis_graph.post_summary.post_comment") as mock_post_summary:
+         patch("analysis_graph.open_implementation_pr.post_clarification_cap_notice") as mock_cap_notice:
         outcome = analysis_graph.run_analysis(
             "stories/software-factory/foo.md", "foo", "run-1", state_base=tmp_path
         )
@@ -122,7 +113,6 @@ def test_complete_with_open_questions_writes_awaiting_clarification(tmp_path):
     mock_label.assert_called_once_with(2, cwd=None)
     mock_close.assert_called_once_with(2, ["what about X?"], cwd=None)
     mock_cap_notice.assert_not_called()
-    mock_post_summary.assert_not_called()
 
 
 # --- cap-reached path (AD-13's bounded-rounds mechanism, ticket 2.2) ----------------------
@@ -139,8 +129,7 @@ def test_complete_with_open_questions_at_cap_writes_clarification_cap_reached(tm
          patch("analysis_graph.open_implementation_pr.open_pr_for_story", return_value=fake_pr) as mock_open_pr, \
          patch("analysis_graph.open_implementation_pr.label_clarification_round") as mock_label, \
          patch("analysis_graph.open_implementation_pr.close_for_clarification") as mock_close, \
-         patch("analysis_graph.open_implementation_pr.post_clarification_cap_notice") as mock_cap_notice, \
-         patch("analysis_graph.post_summary.post_comment") as mock_post_summary:
+         patch("analysis_graph.open_implementation_pr.post_clarification_cap_notice") as mock_cap_notice:
         outcome = analysis_graph.run_analysis(
             "stories/software-factory/foo.md", "foo", "run-1", state_base=tmp_path
         )
@@ -156,11 +145,10 @@ def test_complete_with_open_questions_at_cap_writes_clarification_cap_reached(tm
     mock_status.assert_called_once_with("foo", "run-1", cwd=None)
     mock_open_pr.assert_called_once_with("foo", "run-1", state_base=tmp_path, cwd=None)
     mock_cap_notice.assert_called_once_with(3, ["what about X?"], cwd=None)
-    # at-cap never labels/closes/comments via the below-cap or ready-for-review paths --
-    # post_clarification_cap_notice (mocked above) owns its own labeling internally.
+    # at-cap never labels/closes via the below-cap path -- post_clarification_cap_notice
+    # (mocked above) owns its own labeling internally.
     mock_label.assert_not_called()
     mock_close.assert_not_called()
-    mock_post_summary.assert_not_called()
 
 
 def test_clarification_status_failure_raises_analysis_pr_open_error_with_no_state_files(tmp_path):
@@ -320,26 +308,6 @@ def test_close_for_clarification_failure_raises_analysis_pr_open_error_but_state
     assert dmeta["status"] == "awaiting-clarification"
 
 
-def test_post_summary_failure_raises_analysis_pr_open_error_but_state_files_remain(tmp_path):
-    result = _result()
-    fake_pr = {"branch": "software-factory/foo/run-1", "pr_number": 1, "pr_url": "https://example/1"}
-    with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))), \
-         patch("analysis_graph.open_implementation_pr.open_pr_for_story", return_value=fake_pr), \
-         patch(
-             "analysis_graph.post_summary.post_comment",
-             side_effect=post_summary.PostCommentError("gh pr comment failed: rate limited"),
-         ):
-        with pytest.raises(analysis_graph.AnalysisPROpenError, match="rate limited"):
-            analysis_graph.run_analysis("stories/software-factory/foo.md", "foo", "run-1", state_base=tmp_path)
-
-    # plan.md/decisions.md and the PR remain exactly as entry 3 left them -- only the
-    # gate-summary comment step itself failed.
-    meta, _ = state_io.read_state(tmp_path / "foo" / "run-1" / "plan.md")
-    assert meta["status"] == "ready-for-review"
-    dmeta, _ = state_io.read_state(tmp_path / "foo" / "run-1" / "decisions.md")
-    assert dmeta["status"] == "ready-for-review"
-
-
 # --- command construction ------------------------------------------------------------------
 
 
@@ -392,8 +360,7 @@ def test_cli_main_success_exits_0(tmp_path, capsys, monkeypatch):
     result = _result()
     fake_pr = {"branch": "software-factory/foo/run-1", "pr_number": 1, "pr_url": "https://example/1"}
     with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))), \
-         patch("analysis_graph.open_implementation_pr.open_pr_for_story", return_value=fake_pr), \
-         patch("analysis_graph.post_summary.post_comment"):
+         patch("analysis_graph.open_implementation_pr.open_pr_for_story", return_value=fake_pr):
         rc = analysis_graph.main(
             ["--story-file", "stories/software-factory/foo.md", "--story-slug", "foo", "--run-id", "run-1"]
         )

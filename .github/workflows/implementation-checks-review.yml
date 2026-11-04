@@ -453,6 +453,24 @@ jobs:
             --story-slug "${{ needs.implementation.outputs.story-slug }}" \
             --run-id "${{ needs.implementation.outputs.run-id }}"
 
+      # Entry 6 (AD-17 caller type c): reports this job's own concrete stage status
+      # (review.md's `status` field) to the orchestrator's Function URL, authenticated
+      # via entry 3's shared stage-callback secret. Appended last in this job, so a
+      # failure anywhere earlier (including "Post evidence-approval summary") skips
+      # this step by GitHub Actions' own default step-ordering behavior -- a
+      # halted/crashed run posts no callback, same as analysis.yml's explicit
+      # `if: steps.analyze.outcome == 'success'`. ORCHESTRATOR_FUNCTION_URL/
+      # STAGE_CALLBACK_SECRET are human-supplied repo configuration (see analysis.yml).
+      - name: Report stage status to orchestrator
+        run: |
+          uv run factory/scripts/post_stage_callback.py \
+            --url "${{ vars.ORCHESTRATOR_FUNCTION_URL }}" \
+            --secret "${{ secrets.STAGE_CALLBACK_SECRET }}" \
+            --stage implementation-checks-review \
+            --story-slug "${{ needs.implementation.outputs.story-slug }}" \
+            --run-id "${{ needs.implementation.outputs.run-id }}" \
+            --status-file ".factory/${{ needs.implementation.outputs.story-slug }}/${{ needs.implementation.outputs.run-id }}/review.md"
+
   close-rejected-pr:
     name: "Close PR on gate reject"
     needs: implementation

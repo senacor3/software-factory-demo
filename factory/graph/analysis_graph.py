@@ -12,8 +12,10 @@ story-job-1-intake-analysis-plan.md's I/O & Edge-Case Matrix):
   1. Incomplete or out-of-scope -- halt, no state file written, reason on stderr.
   2. Complete, in-scope, no open questions -- write plan.md + decisions.md via
      factory/scripts/state_io.py, status `ready-for-review`; then open the branch+PR
-     (AD-12) via factory/scripts/open_implementation_pr.py and post the gate-summary PR
-     comment (AD-4) via factory/scripts/post_summary.py.
+     (AD-12) via factory/scripts/open_implementation_pr.py. The AD-4 gate-summary PR
+     comment is no longer posted here -- the workflow's own final step reports
+     `ready-for-review` to the orchestrator via factory/scripts/post_stage_callback.py,
+     which renders and posts it instead (entry 6, AD-17 caller type c).
   3. Complete, in-scope, open questions remain -- a deterministic round-count decides
      `awaiting-clarification` (below AD-13's 2-round cap) or `clarification-cap-reached`
      (at the cap), counted from this story-slug's prior `clarification-round`-labeled PRs
@@ -31,10 +33,10 @@ tell the two apart.
 
 A fifth case -- plan.md/decisions.md wrote successfully but a deterministic post-analysis
 step itself fails (`git`/`gh` subprocess error, whether from opening the branch/PR (AD-12),
-superseding this story-slug's prior open PRs inside that same step (AD-15), posting the
-gate-summary comment (AD-4), or from the clarification label/comment/close or cap-notice
-call (AD-13/AD-15)) -- raises `AnalysisPROpenError`, distinct from both of the
-above (per the `change-pr-at-intake` amendment, AD-12). A sixth, earlier failure point --
+superseding this story-slug's prior open PRs inside that same step (AD-15), or from the
+clarification label/comment/close or cap-notice call (AD-13/AD-15)) -- raises
+`AnalysisPROpenError`, distinct from both of the above (per the `change-pr-at-intake`
+amendment, AD-12). A sixth, earlier failure point --
 the round-count query itself (`clarification_status`), which now runs *before* the state
 write -- also raises `AnalysisPROpenError`, but in that case plan.md/decisions.md are not
 yet written.
@@ -64,7 +66,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import open_implementation_pr
-import post_summary
 import state_io
 
 SCHEMA_PATH = Path(__file__).resolve().parent / "schemas" / "analysis_result.schema.json"
@@ -190,26 +191,6 @@ def _render_decisions_body(result: dict) -> str:
     return "\n".join(lines)
 
 
-def _render_plan_summary(result: dict) -> str:
-    """AD-4's gate-summary comment for the `plan-approval` gate: the proposal,
-    subtask/test counts, and a pointer to the full-detail files -- not their contents."""
-    subtasks = result.get("subtasks") or []
-    tests = result.get("tests") or []
-    lines = [
-        "## Plan ready for review",
-        "",
-        "### Proposal",
-        "",
-        (result.get("proposal") or "").strip() or "_none_",
-        "",
-        f"- Subtasks: {len(subtasks)}",
-        f"- Tests: {len(tests)}",
-        "",
-        "See `plan.md`/`decisions.md` for full detail.",
-    ]
-    return "\n".join(lines)
-
-
 def run_analysis(
     story_file: str,
     story_slug: str,
@@ -267,11 +248,7 @@ def run_analysis(
             open_implementation_pr.post_clarification_cap_notice(
                 pr["pr_number"], result["open_questions"], cwd=cwd
             )
-        else:
-            post_summary.post_comment(
-                pr["pr_number"], _render_plan_summary(result), cwd=cwd
-            )
-    except (open_implementation_pr.PROpenError, post_summary.PostCommentError) as e:
+    except open_implementation_pr.PROpenError as e:
         raise AnalysisPROpenError(str(e)) from e
 
     return {

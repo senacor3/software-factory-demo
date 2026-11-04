@@ -77,9 +77,11 @@ class TestHandlerDispatch:
         assert "signature" in body["reason"].lower()
 
     def test_valid_stage_callback_secret_is_accepted(self, _mock_credentials):
-        event = _event({"X-Stage-Callback-Secret": _STAGE_CALLBACK_SECRET})
+        raw_body = _stage_callback_payload("merge", "merged")
+        event = _event({"X-Stage-Callback-Secret": _STAGE_CALLBACK_SECRET}, body=raw_body.decode())
 
-        response = handler(event, None)
+        with patch("handler.dynamodb_state.record_stage_status"):
+            response = handler(event, None)
 
         assert response["statusCode"] == 200
         body = json.loads(response["body"])
@@ -149,12 +151,157 @@ class TestHandlerDispatch:
     def test_header_lookup_is_case_insensitive(self, _mock_credentials):
         # Function URL / client header casing is not guaranteed -- handler.py
         # must lowercase-key headers itself rather than relying on exact case.
-        event = _event({"x-stage-callback-secret": _STAGE_CALLBACK_SECRET})
+        raw_body = _stage_callback_payload("merge", "merged")
+        event = _event({"x-stage-callback-secret": _STAGE_CALLBACK_SECRET}, body=raw_body.decode())
 
-        response = handler(event, None)
+        with patch("handler.dynamodb_state.record_stage_status"):
+            response = handler(event, None)
 
         assert response["statusCode"] == 200
         assert json.loads(response["body"])["caller"] == "stage-callback"
+
+
+def _stage_callback_payload(stage: str, status: str, *, story_slug: str = "my-story-slug", run_id: str = "run-7") -> bytes:
+    return json.dumps(
+        {"stage": stage, "story-slug": story_slug, "run-id": run_id, "status": status}
+    ).encode("utf-8")
+
+
+def _stage_callback_event(raw_body: bytes) -> dict:
+    return _event({"X-Stage-Callback-Secret": _STAGE_CALLBACK_SECRET}, body=raw_body.decode())
+
+
+@patch("handler._load_github_app_credentials", return_value=_FAKE_CREDENTIALS)
+class TestStageCallback:
+    def test_analysis_ready_for_review_records_status_and_posts_plan_approval_summary(
+        self, _mock_credentials
+    ):
+        with (
+            patch("handler.dynamodb_state.record_stage_status") as mock_record,
+            patch("handler.github_app.find_pull_request_by_branch") as mock_find_pr,
+            patch("handler.github_app.get_file_content") as mock_get_file,
+            patch("handler.github_app.post_comment") as mock_post_comment,
+        ):
+            mock_find_pr.return_value = {
+                "number": 42,
+                "head": {"ref": "software-factory/my-story-slug/run-7"},
+            }
+            plan_body = (
+                "## Proposal\n\ndo the thing\n\n## Subtasks\n\n- step one\n- step two\n\n"
+                "## Tests\n\n- test one\n"
+            )
+            mock_get_file.return_value = (plan_body, "sha-123")
+
+            raw_body = _stage_callback_payload("analysis", "ready-for-review")
+            response = handler(_stage_callback_event(raw_body), None)
+
+            assert response["statusCode"] == 200
+            mock_record.assert_called_once_with(
+                "my-story-slug", "run-7", "analysis", "ready-for-review"
+            )
+            mock_find_pr.assert_called_once_with(
+                _GITHUB_PAT, "software-factory/my-story-slug/run-7"
+            )
+            mock_get_file.assert_called_once_with(
+                _GITHUB_PAT,
+                ".factory/my-story-slug/run-7/plan.md",
+                "software-factory/my-story-slug/run-7",
+            )
+            mock_post_comment.assert_called_once()
+            args = mock_post_comment.call_args[0]
+            assert args[0] == _GITHUB_PAT
+            assert args[1] == 42
+            assert "do the thing" in args[2]
+            assert "Subtasks: 2" in args[2]
+            assert "Tests: 1" in args[2]
+
+    def test_analysis_awaiting_clarification_records_status_posts_no_comment(
+        self, _mock_credentials
+    ):
+        with (
+            patch("handler.dynamodb_state.record_stage_status") as mock_record,
+            patch("handler.github_app.find_pull_request_by_branch") as mock_find_pr,
+            patch("handler.github_app.post_comment") as mock_post_comment,
+        ):
+            raw_body = _stage_callback_payload("analysis", "awaiting-clarification")
+            response = handler(_stage_callback_event(raw_body), None)
+
+            assert response["statusCode"] == 200
+            mock_record.assert_called_once_with(
+                "my-story-slug", "run-7", "analysis", "awaiting-clarification"
+            )
+            mock_find_pr.assert_not_called()
+            mock_post_comment.assert_not_called()
+
+    def test_analysis_clarification_cap_reached_records_status_posts_no_comment(
+        self, _mock_credentials
+    ):
+        with (
+            patch("handler.dynamodb_state.record_stage_status") as mock_record,
+            patch("handler.github_app.find_pull_request_by_branch") as mock_find_pr,
+            patch("handler.github_app.post_comment") as mock_post_comment,
+        ):
+            raw_body = _stage_callback_payload("analysis", "clarification-cap-reached")
+            response = handler(_stage_callback_event(raw_body), None)
+
+            assert response["statusCode"] == 200
+            mock_record.assert_called_once_with(
+                "my-story-slug", "run-7", "analysis", "clarification-cap-reached"
+            )
+            mock_find_pr.assert_not_called()
+            mock_post_comment.assert_not_called()
+
+    def test_implementation_checks_review_callback_records_status_posts_no_comment(
+        self, _mock_credentials
+    ):
+        with (
+            patch("handler.dynamodb_state.record_stage_status") as mock_record,
+            patch("handler.github_app.find_pull_request_by_branch") as mock_find_pr,
+            patch("handler.github_app.post_comment") as mock_post_comment,
+        ):
+            raw_body = _stage_callback_payload("implementation-checks-review", "resolved")
+            response = handler(_stage_callback_event(raw_body), None)
+
+            assert response["statusCode"] == 200
+            mock_record.assert_called_once_with(
+                "my-story-slug", "run-7", "implementation-checks-review", "resolved"
+            )
+            mock_find_pr.assert_not_called()
+            mock_post_comment.assert_not_called()
+
+    def test_merge_callback_records_status_posts_no_comment(self, _mock_credentials):
+        with (
+            patch("handler.dynamodb_state.record_stage_status") as mock_record,
+            patch("handler.github_app.find_pull_request_by_branch") as mock_find_pr,
+            patch("handler.github_app.post_comment") as mock_post_comment,
+        ):
+            raw_body = _stage_callback_payload("merge", "merged")
+            response = handler(_stage_callback_event(raw_body), None)
+
+            assert response["statusCode"] == 200
+            mock_record.assert_called_once_with("my-story-slug", "run-7", "merge", "merged")
+            mock_find_pr.assert_not_called()
+            mock_post_comment.assert_not_called()
+
+    def test_analysis_ready_for_review_with_no_open_pr_still_records_status(
+        self, _mock_credentials
+    ):
+        with (
+            patch("handler.dynamodb_state.record_stage_status") as mock_record,
+            patch("handler.github_app.find_pull_request_by_branch", return_value=None) as mock_find_pr,
+            patch("handler.github_app.get_file_content") as mock_get_file,
+            patch("handler.github_app.post_comment") as mock_post_comment,
+        ):
+            raw_body = _stage_callback_payload("analysis", "ready-for-review")
+            response = handler(_stage_callback_event(raw_body), None)
+
+            assert response["statusCode"] == 200
+            mock_record.assert_called_once_with(
+                "my-story-slug", "run-7", "analysis", "ready-for-review"
+            )
+            mock_find_pr.assert_called_once()
+            mock_get_file.assert_not_called()
+            mock_post_comment.assert_not_called()
 
 
 def _issue_comment_payload(

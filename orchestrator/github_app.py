@@ -198,6 +198,42 @@ def update_file_content(
         ) from exc
 
 
+def find_pull_request_by_branch(token: str, branch: str) -> dict[str, Any] | None:
+    """Find the first open PR whose head branch is `branch`, via the Pulls API's
+    `head` filter (`owner:branch`).
+
+    Exists because the stage-completion callback is keyed on story-slug/run-id
+    (branch name), not a PR number -- unlike `/approve`/`/reject`, which read the PR
+    number straight off the `issue_comment` webhook payload.
+
+    Returns None when no open PR matches (e.g. it was already closed/merged) -- not
+    an error; callers (handler.py's stage-callback branch) skip the comment step in
+    that case rather than failing. Raises RuntimeError with GitHub's error body
+    surfaced clearly on any other failure.
+    """
+    owner = _REPO.split("/")[0]
+    url = f"{_GITHUB_API_BASE}/repos/{_REPO}/pulls?head={owner}:{branch}&state=open"
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": _API_VERSION,
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(request) as response:
+            prs: list[dict[str, Any]] = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        error_body = exc.read().decode("utf-8")
+        raise RuntimeError(
+            f"GitHub find-pull-request-by-branch request failed ({exc.code}): {error_body}"
+        ) from exc
+
+    return prs[0] if prs else None
+
+
 def close_pull_request(token: str, pr_number: int) -> None:
     """Close a PR (`state: closed`) via the Pulls API's PATCH endpoint --
     used by `/reject`. Never merges, never deletes the branch.

@@ -14,6 +14,8 @@ rejected) rather than falling through to a later check:
 2. Stage-completion callback -- `X-Stage-Callback-Secret` present:
    verified via constant-time comparison against the configured shared
    secret. Same immediate-reject-on-mismatch behavior as the webhook check.
+   Once verified, the body is parsed and acted on -- see
+   `_handle_stage_callback`.
 3. UI OAuth (reserved stub, AD-17/AD-23) -- `Authorization` present but
    neither of the above matched: rejected as "not yet implemented", a
    reason distinct from the generic unrecognized-caller rejection, so
@@ -23,13 +25,16 @@ rejected) rather than falling through to a later check:
 A request matching none of the three is rejected as unrecognized, with a
 reason distinguishable from a signature failure.
 
-No DynamoDB-backed stage-tracking or idempotency hardening here (entries
-6/9 own that; this entry's only DynamoDB write is `/reject`'s plain
-`PutItem` via `dynamodb_state.mark_terminal`) -- a successful dispatch
-returns 200 naming the recognized caller type. The old `_verify_post_comment`
-diagnostic backdoor (entry 2) is gone: leaving an unauthenticated path
-reachable alongside real caller-type auth would contradict this story's own
-"unrecognized caller is rejected" criterion.
+Stage-completion callback handling (entry 6, AD-17 caller type c) is real:
+`dynamodb_state.record_stage_status` records every callback's stage/status, and --
+only for the `analysis` workflow's `ready-for-review` status -- the PR's AD-4
+plan-approval summary is rendered from `plan.md` and posted here too (see
+`_handle_stage_callback`), replacing the old in-job call site in
+`analysis_graph.py`. Not yet AD-20's atomic conditional write (entry 9's scope). A
+successful dispatch returns 200 naming the recognized caller type. The old
+`_verify_post_comment` diagnostic backdoor (entry 2) is gone: leaving an
+unauthenticated path reachable alongside real caller-type auth would contradict
+this story's own "unrecognized caller is rejected" criterion.
 """
 
 import base64
@@ -107,6 +112,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         if verify_stage_callback_secret(
             stage_callback_header, credentials["stage_callback_secret"]
         ):
+            _handle_stage_callback(raw_body, credentials["github_pat"])
             return _accepted("stage-callback")
         return _rejected("invalid stage-callback secret")
 
@@ -205,6 +211,104 @@ def _handle_github_comment(raw_body: bytes, credentials: dict[str, Any]) -> None
         _handle_reject(token, pr_number)
     elif command.kind == "rework":
         _handle_rework(token, pr_number, command.feedback or "")
+
+
+def _handle_stage_callback(raw_body: bytes, token: str) -> None:
+    """Parse the secret-verified stage-completion callback body and act on it (AD-17
+    caller type c, entry 6): record the stage status in DynamoDB, and -- only for the
+    `analysis` workflow's `ready-for-review` status -- find the PR by branch, render
+    the AD-4 plan-approval summary from `plan.md`'s committed body (read off the PR's
+    own head branch, never `main`), and post it.
+
+    No open PR found for that branch (already closed/missing): the DynamoDB write
+    still happened; the comment step is simply skipped, not an error.
+
+    Any GitHub API failure past the DynamoDB write is left to propagate out of this
+    function and out of `handler()` itself -- surfacing in Lambda logs, same posture
+    as `_handle_github_comment`.
+    """
+    payload = json.loads(raw_body)
+    stage = payload["stage"]
+    story_slug = payload["story-slug"]
+    run_id = payload["run-id"]
+    status = payload["status"]
+
+    dynamodb_state.record_stage_status(story_slug, run_id, stage, status)
+
+    if stage != "analysis" or status != "ready-for-review":
+        return
+
+    branch = f"{_BRANCH_PREFIX}/{story_slug}/{run_id}"
+    pr = github_app.find_pull_request_by_branch(token, branch)
+    if pr is None:
+        return
+
+    plan_body, _sha = github_app.get_file_content(
+        token, f".factory/{story_slug}/{run_id}/plan.md", pr["head"]["ref"]
+    )
+    github_app.post_comment(token, pr["number"], _render_plan_approval_summary(plan_body))
+
+
+_PLAN_SECTION_HEADERS = ("## Proposal", "## Subtasks", "## Tests")
+
+
+def _parse_plan_sections(plan_body: str) -> dict[str, str]:
+    """Split `plan.md`'s body into its known sections, keyed by header text (without
+    the `## ` prefix), each section's own text stripped of leading/trailing blank
+    lines. Mirrors how `analysis_graph._render_plan_body` wrote them.
+
+    Only the three literal headers it always writes (`_PLAN_SECTION_HEADERS`) are
+    treated as section boundaries -- not any `"## "`-prefixed line -- so a `##`
+    markdown subheading inside the agent's own freeform proposal text is kept as
+    part of the proposal rather than mistaken for a new section.
+    """
+    sections: dict[str, str] = {}
+    current: str | None = None
+    lines: list[str] = []
+    for line in plan_body.splitlines():
+        if line in _PLAN_SECTION_HEADERS:
+            if current is not None:
+                sections[current] = "\n".join(lines).strip()
+            current = line[len("## "):].strip()
+            lines = []
+        else:
+            lines.append(line)
+    if current is not None:
+        sections[current] = "\n".join(lines).strip()
+    return sections
+
+
+def _count_bullet_lines(section_text: str) -> int:
+    """Count `- `-prefixed bullet lines in a section's text; 0 for the `_none_`
+    placeholder (and for an absent section)."""
+    if not section_text or section_text.strip() == "_none_":
+        return 0
+    return sum(1 for line in section_text.splitlines() if line.strip().startswith("- "))
+
+
+def _render_plan_approval_summary(plan_body: str) -> str:
+    """AD-4's gate-summary comment for the `plan-approval` gate, rebuilt from
+    `plan.md`'s own committed body (the proposal text verbatim, subtask/test
+    bullet-line counts) -- mirrors `analysis_graph._render_plan_summary`'s shape,
+    which this replaces as the one place that renders it (that call site moved here
+    from the analysis job, per this entry's Approach)."""
+    sections = _parse_plan_sections(plan_body)
+    proposal = sections.get("Proposal") or "_none_"
+    subtasks_count = _count_bullet_lines(sections.get("Subtasks", ""))
+    tests_count = _count_bullet_lines(sections.get("Tests", ""))
+    lines = [
+        "## Plan ready for review",
+        "",
+        "### Proposal",
+        "",
+        proposal,
+        "",
+        f"- Subtasks: {subtasks_count}",
+        f"- Tests: {tests_count}",
+        "",
+        "See `plan.md`/`decisions.md` for full detail.",
+    ]
+    return "\n".join(lines)
 
 
 def _parse_branch(head_ref: str) -> tuple[str, str] | None:

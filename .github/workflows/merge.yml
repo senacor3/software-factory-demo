@@ -68,6 +68,22 @@ jobs:
             --story-slug "${{ github.event.inputs.story-slug }}" \
             --run-id "${{ github.event.inputs.run-id }}"
 
+      # Entry 6 (AD-17 caller type c): reports this job's own concrete stage status
+      # to the orchestrator's Function URL, authenticated via entry 3's shared
+      # stage-callback secret. `merged` is the only status this job can ever report,
+      # by construction -- a failure in "Merge" above never reaches this step (GitHub
+      # Actions' own default step-ordering behavior). ORCHESTRATOR_FUNCTION_URL/
+      # STAGE_CALLBACK_SECRET are human-supplied repo configuration (see analysis.yml).
+      - name: Report stage status to orchestrator
+        run: |
+          uv run factory/scripts/post_stage_callback.py \
+            --url "${{ vars.ORCHESTRATOR_FUNCTION_URL }}" \
+            --secret "${{ secrets.STAGE_CALLBACK_SECRET }}" \
+            --stage merge \
+            --story-slug "${{ github.event.inputs.story-slug }}" \
+            --run-id "${{ github.event.inputs.run-id }}" \
+            --status merged
+
   close-rejected-pr:
     name: "Close PR on gate reject"
     needs: merge

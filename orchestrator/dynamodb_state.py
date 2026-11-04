@@ -1,19 +1,19 @@
-"""dynamodb_state -- the only DynamoDB write this entry owns: marking a
-run terminal when a human posts `/reject` on its PR (AD-2).
+"""dynamodb_state -- the orchestrator's two DynamoDB writes: marking a run
+terminal when a human posts `/reject` on its PR (AD-2, entry 2), and recording a
+workflow's own stage-completion status (AD-17's addendum, entry 6).
 
-`mark_terminal` is a plain `PutItem` against the control-plane table
+Both are plain `PutItem`s against the control-plane table
 `light-factory-orchestrator-state` (must match `local.table_name` in
 `infra/main.tf`), keyed on the composite partition key `story_slug#run_id`
-(AD-17's addendum) -- not yet AD-20's atomic conditional write. That
-matches the IAM policy already granted to the Lambda's role
+(AD-17's addendum) -- not yet AD-20's atomic conditional write (entry 9's scope).
+That matches the IAM policy already granted to the Lambda's role
 (`dynamodb:GetItem`/`dynamodb:PutItem` only, see `infra/main.tf`'s
-`lambda_dynamodb` policy) and keeps this entry's scope to "/reject marks
-the run terminal" without pulling in entry 9's idempotency hardening.
+`lambda_dynamodb` policy).
 
 Lazy `import boto3`, mirroring `handler._load_github_app_credentials` --
 importing this module never requires boto3 to be installed (useful for
 the local test suite, which mocks `boto3.client` out entirely), and a
-request that never calls `mark_terminal` never pays a real AWS SDK import
+request that never calls either write below never pays a real AWS SDK import
 cost.
 """
 
@@ -40,6 +40,31 @@ def mark_terminal(story_slug: str, run_id: str, reason: str) -> None:
             "story_slug#run_id": {"S": f"{story_slug}#{run_id}"},
             "status": {"S": "rejected"},
             "reason": {"S": reason},
+            "updated": {"S": _now()},
+        },
+    )
+
+
+def record_stage_status(story_slug: str, run_id: str, stage: str, status: str) -> None:
+    """Write a stage-completion control-plane row via PutItem (AD-17's addendum,
+    entry 6) -- this entry's own write, alongside `mark_terminal`. Same composite
+    partition key shape (`story_slug#run_id`); `stage`/`status` are whatever the
+    calling workflow's final step reported, not re-validated against AD-10's enum
+    here (that already happened when the state file was written).
+
+    Not yet AD-20's atomic conditional write (entry 9's scope) -- a second callback
+    for the same story_slug/run_id just overwrites the row, same posture as
+    `mark_terminal`.
+    """
+    import boto3
+
+    client = boto3.client("dynamodb")
+    client.put_item(
+        TableName=_TABLE_NAME,
+        Item={
+            "story_slug#run_id": {"S": f"{story_slug}#{run_id}"},
+            "stage": {"S": stage},
+            "status": {"S": status},
             "updated": {"S": _now()},
         },
     )

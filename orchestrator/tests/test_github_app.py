@@ -2,7 +2,9 @@
 `/approve`/`/rework`/`/reject` comment-command grammar needs
 (orchestrator/github_app.py): post_comment, get_pull_request,
 dispatch_workflow, get_file_content, update_file_content,
-close_pull_request.
+close_pull_request. Also covers `find_pull_request_by_branch`, which the
+stage-completion callback (entry 6) needs since it is keyed on
+story-slug/run-id (branch name), not a PR number.
 
 No real network calls: every function mocks urllib.request.urlopen. Auth
 is a fine-grained GitHub PAT (AD-18) passed straight through as the Bearer
@@ -26,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from github_app import (  # noqa: E402
     close_pull_request,
     dispatch_workflow,
+    find_pull_request_by_branch,
     get_file_content,
     get_pull_request,
     post_comment,
@@ -221,6 +224,46 @@ class TestUpdateFileContent:
             update_file_content(
                 "ghs_abc123", "x.md", "main", "content", "oldsha", "message"
             )
+
+
+class TestFindPullRequestByBranch:
+    @patch("github_app.urllib.request.urlopen")
+    def test_returns_first_match_for_the_head_filter(self, mock_urlopen):
+        mock_urlopen.return_value = _fake_http_response(
+            [{"number": 42, "head": {"ref": "software-factory/my-slug/run-7"}}]
+        )
+
+        result = find_pull_request_by_branch("ghs_abc123", "software-factory/my-slug/run-7")
+
+        assert result == {"number": 42, "head": {"ref": "software-factory/my-slug/run-7"}}
+        request = mock_urlopen.call_args[0][0]
+        assert request.full_url == (
+            "https://api.github.com/repos/senacor3/software-factory-demo/pulls"
+            "?head=senacor3:software-factory/my-slug/run-7&state=open"
+        )
+        assert request.get_header("Authorization") == "Bearer ghs_abc123"
+
+    @patch("github_app.urllib.request.urlopen")
+    def test_returns_none_when_no_open_pr_matches(self, mock_urlopen):
+        mock_urlopen.return_value = _fake_http_response([])
+
+        result = find_pull_request_by_branch("ghs_abc123", "software-factory/my-slug/run-7")
+
+        assert result is None
+
+    @patch("github_app.urllib.request.urlopen")
+    def test_surfaces_github_error_body_on_failure(self, mock_urlopen):
+        error_body = json.dumps({"message": "Bad credentials"}).encode("utf-8")
+        mock_urlopen.side_effect = urllib.error.HTTPError(
+            url="https://api.github.com/repos/senacor3/software-factory-demo/pulls",
+            code=401,
+            msg="Unauthorized",
+            hdrs=None,
+            fp=BytesIO(error_body),
+        )
+
+        with pytest.raises(RuntimeError, match="Bad credentials"):
+            find_pull_request_by_branch("ghs_abc123", "software-factory/my-slug/run-7")
 
 
 class TestClosePullRequest:
