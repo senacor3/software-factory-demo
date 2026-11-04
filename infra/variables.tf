@@ -41,3 +41,32 @@ variable "github_app_private_key_pem" {
   type        = string
   sensitive   = true
 }
+
+variable "github_webhook_secret" {
+  description = <<-EOT
+    Shared secret GitHub signs each webhook delivery's body with
+    (HMAC-SHA256, checked via the `X-Hub-Signature-256` header). Must match
+    the secret entered in the GitHub App's webhook configuration -- a live
+    hookup step that is explicitly NOT part of this story's Done (see
+    story 3's Design Notes); a self-signed synthetic request exercises the
+    identical HMAC logic. No default on purpose -- supply only via `-var`,
+    a `.tfvars` file excluded from git, or a
+    `TF_VAR_github_webhook_secret` env var at apply time. Stored in
+    Secrets Manager, never baked into the Lambda package.
+  EOT
+  type        = string
+  sensitive   = true
+}
+
+variable "stage_callback_secret" {
+  description = <<-EOT
+    Shared secret a stage-completion callback caller must present (via a
+    dedicated header, checked by constant-time comparison) to be
+    recognized as that caller type. No default on purpose -- supply only
+    via `-var`, a `.tfvars` file excluded from git, or a
+    `TF_VAR_stage_callback_secret` env var at apply time. Stored in
+    Secrets Manager, never baked into the Lambda package.
+  EOT
+  type        = string
+  sensitive   = true
+}
