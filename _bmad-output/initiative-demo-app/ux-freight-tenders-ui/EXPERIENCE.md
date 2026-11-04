@@ -16,6 +16,7 @@ Responsive web, desktop-primary. Angular (standalone components) on the existing
 |---|---|---|
 | Tender overview (`/`) | App open, "Abbrechen" from either other surface | Two sortable tables — open tenders, and finished (awarded and closed) tenders with an extra sortable Status column — each with the shipment at a glance (Von, Nach, Abholung, Ladung, Fahrzeug, Angebotsfrist, Angebote), and the entry point to create a new one |
 | Create tender (`/tenders/new`) | "Neue Ausschreibung erstellen" link on overview | Form with five field groups (Strecke, Termine, Ladung, Fahrzeug, Ausschreibung) for the full shipment data → creates an open tender, returns to overview |
+| Edit tender (`/tenders/:id/edit`) | "Bearbeiten" link in the detail header of an open tender (left of the close button); "Zurück zur Ausschreibung" back link | The create form prefilled with the tender's data → saves, returns to the detail page; "Abbrechen" returns without a request. Not editable (no form) once awarded or closed |
 | Tender detail (`/tenders/:id`) | Selecting a row in either overview table; "Zurück zur Übersicht" back link returns to the overview | One tender's full picture: identity, status, a one-line summary, the shipment data in four cards (Strecke, Termine, Ladung, Fahrzeug und Konditionen), a sortable offers table with an add-form, a sortable remarks table with an add-form — an in-place award action per non-expired offer, both forms disabled once awarded or closed |
 
 No surface beyond these three; this redesign changes how they look and how their lists are presented (table vs. plain list), not what they do. → Composition reference: `mockups/tender-overview.html`, `mockups/tender-detail.html`. Spine wins on conflict.
@@ -43,6 +44,7 @@ Behavioral. Visual specs live in `DESIGN.md.Components`.
 | Status pill | Detail-page header, and the Status column of the overview's finished-tenders table (the open table carries none, its heading already says it) (inline right of the title, on the same row as the close button) | `status-pill-open`/`status-pill-awarded`/`status-pill-closed` per `DESIGN.md`; label is "Offen"/"Vergeben"/"Geschlossen", never the raw backend value. |
 | Create-tender form | `/tenders/new` | Five `<fieldset>` groups with a `<legend>` in `{typography.title}`; fields within a group sit side by side and stack at 600px and narrower. "ADR-Klasse" and the two temperature fields appear only while "Gefahrgut (ADR)" / "Temperaturgeführt" is checked. The same rules as the backend apply: a touched, invalid field shows a German message directly below it in `{colors.error}`, cross-field messages under the field to fix; submit disabled until the form is valid. Success navigates to `/`; failure handled per State Patterns → Form submit failed, form state preserved so the user can retry without retyping. |
 | Add-remark / add-offer form | Detail page, inside each table's own section | One field-set per table (remark: free text; offer: Anbieter, Betrag, Zustellung am, Gültig bis, Hinweis (optional), with a German message under each invalid touched field). The offers table shows Anbieter, Betrag, Zustellung, Gültig bis and Hinweis; the first four are sortable, Zustellung adds the caption "nach Wunschtermin" when later than the tender's delivery date, and Gültig bis adds "abgelaufen" once past. Submitting adds the new row to that table without a full page reload — at the top by default, or at its sorted position when a column is active. Both forms disable (fields + submit) together when the tender is closed, replaced by one shared explanation line above both — not duplicated per form. |
+| Tender form | Create and edit pages (one shared form) | Fields, groups, validation and German messages are defined once. In edit mode the form is prefilled (ADR class and temperature range included), "Speichern" stays disabled while the form is invalid, unchanged or submitting, and a past pickup or bid-deadline date is accepted only if it equals the stored value. |
 | Empty state | Any table with no rows | Centered `{typography.caption}` text inside the table's body area (not a full-page takeover), for example "Keine Bemerkungen vorhanden." |
 
 ## State Patterns
@@ -54,6 +56,7 @@ Behavioral. Visual specs live in `DESIGN.md.Components`.
 | Backend unreachable | Overview, detail | One caption-styled error message replacing the affected content; existing German copy is reused as-is. |
 | Unknown tender id | Detail | Same error treatment as backend-unreachable, German not-found message, no crash. |
 | Awarded tender | Detail | Status pill shows "Vergeben"; the awarded offer is listed first and labelled "Zuschlag" in the Vergeben column, other rows stay empty there; the close button is removed; both add-forms disabled; a new explanation line is shown above them and receives focus after a successful award. Awarding uses an in-place confirmation on a single row ("Zuschlag bestätigen" / "Abbrechen"); buttons are disabled while the request is in flight; a failure shows a German `role="alert"` message under the offers table and the tender stays open. Offers past their Gültig bis show no Vergeben button. The overview's Angebote cell shows "Zuschlag: supplier amount" on its second line. |
+| Tender with offers: locked fields | Edit | A notice ("locked-fields-notice") explains that offers exist; every field except "Zustellung bis" and "Angebotsfrist" is disabled but still sent with its stored value. A 409 on save shows "nicht mehr in dieser Form geändert" above the buttons and keeps the entered values. |
 | Closed tender | Detail | Status pill shows "Geschlossen"; both add-forms disabled; one explanation line shown above them. After a successful close, focus moves to that explanation line (the close button it replaces is removed). |
 | Bid deadline passed | Detail, open tender whose Angebotsfrist is before today | Offer form (fields + submit) disabled with a notice above it; the remark form stays enabled. A closed tender shows only the closed explanation. A failed offer submit (including a server-side 409) shows the offer error and keeps the entered values. |
 | Form submit in flight | Create, add-remark, add-offer | Submit button disabled for the duration (prevents double-submit); no spinner needed at this scale — the round trip is local and fast. |
@@ -95,6 +98,14 @@ Failure: the remark submission fails (backend hiccup) — inline error appears b
 3. **Climax:** she's returned to the overview, and the new Bremen → Antwerpen tender is already sitting at the top of the open-tenders table — in the default newest-first order, since sort state is page-local and resets on every visit — so she sees her own action land without having to look for it.
 
 Failure: she sets the delivery date before the pickup date — "Die Zustellung darf nicht vor der Abholung liegen." appears under "Zustellung bis" and "Erstellen" stays disabled until she corrects it, so there's no failed request to recover from in the first place.
+
+### Flow 3 — Correcting a tender (Lena)
+
+1. On an open tender's detail page, Lena selects "Bearbeiten".
+2. The form opens prefilled. She fixes the weight (or, if offers exist, only the delivery date or bid deadline) and selects "Speichern".
+3. **Climax:** she lands back on the detail page showing the corrected values.
+
+Failure: if the tender was closed or received offers in the meantime, the save is rejected with a 409 and the message "nicht mehr in dieser Form geändert" appears above the buttons; her entries stay.
 
 ## Inspiration & Anti-patterns
 

@@ -30,11 +30,14 @@ class TenderServiceTest {
   private static final Clock CLOCK =
       Clock.fixed(Instant.parse("2026-10-13T08:00:00Z"), ZoneId.of("Europe/Berlin"));
 
+  private static final jakarta.validation.Validator VALIDATOR =
+      jakarta.validation.Validation.buildDefaultValidatorFactory().getValidator();
+
   private TenderService tenderService;
 
   @BeforeEach
   void setUp() {
-    tenderService = new TenderService(tenderRepository, CLOCK);
+    tenderService = new TenderService(tenderRepository, CLOCK, VALIDATOR);
   }
 
   @Test
@@ -167,7 +170,7 @@ class TenderServiceTest {
         .willAnswer(invocation -> invocation.getArgument(0));
     Clock deadlineDay =
         Clock.fixed(Instant.parse("2026-10-16T08:00:00Z"), ZoneId.of("Europe/Berlin"));
-    TenderService service = new TenderService(tenderRepository, deadlineDay);
+    TenderService service = new TenderService(tenderRepository, deadlineDay, VALIDATOR);
 
     Tender result =
         service.addOffer(
@@ -189,7 +192,7 @@ class TenderServiceTest {
     given(tenderRepository.save(any(Tender.class)))
         .willAnswer(invocation -> invocation.getArgument(0));
     Clock dayAfter = Clock.fixed(Instant.parse("2026-10-17T08:00:00Z"), ZoneId.of("Europe/Berlin"));
-    TenderService service = new TenderService(tenderRepository, dayAfter);
+    TenderService service = new TenderService(tenderRepository, dayAfter, VALIDATOR);
 
     assertThatThrownBy(
             () ->
@@ -213,7 +216,7 @@ class TenderServiceTest {
     tender.close();
     given(tenderRepository.findById(1L)).willReturn(Optional.of(tender));
     Clock dayAfter = Clock.fixed(Instant.parse("2026-10-17T08:00:00Z"), ZoneId.of("Europe/Berlin"));
-    TenderService service = new TenderService(tenderRepository, dayAfter);
+    TenderService service = new TenderService(tenderRepository, dayAfter, VALIDATOR);
 
     assertThatThrownBy(
             () ->
@@ -319,7 +322,7 @@ class TenderServiceTest {
         .willAnswer(invocation -> invocation.getArgument(0));
     Clock dayAfter = Clock.fixed(Instant.parse("2026-10-17T08:00:00Z"), ZoneId.of("Europe/Berlin"));
 
-    Tender result = new TenderService(tenderRepository, dayAfter).awardTender(1L, 10L);
+    Tender result = new TenderService(tenderRepository, dayAfter, VALIDATOR).awardTender(1L, 10L);
 
     assertThat(result.getStatus()).isEqualTo(TenderStatus.AWARDED);
   }

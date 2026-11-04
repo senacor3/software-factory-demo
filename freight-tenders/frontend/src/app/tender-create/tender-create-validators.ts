@@ -33,8 +33,14 @@ export const oneFractionDigit: ValidatorFn = (control) => {
     : null;
 };
 
-export const pickupNotInPast: ValidatorFn = (control) =>
-  isFilled(control.value) && control.value < todayIso() ? { pickupInPast: true } : null;
+// On edit, a date equal to the originally loaded value is accepted even if it is now in the past;
+// `original` returns that value (or null on create, where every past date is rejected).
+export function pickupNotInPast(original: () => string | null = () => null): ValidatorFn {
+  return (control) =>
+    isFilled(control.value) && control.value < todayIso() && control.value !== original()
+      ? { pickupInPast: true }
+      : null;
+}
 
 export const deliveryNotBeforePickup: ValidatorFn = (control) => {
   const pickup = sibling(control, 'pickupDate');
@@ -43,8 +49,12 @@ export const deliveryNotBeforePickup: ValidatorFn = (control) => {
     : null;
 };
 
-export const deadlineNotInPast: ValidatorFn = (control) =>
-  isFilled(control.value) && control.value < todayIso() ? { deadlineInPast: true } : null;
+export function deadlineNotInPast(original: () => string | null = () => null): ValidatorFn {
+  return (control) =>
+    isFilled(control.value) && control.value < todayIso() && control.value !== original()
+      ? { deadlineInPast: true }
+      : null;
+}
 
 export const deadlineNotAfterPickup: ValidatorFn = (control) => {
   const pickup = sibling(control, 'pickupDate');

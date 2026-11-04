@@ -154,6 +154,10 @@ export class TenderApiService {
     return this.http.post<TenderSummary>('/api/tenders', request);
   }
 
+  update(id: number, request: CreateTenderRequest): Observable<TenderSummary> {
+    return this.http.put<TenderSummary>(`/api/tenders/${id}`, request);
+  }
+
   detail(id: number): Observable<TenderDetail> {
     return this.http.get<TenderDetail>(`/api/tenders/${id}`);
   }

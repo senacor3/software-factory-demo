@@ -421,6 +421,13 @@ select:disabled {
   white-space: nowrap;
 }
 
+.page-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(2 * var(--space-unit));
+}
+
 @media (max-width: 600px) {
   .page {
     padding: var(--space-margin-mobile);
@@ -429,6 +436,12 @@ select:disabled {
   .page-header {
     flex-wrap: wrap;
     align-items: flex-start;
+  }
+
+  .page-header-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .data-table th:not(.sortable),

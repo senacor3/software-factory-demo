@@ -227,6 +227,42 @@ public class Tender {
     offer.setTender(this);
   }
 
+  /** Replaces the 16 data fields; id, status, remarks, offers and awardedOffer are untouched. */
+  public void update(
+      Address origin,
+      Address destination,
+      LocalDate pickupDate,
+      LocalDate deliveryDate,
+      LocalDate bidDeadline,
+      String commodity,
+      Integer weightKg,
+      BigDecimal loadingMeters,
+      Integer palletCount,
+      EquipmentType equipmentType,
+      boolean dangerousGoods,
+      String adrClass,
+      boolean temperatureControlled,
+      Integer temperatureMinC,
+      Integer temperatureMaxC,
+      Currency currency) {
+    this.origin = origin;
+    this.destination = destination;
+    this.pickupDate = pickupDate;
+    this.deliveryDate = deliveryDate;
+    this.bidDeadline = bidDeadline;
+    this.commodity = commodity;
+    this.weightKg = weightKg;
+    this.loadingMeters = loadingMeters;
+    this.palletCount = palletCount;
+    this.equipmentType = equipmentType;
+    this.dangerousGoods = dangerousGoods;
+    this.adrClass = adrClass;
+    this.temperatureControlled = temperatureControlled;
+    this.temperatureMinC = temperatureMinC;
+    this.temperatureMaxC = temperatureMaxC;
+    this.currency = currency;
+  }
+
   public void close() {
     status = TenderStatus.CLOSED;
   }

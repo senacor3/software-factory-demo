@@ -27,6 +27,19 @@ public class TenderExceptionHandler {
         .body(ErrorResponse.of(HttpStatus.CONFLICT, exception.getMessage(), request));
   }
 
+  @ExceptionHandler(TenderFieldsLockedException.class)
+  public ResponseEntity<ErrorResponse> handleTenderFieldsLocked(
+      TenderFieldsLockedException exception, HttpServletRequest request) {
+    return ResponseEntity.status(HttpStatus.CONFLICT)
+        .body(ErrorResponse.of(HttpStatus.CONFLICT, exception.getMessage(), request));
+  }
+
+  @ExceptionHandler(TenderValidationException.class)
+  public ResponseEntity<ErrorResponse> handleTenderValidation(
+      TenderValidationException exception, HttpServletRequest request) {
+    return badRequest("Request validation failed", exception.getViolations(), request);
+  }
+
   @ExceptionHandler(OfferExpiredException.class)
   public ResponseEntity<ErrorResponse> handleOfferExpired(
       OfferExpiredException exception, HttpServletRequest request) {

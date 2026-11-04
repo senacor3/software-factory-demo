@@ -27,6 +27,7 @@ gone on restart.
 | Endpoint | Does | Success |
 |---|---|---|
 | `POST /api/tenders` | Creates an open tender from the shipment data (`origin`/`destination` as `{country, postalCode, city}`, `pickupDate`, `deliveryDate`, `bidDeadline`, `commodity`, `weightKg`, `loadingMeters`, optional `palletCount`, `equipmentType`, `dangerousGoods` with `adrClass`, `temperatureControlled` with `temperatureMinC`/`temperatureMaxC`, `currency`); invalid data returns `400` with `violations` | `201` |
+| `PUT /api/tenders/{id}` | Replaces the data of an open tender with the same body as `POST /api/tenders` (checked in order: `404` unknown id, `400` invalid data, `409` tender not open, `409` locked fields). A `pickupDate` or `bidDeadline` in the past is accepted only if it equals the stored value. Once the tender has offers (expired ones included), only `deliveryDate` and `bidDeadline` may change; the `409` names the differing fields | `200` |
 | `GET /api/tenders` | Lists tenders, each with `offerCount` and `lowestOfferAmount` (`null` without offers); optional `?status=OPEN`, `?status=AWARDED` or `?status=CLOSED`; awarded tenders also carry `awardedSupplierName` and `awardedAmount` (`null` otherwise) | `200` |
 | `GET /api/tenders/{id}` | Returns one tender with its remarks and offers | `200` |
 | `POST /api/tenders/{id}/close` | Closes the tender (`409` for an awarded tender) | `200` |
@@ -58,6 +59,7 @@ Angular (standalone components, SCSS, Vitest for unit tests).
 |---|---|---|
 | `/` | `TenderOverview` | Two tables, "Offene Ausschreibungen" (open) and "Abgeschlossene Ausschreibungen" (awarded and closed, with a sortable "Status" column); each row shows the route, pickup date, load, vehicle, bid deadline and offer count with the lowest offer (or "Zuschlag: supplier amount" for an awarded tender); the tables scroll horizontally on narrow screens; a row opens that tender |
 | `/tenders/new` | `TenderCreate` | A form with five field groups (route "Strecke", dates "Termine", cargo "Ladung", vehicle "Fahrzeug", tender "Ausschreibung") for the full shipment data, validated with the backend's rules; on success it returns to the overview |
+| `/tenders/:id/edit` | `TenderEdit` | The create form prefilled with the tender's data ("Speichern", "Abbrechen"); only for open tenders (otherwise "not editable"); with offers, a notice and only "Zustellung bis" and "Angebotsfrist" stay editable; on success it returns to the tender |
 | `/tenders/:id` | `TenderDetail` | A "Zurück zur Übersicht" back link, the tender's status, a one-line summary, the shipment data as four cards (Strecke, Termine, Ladung, Fahrzeug und Konditionen), its offers and remarks as two tables, a form to add each, a "Vergeben" button per non-expired offer with an in-place confirmation while the tender is open, and an "Ausschreibung schließen" button while the tender is open |
 
 ```bash
