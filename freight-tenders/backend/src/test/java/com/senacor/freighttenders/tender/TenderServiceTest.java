@@ -357,6 +357,454 @@ class TenderServiceTest {
     assertThat(tenderService.closeTender(1L).getStatus()).isEqualTo(TenderStatus.CLOSED);
   }
 
+  @Test
+  void updateTenderReplacesDataAndKeepsIdStatusAndRemarks() {
+    Tender tender = TenderFixtures.tender();
+    ReflectionTestUtils.setField(tender, "id", 1L);
+    tender.addRemark(new Remark("keep me"));
+    givenStoredAndSave(tender);
+
+    Tender result =
+        tenderService.updateTender(
+            1L,
+            new CreateTenderRequest(
+                new CreateTenderRequest.AddressRequest("DE", "10115", "Berlin"),
+                new CreateTenderRequest.AddressRequest("NL", "3011 AA", "Rotterdam"),
+                LocalDate.of(2026, 10, 21),
+                LocalDate.of(2026, 10, 23),
+                LocalDate.of(2026, 10, 17),
+                "Neue Ware",
+                1000,
+                new BigDecimal("5.5"),
+                null,
+                EquipmentType.REEFER,
+                true,
+                "3",
+                true,
+                -5,
+                5,
+                Currency.EUR));
+
+    assertThat(result.getId()).isEqualTo(1L);
+    assertThat(result.getStatus()).isEqualTo(TenderStatus.OPEN);
+    assertThat(result.getRemarks()).hasSize(1);
+    assertThat(result.getOrigin().city()).isEqualTo("Berlin");
+    assertThat(result.getPickupDate()).isEqualTo(LocalDate.of(2026, 10, 21));
+    assertThat(result.getCommodity()).isEqualTo("Neue Ware");
+    assertThat(result.getPalletCount()).isNull();
+    assertThat(result.isDangerousGoods()).isTrue();
+    assertThat(result.getAdrClass()).isEqualTo("3");
+    assertThat(result.getTemperatureMinC()).isEqualTo(-5);
+    verify(tenderRepository).save(tender);
+  }
+
+  @Test
+  void updateTenderWithUnchangedDataSucceeds() {
+    Tender tender = TenderFixtures.tender();
+    givenStoredAndSave(tender);
+
+    assertThat(tenderService.updateTender(1L, TenderFixtures.request()).getCommodity())
+        .isEqualTo("Maschinenteile auf Europaletten");
+  }
+
+  @Test
+  void updateTenderOnUnknownIdThrowsNotFoundEvenForInvalidBody() {
+    given(tenderRepository.findById(99L)).willReturn(Optional.empty());
+    CreateTenderRequest invalid = requestWithCommodity("");
+
+    assertThatThrownBy(() -> tenderService.updateTender(99L, invalid))
+        .isInstanceOf(TenderNotFoundException.class);
+  }
+
+  @Test
+  void updateTenderWithBlankCommodityIsRejectedAndLeavesTenderUnchanged() {
+    Tender tender = TenderFixtures.tender();
+    given(tenderRepository.findById(1L)).willReturn(Optional.of(tender));
+
+    assertThat(violationFields(requestWithCommodity(" "))).contains("commodity");
+    assertThat(tender.getCommodity()).isEqualTo("Maschinenteile auf Europaletten");
+    verify(tenderRepository, never()).save(any());
+  }
+
+  @Test
+  void updateTenderRejectsEachCrossFieldRule() {
+    Tender tender = TenderFixtures.tender();
+    given(tenderRepository.findById(1L)).willReturn(Optional.of(tender));
+    LocalDate pickup = LocalDate.of(2026, 10, 20);
+    LocalDate deliver = LocalDate.of(2026, 10, 22);
+    LocalDate deadline = LocalDate.of(2026, 10, 16);
+
+    LocalDate early = LocalDate.of(2026, 10, 19);
+    LocalDate late = LocalDate.of(2026, 10, 21);
+
+    assertThat(rejected(pickup, early, deadline, false, null, false, null, null))
+        .contains("deliveryDate");
+    assertThat(rejected(pickup, deliver, late, false, null, false, null, null))
+        .contains("bidDeadline");
+    assertThat(rejected(pickup, deliver, deadline, true, null, false, null, null))
+        .contains("adrClass");
+    assertThat(rejected(pickup, deliver, deadline, false, "3", false, null, null))
+        .contains("adrClass");
+    assertThat(rejected(pickup, deliver, deadline, false, null, true, null, null))
+        .contains("equipmentType", "temperatureMinC", "temperatureMaxC");
+    assertThat(rejected(pickup, deliver, deadline, false, null, true, 9, 1))
+        .contains("temperatureMinC", "temperatureMaxC");
+    assertThat(rejected(pickup, deliver, deadline, false, null, false, 1, 2))
+        .contains("temperatureMinC", "temperatureMaxC");
+    verify(tenderRepository, never()).save(any());
+  }
+
+  @Test
+  void updateTenderAcceptsPastDatesEqualToStoredValuesButNotChangedOnes() {
+    Tender tender =
+        new Tender(
+            new Address("DE", "20457", "Hamburg"),
+            new Address("NL", "3011 AA", "Rotterdam"),
+            LocalDate.of(2026, 10, 10),
+            LocalDate.of(2026, 10, 12),
+            LocalDate.of(2026, 10, 5),
+            "Maschinenteile auf Europaletten",
+            18500,
+            new BigDecimal("13.6"),
+            33,
+            EquipmentType.CURTAIN_SIDER,
+            false,
+            null,
+            false,
+            null,
+            null,
+            Currency.EUR);
+    givenStoredAndSave(tender);
+
+    CreateTenderRequest same =
+        requestWith(
+            LocalDate.of(2026, 10, 10),
+            LocalDate.of(2026, 10, 12),
+            LocalDate.of(2026, 10, 5),
+            false,
+            null,
+            false,
+            null,
+            null);
+    assertThat(tenderService.updateTender(1L, same)).isSameAs(tender);
+
+    assertThat(
+            violationFields(
+                requestWith(
+                    LocalDate.of(2026, 10, 11),
+                    LocalDate.of(2026, 10, 12),
+                    LocalDate.of(2026, 10, 5),
+                    false,
+                    null,
+                    false,
+                    null,
+                    null)))
+        .containsExactly("pickupDate");
+    assertThat(
+            violationFields(
+                requestWith(
+                    LocalDate.of(2026, 10, 10),
+                    LocalDate.of(2026, 10, 12),
+                    LocalDate.of(2026, 10, 6),
+                    false,
+                    null,
+                    false,
+                    null,
+                    null)))
+        .containsExactly("bidDeadline");
+  }
+
+  @Test
+  void updateTenderOnClosedOrAwardedTenderIsRejectedWithConflict() {
+    Tender closed = TenderFixtures.tender();
+    closed.close();
+    given(tenderRepository.findById(1L)).willReturn(Optional.of(closed));
+
+    assertThatThrownBy(() -> tenderService.updateTender(1L, TenderFixtures.request()))
+        .isInstanceOf(TenderClosedException.class);
+
+    Tender awarded = tenderWithOffer(LocalDate.of(2026, 10, 30));
+    awarded.award(awarded.getOffers().get(0));
+    given(tenderRepository.findById(2L)).willReturn(Optional.of(awarded));
+    assertThatThrownBy(() -> tenderService.updateTender(2L, TenderFixtures.request()))
+        .isInstanceOf(TenderClosedException.class);
+    verify(tenderRepository, never()).save(any());
+  }
+
+  @Test
+  void updateTenderWithInvalidBodyOnClosedTenderReturnsValidationNotConflict() {
+    Tender closed = TenderFixtures.tender();
+    closed.close();
+    given(tenderRepository.findById(1L)).willReturn(Optional.of(closed));
+
+    assertThatThrownBy(() -> tenderService.updateTender(1L, requestWithCommodity("")))
+        .isInstanceOf(TenderValidationException.class);
+  }
+
+  @Test
+  void updateTenderWithOffersAllowsChangingOnlyDeliveryDateAndBidDeadline() {
+    Tender tender = tenderWithOffer(LocalDate.of(2026, 10, 30));
+    givenStoredAndSave(tender);
+
+    Tender result =
+        tenderService.updateTender(
+            1L,
+            requestWith(
+                LocalDate.of(2026, 10, 20),
+                LocalDate.of(2026, 10, 25),
+                LocalDate.of(2026, 10, 18),
+                false,
+                null,
+                false,
+                null,
+                null));
+
+    assertThat(result.getDeliveryDate()).isEqualTo(LocalDate.of(2026, 10, 25));
+    assertThat(result.getBidDeadline()).isEqualTo(LocalDate.of(2026, 10, 18));
+  }
+
+  @Test
+  void updateTenderWithOffersRejectsChangedLockedFieldsNamingThem() {
+    Tender tender = tenderWithOffer(LocalDate.of(2026, 10, 30));
+    given(tenderRepository.findById(1L)).willReturn(Optional.of(tender));
+
+    assertThatThrownBy(() -> tenderService.updateTender(1L, requestWithCommodity("Andere Ware")))
+        .isInstanceOf(TenderFieldsLockedException.class)
+        .hasMessageContaining("commodity");
+
+    CreateTenderRequest base = TenderFixtures.request();
+    CreateTenderRequest otherCurrency =
+        new CreateTenderRequest(
+            base.origin(),
+            base.destination(),
+            base.pickupDate(),
+            base.deliveryDate(),
+            base.bidDeadline(),
+            base.commodity(),
+            base.weightKg(),
+            base.loadingMeters(),
+            base.palletCount(),
+            base.equipmentType(),
+            base.dangerousGoods(),
+            base.adrClass(),
+            base.temperatureControlled(),
+            base.temperatureMinC(),
+            base.temperatureMaxC(),
+            Currency.values()[(base.currency().ordinal() + 1) % Currency.values().length]);
+    assertThatThrownBy(() -> tenderService.updateTender(1L, otherCurrency))
+        .isInstanceOf(TenderFieldsLockedException.class)
+        .hasMessageContaining("currency");
+
+    CreateTenderRequest otherOrigin =
+        new CreateTenderRequest(
+            new CreateTenderRequest.AddressRequest("DE", "20457", "Bremen"),
+            base.destination(),
+            base.pickupDate(),
+            base.deliveryDate(),
+            base.bidDeadline(),
+            base.commodity(),
+            base.weightKg(),
+            base.loadingMeters(),
+            base.palletCount(),
+            base.equipmentType(),
+            base.dangerousGoods(),
+            base.adrClass(),
+            base.temperatureControlled(),
+            base.temperatureMinC(),
+            base.temperatureMaxC(),
+            base.currency());
+    assertThatThrownBy(() -> tenderService.updateTender(1L, otherOrigin))
+        .isInstanceOf(TenderFieldsLockedException.class)
+        .hasMessageContaining("origin");
+    verify(tenderRepository, never()).save(any());
+  }
+
+  @Test
+  void updateTenderWithOffersTreatsEqualValuesAsUnchanged() {
+    Tender tender =
+        new Tender(
+            new Address("DE", "20457", "Hamburg"),
+            new Address("NL", "3011 AA", "Rotterdam"),
+            LocalDate.of(2026, 10, 20),
+            LocalDate.of(2026, 10, 22),
+            LocalDate.of(2026, 10, 16),
+            "Maschinenteile auf Europaletten",
+            18500,
+            new BigDecimal("13.60"),
+            null,
+            EquipmentType.CURTAIN_SIDER,
+            false,
+            null,
+            false,
+            null,
+            null,
+            Currency.EUR);
+    tender.addOffer(TenderFixtures.offer("Acme", new BigDecimal("100.00")));
+    givenStoredAndSave(tender);
+    CreateTenderRequest base = TenderFixtures.request();
+
+    // loadingMeters 13.6 vs stored 13.60, palletCount absent vs stored null
+    Tender result =
+        tenderService.updateTender(
+            1L,
+            new CreateTenderRequest(
+                base.origin(),
+                base.destination(),
+                base.pickupDate(),
+                base.deliveryDate(),
+                base.bidDeadline(),
+                base.commodity(),
+                base.weightKg(),
+                new BigDecimal("13.6"),
+                null,
+                base.equipmentType(),
+                base.dangerousGoods(),
+                null,
+                base.temperatureControlled(),
+                null,
+                null,
+                base.currency()));
+
+    assertThat(result).isSameAs(tender);
+  }
+
+  @Test
+  void updateTenderWithOnlyExpiredOffersIsStillLocked() {
+    Tender tender = tenderWithOffer(LocalDate.of(2026, 10, 1));
+    given(tenderRepository.findById(1L)).willReturn(Optional.of(tender));
+
+    assertThatThrownBy(() -> tenderService.updateTender(1L, requestWithCommodity("Andere Ware")))
+        .isInstanceOf(TenderFieldsLockedException.class);
+  }
+
+  @Test
+  void extendingAPassedBidDeadlineMakesAddOfferWorkAgain() {
+    Tender tender =
+        new Tender(
+            new Address("DE", "20457", "Hamburg"),
+            new Address("NL", "3011 AA", "Rotterdam"),
+            LocalDate.of(2026, 10, 20),
+            LocalDate.of(2026, 10, 22),
+            LocalDate.of(2026, 10, 10),
+            "Maschinenteile auf Europaletten",
+            18500,
+            new BigDecimal("13.6"),
+            33,
+            EquipmentType.CURTAIN_SIDER,
+            false,
+            null,
+            false,
+            null,
+            null,
+            Currency.EUR);
+    givenStoredAndSave(tender);
+
+    assertThatThrownBy(() -> addOffer(1L, LocalDate.of(2026, 10, 21)))
+        .isInstanceOf(BidDeadlinePassedException.class);
+
+    tenderService.updateTender(
+        1L,
+        requestWith(
+            LocalDate.of(2026, 10, 20),
+            LocalDate.of(2026, 10, 22),
+            LocalDate.of(2026, 10, 13),
+            false,
+            null,
+            false,
+            null,
+            null));
+
+    assertThat(addOffer(1L, LocalDate.of(2026, 10, 21)).getOffers()).hasSize(1);
+  }
+
+  private void givenStoredAndSave(Tender tender) {
+    given(tenderRepository.findById(1L)).willReturn(Optional.of(tender));
+    given(tenderRepository.save(any(Tender.class)))
+        .willAnswer(invocation -> invocation.getArgument(0));
+  }
+
+  private List<String> rejected(
+      LocalDate pickup,
+      LocalDate delivery,
+      LocalDate deadline,
+      boolean dangerousGoods,
+      String adrClass,
+      boolean temperatureControlled,
+      Integer minC,
+      Integer maxC) {
+    return violationFields(
+        requestWith(
+            pickup,
+            delivery,
+            deadline,
+            dangerousGoods,
+            adrClass,
+            temperatureControlled,
+            minC,
+            maxC));
+  }
+
+  private List<String> violationFields(CreateTenderRequest request) {
+    try {
+      tenderService.updateTender(1L, request);
+    } catch (TenderValidationException exception) {
+      return exception.getViolations().stream()
+          .map(TenderExceptionHandler.Violation::field)
+          .toList();
+    }
+    return List.of();
+  }
+
+  private static CreateTenderRequest requestWithCommodity(String commodity) {
+    CreateTenderRequest base = TenderFixtures.request();
+    return new CreateTenderRequest(
+        base.origin(),
+        base.destination(),
+        base.pickupDate(),
+        base.deliveryDate(),
+        base.bidDeadline(),
+        commodity,
+        base.weightKg(),
+        base.loadingMeters(),
+        base.palletCount(),
+        base.equipmentType(),
+        base.dangerousGoods(),
+        base.adrClass(),
+        base.temperatureControlled(),
+        base.temperatureMinC(),
+        base.temperatureMaxC(),
+        base.currency());
+  }
+
+  private static CreateTenderRequest requestWith(
+      LocalDate pickup,
+      LocalDate delivery,
+      LocalDate deadline,
+      boolean dangerousGoods,
+      String adrClass,
+      boolean temperatureControlled,
+      Integer minC,
+      Integer maxC) {
+    CreateTenderRequest base = TenderFixtures.request();
+    return new CreateTenderRequest(
+        base.origin(),
+        base.destination(),
+        pickup,
+        delivery,
+        deadline,
+        base.commodity(),
+        base.weightKg(),
+        base.loadingMeters(),
+        base.palletCount(),
+        base.equipmentType(),
+        dangerousGoods,
+        adrClass,
+        temperatureControlled,
+        minC,
+        maxC,
+        base.currency());
+  }
+
   private static Tender tenderWithOffer(LocalDate validUntil) {
     Tender tender = TenderFixtures.tender();
     Offer offer =

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -640,5 +641,64 @@ class TenderControllerTest {
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.violations.length()").value(1))
         .andExpect(jsonPath("$.violations[0].field").value("deliveryDate"));
+  }
+
+  @Test
+  void updateTenderReturns200WithUpdatedTender() throws Exception {
+    Tender tender = TenderFixtures.tender();
+    ReflectionTestUtils.setField(tender, "id", 1L);
+    given(tenderService.updateTender(eq(1L), any(CreateTenderRequest.class))).willReturn(tender);
+
+    mockMvc
+        .perform(
+            put("/api/tenders/{id}", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(TenderFixtures.VALID_REQUEST_JSON))
+        .andExpect(status().isOk())
+        .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+        .andExpect(jsonPath("$.id").value(1))
+        .andExpect(jsonPath("$.status").value("OPEN"))
+        .andExpect(jsonPath("$.origin.city").value("Hamburg"));
+
+    ArgumentCaptor<CreateTenderRequest> captor = ArgumentCaptor.forClass(CreateTenderRequest.class);
+    verify(tenderService).updateTender(eq(1L), captor.capture());
+    assertThat(captor.getValue()).isEqualTo(TenderFixtures.request());
+  }
+
+  @Test
+  void updateTenderMapsDomainExceptionsToErrorShape() throws Exception {
+    given(tenderService.updateTender(eq(99L), any(CreateTenderRequest.class)))
+        .willThrow(new TenderNotFoundException(99L));
+    given(tenderService.updateTender(eq(2L), any(CreateTenderRequest.class)))
+        .willThrow(new TenderClosedException(2L));
+    given(tenderService.updateTender(eq(3L), any(CreateTenderRequest.class)))
+        .willThrow(new TenderFieldsLockedException(3L, List.of("commodity", "currency")));
+    given(tenderService.updateTender(eq(4L), any(CreateTenderRequest.class)))
+        .willThrow(
+            new TenderValidationException(
+                List.of(new TenderExceptionHandler.Violation("bidDeadline", "must not be in the past"))));
+
+    mockMvc
+        .perform(putValid(99L))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.violations").doesNotExist());
+    mockMvc.perform(putValid(2L)).andExpect(status().isConflict());
+    mockMvc
+        .perform(putValid(3L))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("commodity")))
+        .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("currency")));
+    mockMvc
+        .perform(putValid(4L))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.violations.length()").value(1))
+        .andExpect(jsonPath("$.violations[0].field").value("bidDeadline"));
+  }
+
+  private static org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder putValid(
+      long id) {
+    return put("/api/tenders/{id}", id)
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(TenderFixtures.VALID_REQUEST_JSON);
   }
 }

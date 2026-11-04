@@ -615,6 +615,29 @@ describe('TenderDetail', () => {
     expect(closeButton(element)).toBeNull();
   });
 
+  function editLink(element: HTMLElement): HTMLAnchorElement | null {
+    return element.querySelector<HTMLAnchorElement>('[data-testid="edit-tender"]');
+  }
+
+  it('shows a secondary German edit link to the edit page for an open tender', async () => {
+    const element = await render(OPEN_TENDER);
+
+    const link = editLink(element)!;
+    expect(link.textContent?.trim()).toBe('Bearbeiten');
+    expect(link.getAttribute('href')).toBe('/tenders/1/edit');
+    expect(link.classList.contains('btn-secondary')).toBe(true);
+  });
+
+  it('never shows the edit link for a closed tender', async () => {
+    expect(editLink(await render(CLOSED_TENDER))).toBeNull();
+  });
+
+  it('never shows the edit link for an awarded tender', async () => {
+    const element = await render({ ...OPEN_TENDER, status: 'AWARDED', awardedOfferId: 20 });
+
+    expect(editLink(element)).toBeNull();
+  });
+
   it('closes the tender in place, keeping remarks and offers and disabling the add-forms', async () => {
     const element = await render(OPEN_TENDER);
 
