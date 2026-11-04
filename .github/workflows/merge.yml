@@ -1,0 +1,119 @@
+name: merge
+
+# Third of the software-factory pipeline's three dispatchable files (AD-2): runs
+# `merge` alone (gated by the evidence-approval Environment), fed by
+# workflow_dispatch inputs instead of a cross-job needs: from a `review` job that
+# lives in implementation-checks-review.yml. `run-id` itself is never recomputed
+# here -- it is accepted verbatim from whatever dispatched this file.
+#
+# Also carries a `close-rejected-pr`-equivalent job for this file's own gate
+# (evidence-approval): cross-file `needs:` is impossible, so AD-16's existing
+# reject-cleanup mechanism is duplicated per downstream file rather than removed
+# (superseded by a later story's direct /reject webhook handling).
+#
+# See _bmad-output/initiative-light-factory/architecture-light-factory/
+# architecture-light-factory.md for the decisions (AD-n) the comments below cite.
+
+on:
+  workflow_dispatch:
+    inputs:
+      story-slug:
+        description: "The story slug derived by analysis.yml (its story-slug job output)"
+        required: true
+        type: string
+      run-id:
+        description: "The run-id derived by analysis.yml (its run-id job output) -- accepted verbatim, never recomputed here"
+        required: true
+        type: string
+
+# The two downstream files no longer receive story_file at all, so their groups
+# key on story-slug+run-id instead -- the only identifiers they actually have. A
+# second dispatch for the same story-slug+run-id while a run is still in flight --
+# including one paused at the evidence-approval gate -- cancels that run outright.
+concurrency:
+  group: merge-${{ github.event.inputs.story-slug }}-${{ github.event.inputs.run-id }}
+  cancel-in-progress: true
+
+jobs:
+  merge:
+    name: "Merge"
+    environment: evidence-approval
+    runs-on: ubuntu-24.04
+    # AD-5/AD-14: contents:write + pull-requests:write scope merge_story.py's `gh pr
+    # merge --squash --delete-branch` call -- a deterministic script, never an agent
+    # (no `claude` CLI invocation anywhere in this job).
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          cache-dependency-glob: |
+            factory/graph/**/*.py
+            factory/scripts/**/*.py
+
+      # CAP-9 approval and merge (AD-14): a deterministic pipeline step, triggered
+      # automatically on evidence-approval's approval -- never an agent action. A
+      # merge conflict or other `gh` failure just fails this step; auto-resolution
+      # is out of scope -- the human resolves out-of-band and re-triggers.
+      - name: Merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          uv run factory/scripts/merge_story.py \
+            --story-slug "${{ github.event.inputs.story-slug }}" \
+            --run-id "${{ github.event.inputs.run-id }}"
+
+  close-rejected-pr:
+    name: "Close PR on gate reject"
+    needs: merge
+    # AD-2/AD-16: a reviewer rejecting evidence-approval leaves `merge` with result
+    # `failure` and zero steps run -- indistinguishable from an ordinary crash by
+    # `needs.merge.result` alone -- so this job runs whenever `merge` failed, and
+    # close_rejected_pr.py decides from the run's own review history whether that
+    # was a reject. `!cancelled()` keeps it off a concurrency-cancelled (superseded,
+    # AD-15) run, whose PR the superseding run closes itself; a successful run has
+    # no `failure` result and never gets here. Reads story-slug/run-id straight from
+    # this file's own workflow_dispatch inputs -- not via `needs.merge.outputs.*` --
+    # so this job never depends on `merge` having run any step to produce them,
+    # which matters exactly on the reject path this job exists for.
+    if: ${{ !cancelled() && needs.merge.result == 'failure' }}
+    runs-on: ubuntu-24.04
+    # AD-5: actions:read scopes the review-history call (`gh api
+    # .../actions/runs/<id>/approvals`), pull-requests:write the `gh pr list` + `gh pr
+    # close --comment` calls, contents:read the checkout -- no push, no merge, no
+    # branch deletion. A deterministic script, never an agent (no `claude` CLI
+    # invocation anywhere in this job).
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          cache-dependency-glob: |
+            factory/graph/**/*.py
+            factory/scripts/**/*.py
+
+      # The gate checked is this file's own: evidence-approval, hardcoded -- this
+      # file only ever gates `merge` on it. --github-run-id is the numeric id the
+      # review-history API wants, this file's own `github.run_id` (never another
+      # file's). An ordinary failure exits 0 with "not a reject" and leaves the PR
+      # open; only a `gh`/API failure fails this step.
+      - name: Close PR if the gate was rejected
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          uv run factory/scripts/close_rejected_pr.py \
+            --story-slug "${{ github.event.inputs.story-slug }}" \
+            --run-id "${{ github.event.inputs.run-id }}" \
+            --github-run-id "${{ github.run_id }}" \
+            --gate evidence-approval

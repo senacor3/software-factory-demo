@@ -19,7 +19,10 @@ import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-WORKFLOW = REPO_ROOT / ".github" / "workflows" / "software-factory.yml"
+# The `checks`/`checks-fix-loop` jobs this module tests live in
+# implementation-checks-review.yml since the single-workflow split (AD-2) --
+# software-factory.yml no longer exists.
+WORKFLOW = REPO_ROOT / ".github" / "workflows" / "implementation-checks-review.yml"
 TOOLCHAIN_ACTION = "./.github/actions/checks-toolchain"
 ACTION_FILE = REPO_ROOT / ".github" / "actions" / "checks-toolchain" / "action.yml"
 
