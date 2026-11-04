@@ -5,12 +5,12 @@
 No real AWS call, and no real boto3 import either: `mark_terminal` only
 `import boto3`s lazily inside the function (mirroring
 `handler._load_github_app_credentials`), and boto3 isn't installed in this
-story's own verification environment (`uv run --with pytest --with
-"PyJWT[crypto]" pytest tests/ -v` -- no boto3 in that `--with` list,
-deliberately, per `requirements.txt`'s "pre-bundled in the Lambda runtime"
-comment). So a fake `boto3` module is injected into `sys.modules` for the
-duration of the call, rather than patching `boto3.client` directly (which
-would require the real package to be importable first).
+story's own verification environment (`uv run --with pytest pytest tests/
+-v` -- no boto3 in that `--with` list, deliberately, per
+`requirements.txt`'s "pre-bundled in the Lambda runtime" comment). So a
+fake `boto3` module is injected into `sys.modules` for the duration of the
+call, rather than patching `boto3.client` directly (which would require
+the real package to be importable first).
 """
 
 import sys

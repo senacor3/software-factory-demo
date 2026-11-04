@@ -116,22 +116,21 @@ resource "aws_iam_role_policy" "lambda_dynamodb" {
   })
 }
 
-# GitHub App credentials, plus the webhook and stage-callback shared
-# secrets (story 3): human creates and installs the App via GitHub's web
-# UI (no Terraform provider can create the App resource itself), then
-# supplies App ID / installation ID / private key, and separately chooses
-# the two caller-auth shared secrets, as the five sensitive variables
-# below. One secret, one JSON blob -- never hardcoded, never committed. A
-# second secret for webhook_secret/stage_callback_secret was considered
-# and rejected (see story 3's Design Notes): it would double the
-# `get_secret_value` call on every request, and the existing IAM policy is
-# already scoped to exactly this one ARN.
+# Fine-grained GitHub PAT (AD-18), plus the webhook and stage-callback
+# shared secrets (story 3): human creates the PAT via GitHub's web UI (no
+# Terraform provider can create it), then supplies it, and separately
+# chooses the two caller-auth shared secrets, as the three sensitive
+# variables below. One secret, one JSON blob -- never hardcoded, never
+# committed. A second secret for webhook_secret/stage_callback_secret was
+# considered and rejected (see story 3's Design Notes): it would double
+# the `get_secret_value` call on every request, and the existing IAM
+# policy is already scoped to exactly this one ARN.
 resource "aws_secretsmanager_secret" "github_app" {
   name = local.github_app_secret_name
 
   # No data-loss risk from skipping AWS's default 30-day soft-delete
   # window -- the secret's content is always re-suppliable from the same
-  # GitHub App credentials. Without this, a destroy+re-apply cycle during
+  # GitHub PAT and shared secrets. Without this, a destroy+re-apply cycle during
   # local iteration would fail trying to recreate a secret with the same
   # name until that window elapsed.
   recovery_window_in_days = 0
@@ -140,9 +139,7 @@ resource "aws_secretsmanager_secret" "github_app" {
 resource "aws_secretsmanager_secret_version" "github_app" {
   secret_id = aws_secretsmanager_secret.github_app.id
   secret_string = jsonencode({
-    app_id                = var.github_app_id
-    installation_id       = var.github_app_installation_id
-    private_key_pem       = var.github_app_private_key_pem
+    github_pat            = var.github_pat
     webhook_secret        = var.github_webhook_secret
     stage_callback_secret = var.stage_callback_secret
   })

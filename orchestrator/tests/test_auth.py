@@ -5,8 +5,7 @@ and the stage-completion callback's shared-secret comparison.
 No network, no AWS -- pure stdlib hmac/hashlib logic, per the story's I/O
 matrix and Verification section.
 
-Run via `cd orchestrator && uv run --with pytest --with "PyJWT[crypto]"
-pytest tests/ -v`.
+Run via `cd orchestrator && uv run --with pytest pytest tests/ -v`.
 """
 
 import base64

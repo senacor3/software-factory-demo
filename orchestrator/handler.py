@@ -63,7 +63,7 @@ _STORY_PROJECTS = ("light-factory", "freight-tenders")
 # infra/main.tf -- the Lambda's IAM role is scoped to read only this one
 # secret's ARN (AD-18), so the name is fixed rather than configurable. The
 # same blob also carries `webhook_secret` and `stage_callback_secret`
-# (story 3) alongside the GitHub App credentials (story 2) -- one secret,
+# (story 3) alongside the fine-grained GitHub PAT (AD-18) -- one secret,
 # at most one uncached `get_secret_value` call per invocation (fetched
 # lazily, only when the webhook or stage-callback branch actually needs
 # it -- never for the UI-OAuth-stub or unrecognized-caller branches, which
@@ -197,17 +197,14 @@ def _handle_github_comment(raw_body: bytes, credentials: dict[str, Any]) -> None
     if pr_number is None:
         return
 
-    jwt_token = github_app.mint_jwt(credentials["app_id"], credentials["private_key_pem"])
-    installation_token = github_app.get_installation_token(
-        jwt_token, credentials["installation_id"]
-    )
+    token = credentials["github_pat"]
 
     if command.kind == "approve":
-        _handle_approve(installation_token, pr_number)
+        _handle_approve(token, pr_number)
     elif command.kind == "reject":
-        _handle_reject(installation_token, pr_number)
+        _handle_reject(token, pr_number)
     elif command.kind == "rework":
-        _handle_rework(installation_token, pr_number, command.feedback or "")
+        _handle_rework(token, pr_number, command.feedback or "")
 
 
 def _parse_branch(head_ref: str) -> tuple[str, str] | None:
@@ -347,10 +344,10 @@ def _resolve_story_file(token: str, story_slug: str) -> tuple[str, str, str] | N
 
 def _load_github_app_credentials() -> dict[str, Any]:
     """Load the one Secrets Manager blob backing all caller-auth checks:
-    GitHub App credentials (story 2) plus `webhook_secret` and
-    `stage_callback_secret` (this story). Called lazily, only from the
-    branches that need it, so at most one uncached `get_secret_value` call
-    per invocation (zero for a request that never reaches one of those
+    the fine-grained GitHub PAT (AD-18) plus `webhook_secret` and
+    `stage_callback_secret`. Called lazily, only from the branches that
+    need it, so at most one uncached `get_secret_value` call per
+    invocation (zero for a request that never reaches one of those
     branches); no caching added in this story.
     """
     # Imported lazily: boto3 is pre-bundled in the Lambda Python runtime

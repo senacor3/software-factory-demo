@@ -4,7 +4,7 @@ rework-without-feedback/plain-comment parsing, per this story's I/O
 matrix.
 
 Pure parsing logic, no network/AWS -- run via `cd orchestrator && uv run
---with pytest --with "PyJWT[crypto]" pytest tests/ -v`.
+--with pytest pytest tests/ -v`.
 """
 
 import sys

@@ -8,15 +8,13 @@ dispatches + comments, `/rework` appends + re-dispatches, `/reject` marks
 terminal + closes + comments, and non-command/non-PR/bot-authored comments
 make zero GitHub-API/DynamoDB calls.
 
-Run via `cd orchestrator && uv run --with pytest --with "PyJWT[crypto]"
-pytest tests/ -v` (per the story's Verification section) -- no deploy, no
-AWS credentials needed: `_load_github_app_credentials` is mocked out in
-every test below, so no real Secrets Manager call ever happens here, and
-every `github_app.*`/`dynamodb_state.mark_terminal` call in the command-
-grammar tests below is mocked too, so no real GitHub API or DynamoDB call
-ever happens here either. PyJWT[crypto] IS needed to import handler.py now
--- unlike before this entry, handler.py's own module-level imports now
-include `github_app`, which imports `jwt` at module level.
+Run via `cd orchestrator && uv run --with pytest pytest tests/ -v` (per the
+story's Verification section) -- no deploy, no AWS credentials needed:
+`_load_github_app_credentials` is mocked out in every test below, so no
+real Secrets Manager call ever happens here, and every
+`github_app.*`/`dynamodb_state.mark_terminal` call in the command-grammar
+tests below is mocked too, so no real GitHub API or DynamoDB call ever
+happens here either.
 """
 
 import hashlib
@@ -34,9 +32,7 @@ _WEBHOOK_SECRET = "the-configured-webhook-secret"
 _STAGE_CALLBACK_SECRET = "the-configured-stage-callback-secret"
 
 _FAKE_CREDENTIALS = {
-    "app_id": "123456",
-    "installation_id": "987654",
-    "private_key_pem": "-----BEGIN PRIVATE KEY-----\nfake\n-----END PRIVATE KEY-----\n",
+    "github_pat": "github_pat_fake123",
     "webhook_secret": _WEBHOOK_SECRET,
     "stage_callback_secret": _STAGE_CALLBACK_SECRET,
 }
@@ -185,13 +181,12 @@ def _webhook_event(raw_body: bytes) -> dict:
     )
 
 
+_GITHUB_PAT = _FAKE_CREDENTIALS["github_pat"]
+
+
 @patch("handler._load_github_app_credentials", return_value=_FAKE_CREDENTIALS)
-@patch("handler.github_app.mint_jwt", return_value="fake.jwt.token")
-@patch("handler.github_app.get_installation_token", return_value="ghs_installation_token")
 class TestCommentCommandGrammar:
-    def test_approve_dispatches_workflow_and_posts_comment(
-        self, _mock_token, _mock_jwt, _mock_credentials
-    ):
+    def test_approve_dispatches_workflow_and_posts_comment(self, _mock_credentials):
         with (
             patch("handler.github_app.get_pull_request") as mock_get_pr,
             patch("handler.github_app.dispatch_workflow") as mock_dispatch,
@@ -206,18 +201,16 @@ class TestCommentCommandGrammar:
 
             assert response["statusCode"] == 200
             mock_dispatch.assert_called_once_with(
-                "ghs_installation_token",
+                _GITHUB_PAT,
                 "implementation-checks-review.yml",
                 "main",
                 {"story-slug": "my-story-slug", "run-id": "run-7"},
             )
             mock_post_comment.assert_called_once()
-            assert mock_post_comment.call_args[0][0] == "ghs_installation_token"
+            assert mock_post_comment.call_args[0][0] == _GITHUB_PAT
             assert mock_post_comment.call_args[0][1] == 42
 
-    def test_rework_appends_feedback_and_redispatches_analysis(
-        self, _mock_token, _mock_jwt, _mock_credentials
-    ):
+    def test_rework_appends_feedback_and_redispatches_analysis(self, _mock_credentials):
         with (
             patch("handler.github_app.get_pull_request") as mock_get_pr,
             patch("handler.github_app.get_file_content") as mock_get_file,
@@ -235,27 +228,25 @@ class TestCommentCommandGrammar:
 
             assert response["statusCode"] == 200
             mock_get_file.assert_called_once_with(
-                "ghs_installation_token", "stories/light-factory/my-story-slug.md", "main"
+                _GITHUB_PAT, "stories/light-factory/my-story-slug.md", "main"
             )
             mock_update_file.assert_called_once()
             args = mock_update_file.call_args[0]
-            assert args[0] == "ghs_installation_token"
+            assert args[0] == _GITHUB_PAT
             assert args[1] == "stories/light-factory/my-story-slug.md"
             assert args[2] == "main"
             assert "please also handle X" in args[3]
             assert args[4] == "sha-123"
 
             mock_dispatch.assert_called_once_with(
-                "ghs_installation_token",
+                _GITHUB_PAT,
                 "analysis.yml",
                 "main",
                 {"story_file": "stories/light-factory/my-story-slug.md"},
             )
             mock_post_comment.assert_called_once()
 
-    def test_rework_falls_back_to_freight_tenders_project_path(
-        self, _mock_token, _mock_jwt, _mock_credentials
-    ):
+    def test_rework_falls_back_to_freight_tenders_project_path(self, _mock_credentials):
         with (
             patch("handler.github_app.get_pull_request") as mock_get_pr,
             patch("handler.github_app.get_file_content") as mock_get_file,
@@ -278,14 +269,14 @@ class TestCommentCommandGrammar:
             handler(_webhook_event(raw_body), None)
 
             mock_dispatch.assert_called_once_with(
-                "ghs_installation_token",
+                _GITHUB_PAT,
                 "analysis.yml",
                 "main",
                 {"story_file": "stories/freight-tenders/my-story-slug.md"},
             )
 
     def test_rework_story_file_not_found_under_either_project_posts_rejection(
-        self, _mock_token, _mock_jwt, _mock_credentials
+        self, _mock_credentials
     ):
         with (
             patch("handler.github_app.get_pull_request") as mock_get_pr,
@@ -310,9 +301,7 @@ class TestCommentCommandGrammar:
             mock_post_comment.assert_called_once()
             assert "not" in mock_post_comment.call_args[0][2].lower()
 
-    def test_reject_marks_terminal_closes_pr_and_comments(
-        self, _mock_token, _mock_jwt, _mock_credentials
-    ):
+    def test_reject_marks_terminal_closes_pr_and_comments(self, _mock_credentials):
         with (
             patch("handler.github_app.get_pull_request") as mock_get_pr,
             patch("handler.dynamodb_state.mark_terminal") as mock_mark_terminal,
@@ -330,11 +319,11 @@ class TestCommentCommandGrammar:
             mock_mark_terminal.assert_called_once()
             assert mock_mark_terminal.call_args[0][0] == "my-story-slug"
             assert mock_mark_terminal.call_args[0][1] == "run-7"
-            mock_close_pr.assert_called_once_with("ghs_installation_token", 42)
+            mock_close_pr.assert_called_once_with(_GITHUB_PAT, 42)
             mock_post_comment.assert_called_once()
 
     def test_reject_on_a_pr_with_a_non_matching_branch_makes_no_close_or_comment_call(
-        self, _mock_token, _mock_jwt, _mock_credentials
+        self, _mock_credentials
     ):
         # A PR whose head branch isn't this pipeline's own naming scheme
         # (AD-12/AD-20) is not one this pipeline opened -- /reject must not
@@ -355,9 +344,7 @@ class TestCommentCommandGrammar:
             mock_close_pr.assert_not_called()
             mock_post_comment.assert_not_called()
 
-    def test_non_command_comment_makes_zero_api_calls(
-        self, _mock_token, _mock_jwt, _mock_credentials
-    ):
+    def test_non_command_comment_makes_zero_api_calls(self, _mock_credentials):
         with (
             patch("handler.github_app.get_pull_request") as mock_get_pr,
             patch("handler.github_app.dispatch_workflow") as mock_dispatch,
@@ -369,15 +356,13 @@ class TestCommentCommandGrammar:
             response = handler(_webhook_event(raw_body), None)
 
             assert response["statusCode"] == 200
-            _mock_jwt.assert_not_called()
-            _mock_token.assert_not_called()
             mock_get_pr.assert_not_called()
             mock_dispatch.assert_not_called()
             mock_post_comment.assert_not_called()
             mock_close_pr.assert_not_called()
             mock_mark_terminal.assert_not_called()
 
-    def test_comment_on_a_plain_issue_is_ignored(self, _mock_token, _mock_jwt, _mock_credentials):
+    def test_comment_on_a_plain_issue_is_ignored(self, _mock_credentials):
         payload = {
             "action": "created",
             "issue": {"number": 42},  # no "pull_request" key
@@ -390,9 +375,8 @@ class TestCommentCommandGrammar:
 
             assert response["statusCode"] == 200
             mock_get_pr.assert_not_called()
-            _mock_jwt.assert_not_called()
 
-    def test_comment_by_a_bot_is_ignored(self, _mock_token, _mock_jwt, _mock_credentials):
+    def test_comment_by_a_bot_is_ignored(self, _mock_credentials):
         raw_body = _issue_comment_payload("/approve", comment_user_type="Bot")
 
         with patch("handler.github_app.get_pull_request") as mock_get_pr:
@@ -400,10 +384,9 @@ class TestCommentCommandGrammar:
 
             assert response["statusCode"] == 200
             mock_get_pr.assert_not_called()
-            _mock_jwt.assert_not_called()
 
     def test_rework_with_no_feedback_text_is_ignored_like_a_non_command(
-        self, _mock_token, _mock_jwt, _mock_credentials
+        self, _mock_credentials
     ):
         raw_body = _issue_comment_payload("/rework")
 
@@ -412,9 +395,8 @@ class TestCommentCommandGrammar:
 
             assert response["statusCode"] == 200
             mock_get_pr.assert_not_called()
-            _mock_jwt.assert_not_called()
 
-    def test_edited_comment_action_is_ignored(self, _mock_token, _mock_jwt, _mock_credentials):
+    def test_edited_comment_action_is_ignored(self, _mock_credentials):
         raw_body = _issue_comment_payload("/approve", action="edited")
 
         with patch("handler.github_app.get_pull_request") as mock_get_pr:
@@ -422,4 +404,3 @@ class TestCommentCommandGrammar:
 
             assert response["statusCode"] == 200
             mock_get_pr.assert_not_called()
-            _mock_jwt.assert_not_called()

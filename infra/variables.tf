@@ -14,29 +14,18 @@ variable "aws_profile" {
   type        = string
 }
 
-variable "github_app_id" {
+variable "github_pat" {
   description = <<-EOT
-    GitHub App ID. The App itself cannot be created via Terraform (no
-    provider supports it) -- a human creates it via GitHub's web UI
-    (Settings -> Developer settings -> GitHub Apps -> New GitHub App) with
-    `pull_requests: write`, `issues: write`, `actions: write` permissions
-    (no admin), installs it on senacor3/software-factory-demo, and supplies
-    this value.
-  EOT
-  type        = string
-}
-
-variable "github_app_installation_id" {
-  description = "Installation ID of the GitHub App on senacor3/software-factory-demo (human-supplied, from the App's install step)."
-  type        = string
-}
-
-variable "github_app_private_key_pem" {
-  description = <<-EOT
-    PEM-encoded private key downloaded for the GitHub App. Never committed
-    and has no default -- supply only via `-var`, a `.tfvars` file excluded
-    from git, or a `TF_VAR_github_app_private_key_pem` env var at apply
-    time. Stored in Secrets Manager, never baked into the Lambda package.
+    Fine-grained, repo-scoped GitHub Personal Access Token (AD-18). Cannot
+    be created via Terraform (no provider supports it) -- a human creates
+    it via GitHub's web UI (Settings -> Developer settings -> Personal
+    access tokens -> Fine-grained tokens -> Generate new token), scoped to
+    senacor3/software-factory-demo only, with `Pull requests`, `Issues`,
+    `Actions`, and `Contents` permissions set to read/write (no admin), and
+    supplies this value. Never committed and has no default -- supply only
+    via `-var`, a `.tfvars` file excluded from git, or a
+    `TF_VAR_github_pat` env var at apply time. Stored in Secrets Manager,
+    never baked into the Lambda package.
   EOT
   type        = string
   sensitive   = true
@@ -46,8 +35,10 @@ variable "github_webhook_secret" {
   description = <<-EOT
     Shared secret GitHub signs each webhook delivery's body with
     (HMAC-SHA256, checked via the `X-Hub-Signature-256` header). Must match
-    the secret entered in the GitHub App's webhook configuration -- a live
-    hookup step that is explicitly NOT part of this story's Done (see
+    the secret entered in the repo-level webhook's configuration
+    (senacor3/software-factory-demo Settings -> Webhooks, AD-17's
+    addendum) -- a live hookup step that is explicitly NOT part of this
+    story's Done (see
     story 3's Design Notes); a self-signed synthetic request exercises the
     identical HMAC logic. No default on purpose -- supply only via `-var`,
     a `.tfvars` file excluded from git, or a
