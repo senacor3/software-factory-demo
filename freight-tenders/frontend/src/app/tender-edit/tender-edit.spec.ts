@@ -30,7 +30,7 @@ describe('TenderEdit', () => {
     if (tender !== undefined || status !== 200) {
       const request = httpMock.expectOne('/api/tenders/1');
       if (status === 200) {
-        request.flush(tender);
+        request.flush(tender!);
       } else {
         request.flush({}, { status, statusText: 'Error' });
       }
