@@ -1,5 +1,6 @@
-"""Lambda entry point for the orchestrator: caller-type auth dispatch, and
-(this entry) the `plan-approval` gate's PR-comment command grammar (AD-2).
+"""Lambda entry point for the orchestrator: caller-type auth dispatch, and the
+PR-comment command grammar (AD-2) for both human gates -- `plan-approval` and
+(this entry) `evidence-approval`.
 
 Three recognized caller types, checked in this order, each header checked
 only once and -- when present -- resolved immediately (either accepted or
@@ -47,16 +48,35 @@ import github_app
 from auth import verify_github_webhook_signature, verify_stage_callback_secret
 
 # `software-factory/<story-slug>/<run-id>` (AD-8/AD-12/AD-15/AD-20) -- the PR's
-# head branch parses directly into both identifiers, so `/approve`/`/reject`
-# need no DynamoDB read at all.
+# head branch parses directly into both identifiers. `/reject` needs no
+# DynamoDB read at all (AD-2: gate-agnostic); `/approve`/`/rework` do, via
+# `_current_gate` (this entry), to know which of the two gates is current.
 _BRANCH_PREFIX = "software-factory"
 
-# This entry's two dispatch targets -- both on `main` (AD-2, entry 4's live
+# This entry's three dispatch targets -- all on `main` (AD-2, entry 4's live
 # finding: `workflow_dispatch` only resolves a workflow file present on the
 # default branch regardless of `ref`).
 _IMPLEMENTATION_CHECKS_REVIEW_WORKFLOW = "implementation-checks-review.yml"
+_MERGE_WORKFLOW = "merge.yml"
 _ANALYSIS_WORKFLOW = "analysis.yml"
 _TARGET_REF = "main"
+
+# Which gate, if any, is current for a given `(stage, status)` row read back
+# from `dynamodb_state.get_stage_status` (this entry). Keyed on the pair, not
+# `stage` alone, for `plan-approval` specifically -- `stage=="analysis"` also
+# covers `awaiting-clarification`/`clarification-cap-reached`, neither of
+# which ever reaches a human gate (AD-13) -- only `ready-for-review` does.
+# `evidence-approval` keys on `stage` alone (both `resolved` and
+# `unresolved-after-cap` are legitimate gate-reached outcomes, matching
+# `post_evidence_summary.py`'s own framing), so both are listed explicitly
+# rather than normalizing to a stage-only check, keeping this table a literal,
+# auditable enumeration instead of two different lookup shapes (Design Notes).
+# No row, `stage=="merge"`, or any other combination: no gate is current.
+_GATE_BY_STAGE_STATUS = {
+    ("analysis", "ready-for-review"): "plan-approval",
+    ("implementation-checks-review", "resolved"): "evidence-approval",
+    ("implementation-checks-review", "unresolved-after-cap"): "evidence-approval",
+}
 
 # AD-8/AD-15's two story project subfolders, in the order `/rework`'s path
 # resolution tries them -- the real repo's own folder (`light-factory`)
@@ -324,10 +344,27 @@ def _parse_branch(head_ref: str) -> tuple[str, str] | None:
     return parts[1], parts[2]
 
 
+def _current_gate(story_slug: str, run_id: str) -> str | None:
+    """Which gate, if any, is current for this story/run (this entry, AD-20:
+    "checks the actual current state... before acting"), via a plain
+    `GetItem` read (`dynamodb_state.get_stage_status`) and the
+    `_GATE_BY_STAGE_STATUS` lookup. `None` for no row, an unmapped
+    `(stage, status)` pair (e.g. `stage=="merge"`), or any stage/status this
+    pipeline hasn't reported yet.
+    """
+    row = dynamodb_state.get_stage_status(story_slug, run_id)
+    if row is None:
+        return None
+    return _GATE_BY_STAGE_STATUS.get((row["stage"], row["status"]))
+
+
 def _handle_approve(token: str, pr_number: int) -> None:
-    """`/approve`: dispatch `implementation-checks-review.yml` with the
-    story-slug/run-id parsed from the PR's own head branch -- no
-    DynamoDB read needed -- then post a confirmation comment.
+    """`/approve`: dispatch whichever workflow matches the gate that's
+    actually current for this story/run (`_current_gate`, this entry) --
+    `plan-approval` -> `implementation-checks-review.yml` (unchanged from
+    entry 5), `evidence-approval` -> `merge.yml` (new) -- then post a
+    confirmation comment. Neither gate current: silent no-op, no GitHub API
+    call at all (per this entry's I/O matrix).
     """
     pr = github_app.get_pull_request(token, pr_number)
     parsed = _parse_branch(pr["head"]["ref"])
@@ -335,17 +372,21 @@ def _handle_approve(token: str, pr_number: int) -> None:
         return
     story_slug, run_id = parsed
 
+    gate = _current_gate(story_slug, run_id)
+    if gate == "plan-approval":
+        workflow = _IMPLEMENTATION_CHECKS_REVIEW_WORKFLOW
+    elif gate == "evidence-approval":
+        workflow = _MERGE_WORKFLOW
+    else:
+        return
+
     github_app.dispatch_workflow(
-        token,
-        _IMPLEMENTATION_CHECKS_REVIEW_WORKFLOW,
-        _TARGET_REF,
-        {"story-slug": story_slug, "run-id": run_id},
+        token, workflow, _TARGET_REF, {"story-slug": story_slug, "run-id": run_id}
     )
     github_app.post_comment(
         token,
         pr_number,
-        f"Approved via `/approve`. Dispatching `{_IMPLEMENTATION_CHECKS_REVIEW_WORKFLOW}` "
-        f"for `{story_slug}` (`{run_id}`).",
+        f"Approved via `/approve`. Dispatching `{workflow}` for `{story_slug}` (`{run_id}`).",
     )
 
 
@@ -366,9 +407,7 @@ def _handle_reject(token: str, pr_number: int) -> None:
         return
     story_slug, run_id = parsed
 
-    dynamodb_state.mark_terminal(
-        story_slug, run_id, "rejected via /reject PR comment on plan-approval"
-    )
+    dynamodb_state.mark_terminal(story_slug, run_id, "rejected via /reject PR comment")
     github_app.close_pull_request(token, pr_number)
     github_app.post_comment(
         token,
@@ -380,8 +419,11 @@ def _handle_reject(token: str, pr_number: int) -> None:
 def _handle_rework(token: str, pr_number: int, feedback: str) -> None:
     """`/rework <feedback>`: append the feedback as a new commit to the
     resolved story file on `main`, then re-dispatch `analysis.yml` with
-    that file's path. No DynamoDB read/write (stage-tracking and
-    idempotency hardening are entries 6/9's).
+    that file's path. Only acts while `plan-approval` is current
+    (`_current_gate`, this entry) -- AD-2: there's no `/rework`-equivalent
+    action at `evidence-approval`, so a `/rework` posted there, or with no
+    gate current at all, is a silent no-op, same as a comment on an
+    unrelated PR.
 
     Story-file path resolution (AD-8's slug carries no project subfolder):
     tries `stories/light-factory/<slug>.md` then
@@ -394,7 +436,10 @@ def _handle_rework(token: str, pr_number: int, feedback: str) -> None:
     parsed = _parse_branch(pr["head"]["ref"])
     if parsed is None:
         return
-    story_slug, _run_id = parsed
+    story_slug, run_id = parsed
+
+    if _current_gate(story_slug, run_id) != "plan-approval":
+        return
 
     resolved = _resolve_story_file(token, story_slug)
     if resolved is None:

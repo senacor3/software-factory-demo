@@ -1,15 +1,28 @@
 name: merge
 
 # Third of the software-factory pipeline's three dispatchable files (AD-2): runs
-# `merge` alone (gated by the evidence-approval Environment), fed by
-# workflow_dispatch inputs instead of a cross-job needs: from a `review` job that
-# lives in implementation-checks-review.yml. `run-id` itself is never recomputed
-# here -- it is accepted verbatim from whatever dispatched this file.
+# `merge` alone, fed by workflow_dispatch inputs instead of a cross-job needs:
+# from a `review` job that lives in implementation-checks-review.yml. `run-id`
+# itself is never recomputed here -- it is accepted verbatim from whatever
+# dispatched this file.
+#
+# `merge` is no longer gated by an `evidence-approval` GitHub Environment --
+# that gate is now owned entirely by the orchestrator's PR-comment command
+# grammar (`/approve`/`/reject`, AD-2, this entry), read off the one GitHub
+# webhook event the App subscribes to and acted on directly by
+# `orchestrator/handler.py` before this workflow is ever dispatched. This file
+# only ever runs once `/approve` has already triggered the `workflow_dispatch`
+# call; nothing GitHub-native gates it anymore. (The repo-settings
+# `evidence-approval` Environment resource itself is left in place until a
+# later entry removes it.)
 #
 # Also carries a `close-rejected-pr`-equivalent job for this file's own gate
 # (evidence-approval): cross-file `needs:` is impossible, so AD-16's existing
 # reject-cleanup mechanism is duplicated per downstream file rather than removed
-# (superseded by a later story's direct /reject webhook handling).
+# (superseded by this entry's direct /reject webhook handling -- this job is now
+# effectively dead weight on the Gate-2 reject path, since `/reject` closes the
+# PR itself before this file is ever dispatched again; left in place per this
+# entry's own boundaries -- removing it is entry 10's scope, not this one's).
 #
 # See _bmad-output/initiative-light-factory/architecture-light-factory/
 # architecture-light-factory.md for the decisions (AD-n) the comments below cite.
@@ -37,7 +50,6 @@ concurrency:
 jobs:
   merge:
     name: "Merge"
-    environment: evidence-approval
     runs-on: ubuntu-24.04
     # AD-5/AD-14: contents:write + pull-requests:write scope merge_story.py's `gh pr
     # merge --squash --delete-branch` call -- a deterministic script, never an agent

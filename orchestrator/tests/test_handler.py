@@ -3,18 +3,20 @@
 stage-callback accepted, UI-OAuth stub rejected-as-not-implemented, and a
 fully unrecognized caller rejected -- replacing entry 2's now-removed
 `_verify_post_comment` tests (that diagnostic backdoor is gone entirely).
-Also covers this entry's `issue_comment` command-grammar wiring: `/approve`
+Also covers entry 5's `issue_comment` command-grammar wiring: `/approve`
 dispatches + comments, `/rework` appends + re-dispatches, `/reject` marks
 terminal + closes + comments, and non-command/non-PR/bot-authored comments
-make zero GitHub-API/DynamoDB calls.
+make zero GitHub-API/DynamoDB calls -- plus this entry's gate-awareness:
+`/approve` reaching `merge.yml` at `evidence-approval`, and both `/approve`
+and `/rework` becoming no-ops once `_current_gate` says neither gate is
+current.
 
 Run via `cd orchestrator && uv run --with pytest pytest tests/ -v` (per the
 story's Verification section) -- no deploy, no AWS credentials needed:
 `_load_github_app_credentials` is mocked out in every test below, so no
 real Secrets Manager call ever happens here, and every
-`github_app.*`/`dynamodb_state.mark_terminal` call in the command-grammar
-tests below is mocked too, so no real GitHub API or DynamoDB call ever
-happens here either.
+`github_app.*`/`dynamodb_state.*` call in the command-grammar tests below is
+mocked too, so no real GitHub API or DynamoDB call ever happens here either.
 """
 
 import hashlib
@@ -338,6 +340,10 @@ class TestCommentCommandGrammar:
             patch("handler.github_app.get_pull_request") as mock_get_pr,
             patch("handler.github_app.dispatch_workflow") as mock_dispatch,
             patch("handler.github_app.post_comment") as mock_post_comment,
+            patch(
+                "handler.dynamodb_state.get_stage_status",
+                return_value={"stage": "analysis", "status": "ready-for-review"},
+            ),
         ):
             mock_get_pr.return_value = {
                 "head": {"ref": "software-factory/my-story-slug/run-7"}
@@ -357,6 +363,73 @@ class TestCommentCommandGrammar:
             assert mock_post_comment.call_args[0][0] == _GITHUB_PAT
             assert mock_post_comment.call_args[0][1] == 42
 
+    def test_approve_at_evidence_approval_dispatches_merge_workflow(self, _mock_credentials):
+        with (
+            patch("handler.github_app.get_pull_request") as mock_get_pr,
+            patch("handler.github_app.dispatch_workflow") as mock_dispatch,
+            patch("handler.github_app.post_comment") as mock_post_comment,
+            patch(
+                "handler.dynamodb_state.get_stage_status",
+                return_value={"stage": "implementation-checks-review", "status": "resolved"},
+            ),
+        ):
+            mock_get_pr.return_value = {
+                "head": {"ref": "software-factory/my-story-slug/run-7"}
+            }
+
+            raw_body = _issue_comment_payload("/approve")
+            response = handler(_webhook_event(raw_body), None)
+
+            assert response["statusCode"] == 200
+            mock_dispatch.assert_called_once_with(
+                _GITHUB_PAT,
+                "merge.yml",
+                "main",
+                {"story-slug": "my-story-slug", "run-id": "run-7"},
+            )
+            mock_post_comment.assert_called_once()
+            assert mock_post_comment.call_args[0][0] == _GITHUB_PAT
+            assert mock_post_comment.call_args[0][1] == 42
+
+    def test_approve_with_no_gate_current_is_a_no_op(self, _mock_credentials):
+        with (
+            patch("handler.github_app.get_pull_request") as mock_get_pr,
+            patch("handler.github_app.dispatch_workflow") as mock_dispatch,
+            patch("handler.github_app.post_comment") as mock_post_comment,
+            patch("handler.dynamodb_state.get_stage_status", return_value=None),
+        ):
+            mock_get_pr.return_value = {
+                "head": {"ref": "software-factory/my-story-slug/run-7"}
+            }
+
+            raw_body = _issue_comment_payload("/approve")
+            response = handler(_webhook_event(raw_body), None)
+
+            assert response["statusCode"] == 200
+            mock_dispatch.assert_not_called()
+            mock_post_comment.assert_not_called()
+
+    def test_approve_while_merge_stage_is_current_is_a_no_op(self, _mock_credentials):
+        with (
+            patch("handler.github_app.get_pull_request") as mock_get_pr,
+            patch("handler.github_app.dispatch_workflow") as mock_dispatch,
+            patch("handler.github_app.post_comment") as mock_post_comment,
+            patch(
+                "handler.dynamodb_state.get_stage_status",
+                return_value={"stage": "merge", "status": "merged"},
+            ),
+        ):
+            mock_get_pr.return_value = {
+                "head": {"ref": "software-factory/my-story-slug/run-7"}
+            }
+
+            raw_body = _issue_comment_payload("/approve")
+            response = handler(_webhook_event(raw_body), None)
+
+            assert response["statusCode"] == 200
+            mock_dispatch.assert_not_called()
+            mock_post_comment.assert_not_called()
+
     def test_rework_appends_feedback_and_redispatches_analysis(self, _mock_credentials):
         with (
             patch("handler.github_app.get_pull_request") as mock_get_pr,
@@ -364,6 +437,10 @@ class TestCommentCommandGrammar:
             patch("handler.github_app.update_file_content") as mock_update_file,
             patch("handler.github_app.dispatch_workflow") as mock_dispatch,
             patch("handler.github_app.post_comment") as mock_post_comment,
+            patch(
+                "handler.dynamodb_state.get_stage_status",
+                return_value={"stage": "analysis", "status": "ready-for-review"},
+            ),
         ):
             mock_get_pr.return_value = {
                 "head": {"ref": "software-factory/my-story-slug/run-7"}
@@ -400,6 +477,10 @@ class TestCommentCommandGrammar:
             patch("handler.github_app.update_file_content"),
             patch("handler.github_app.dispatch_workflow") as mock_dispatch,
             patch("handler.github_app.post_comment"),
+            patch(
+                "handler.dynamodb_state.get_stage_status",
+                return_value={"stage": "analysis", "status": "ready-for-review"},
+            ),
         ):
             mock_get_pr.return_value = {
                 "head": {"ref": "software-factory/my-story-slug/run-7"}
@@ -431,6 +512,10 @@ class TestCommentCommandGrammar:
             patch("handler.github_app.update_file_content") as mock_update_file,
             patch("handler.github_app.dispatch_workflow") as mock_dispatch,
             patch("handler.github_app.post_comment") as mock_post_comment,
+            patch(
+                "handler.dynamodb_state.get_stage_status",
+                return_value={"stage": "analysis", "status": "ready-for-review"},
+            ),
         ):
             mock_get_pr.return_value = {
                 "head": {"ref": "software-factory/my-story-slug/run-7"}
@@ -447,6 +532,78 @@ class TestCommentCommandGrammar:
             mock_dispatch.assert_not_called()
             mock_post_comment.assert_called_once()
             assert "not" in mock_post_comment.call_args[0][2].lower()
+
+    def test_rework_at_evidence_approval_is_a_no_op(self, _mock_credentials):
+        with (
+            patch("handler.github_app.get_pull_request") as mock_get_pr,
+            patch("handler.github_app.get_file_content") as mock_get_file,
+            patch("handler.github_app.update_file_content") as mock_update_file,
+            patch("handler.github_app.dispatch_workflow") as mock_dispatch,
+            patch("handler.github_app.post_comment") as mock_post_comment,
+            patch(
+                "handler.dynamodb_state.get_stage_status",
+                return_value={"stage": "implementation-checks-review", "status": "resolved"},
+            ),
+        ):
+            mock_get_pr.return_value = {
+                "head": {"ref": "software-factory/my-story-slug/run-7"}
+            }
+
+            raw_body = _issue_comment_payload("/rework please also handle X")
+            response = handler(_webhook_event(raw_body), None)
+
+            assert response["statusCode"] == 200
+            mock_get_file.assert_not_called()
+            mock_update_file.assert_not_called()
+            mock_dispatch.assert_not_called()
+            mock_post_comment.assert_not_called()
+
+    def test_rework_with_no_gate_current_is_a_no_op(self, _mock_credentials):
+        with (
+            patch("handler.github_app.get_pull_request") as mock_get_pr,
+            patch("handler.github_app.get_file_content") as mock_get_file,
+            patch("handler.github_app.update_file_content") as mock_update_file,
+            patch("handler.github_app.dispatch_workflow") as mock_dispatch,
+            patch("handler.github_app.post_comment") as mock_post_comment,
+            patch("handler.dynamodb_state.get_stage_status", return_value=None),
+        ):
+            mock_get_pr.return_value = {
+                "head": {"ref": "software-factory/my-story-slug/run-7"}
+            }
+
+            raw_body = _issue_comment_payload("/rework please also handle X")
+            response = handler(_webhook_event(raw_body), None)
+
+            assert response["statusCode"] == 200
+            mock_get_file.assert_not_called()
+            mock_update_file.assert_not_called()
+            mock_dispatch.assert_not_called()
+            mock_post_comment.assert_not_called()
+
+    def test_rework_while_merge_stage_is_current_is_a_no_op(self, _mock_credentials):
+        with (
+            patch("handler.github_app.get_pull_request") as mock_get_pr,
+            patch("handler.github_app.get_file_content") as mock_get_file,
+            patch("handler.github_app.update_file_content") as mock_update_file,
+            patch("handler.github_app.dispatch_workflow") as mock_dispatch,
+            patch("handler.github_app.post_comment") as mock_post_comment,
+            patch(
+                "handler.dynamodb_state.get_stage_status",
+                return_value={"stage": "merge", "status": "merged"},
+            ),
+        ):
+            mock_get_pr.return_value = {
+                "head": {"ref": "software-factory/my-story-slug/run-7"}
+            }
+
+            raw_body = _issue_comment_payload("/rework please also handle X")
+            response = handler(_webhook_event(raw_body), None)
+
+            assert response["statusCode"] == 200
+            mock_get_file.assert_not_called()
+            mock_update_file.assert_not_called()
+            mock_dispatch.assert_not_called()
+            mock_post_comment.assert_not_called()
 
     def test_reject_marks_terminal_closes_pr_and_comments(self, _mock_credentials):
         with (

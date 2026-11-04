@@ -1,6 +1,7 @@
-"""Unit tests for the orchestrator's two DynamoDB writes
-(orchestrator/dynamodb_state.py): `mark_terminal` and `record_stage_status`,
-each issuing the expected `PutItem` call.
+"""Unit tests for the orchestrator's DynamoDB access
+(orchestrator/dynamodb_state.py): the two writes, `mark_terminal` and
+`record_stage_status`, each issuing the expected `PutItem` call; and (this
+entry) the one read, `get_stage_status`, issuing the expected `GetItem` call.
 
 No real AWS call, and no real boto3 import either: both functions only
 `import boto3`s lazily inside the function (mirroring
@@ -19,7 +20,7 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from dynamodb_state import mark_terminal, record_stage_status  # noqa: E402
+from dynamodb_state import get_stage_status, mark_terminal, record_stage_status  # noqa: E402
 
 
 class TestMarkTerminal:
@@ -62,3 +63,60 @@ class TestRecordStageStatus:
         assert item["stage"] == {"S": "analysis"}
         assert item["status"] == {"S": "ready-for-review"}
         assert "updated" in item
+
+
+class TestGetStageStatus:
+    def test_row_found_returns_unwrapped_stage_and_status(self):
+        fake_boto3 = MagicMock()
+        mock_client = MagicMock()
+        fake_boto3.client.return_value = mock_client
+        mock_client.get_item.return_value = {
+            "Item": {
+                "story_slug#run_id": {"S": "my-story-slug#run-123"},
+                "stage": {"S": "analysis"},
+                "status": {"S": "ready-for-review"},
+                "updated": {"S": "2026-11-04T00:00:00Z"},
+            }
+        }
+
+        with patch.dict(sys.modules, {"boto3": fake_boto3}):
+            result = get_stage_status("my-story-slug", "run-123")
+
+        fake_boto3.client.assert_called_once_with("dynamodb")
+        mock_client.get_item.assert_called_once_with(
+            TableName="light-factory-orchestrator-state",
+            Key={"story_slug#run_id": {"S": "my-story-slug#run-123"}},
+        )
+        assert result == {"stage": "analysis", "status": "ready-for-review"}
+
+    def test_no_row_returns_none(self):
+        fake_boto3 = MagicMock()
+        mock_client = MagicMock()
+        fake_boto3.client.return_value = mock_client
+        mock_client.get_item.return_value = {}
+
+        with patch.dict(sys.modules, {"boto3": fake_boto3}):
+            result = get_stage_status("my-story-slug", "run-123")
+
+        assert result is None
+
+    def test_terminal_row_with_no_stage_or_status_returns_none(self):
+        # A `mark_terminal` row (written once `/reject` has run) has no
+        # `stage`/`status` keys at all -- that row has no current gate by
+        # definition, same as no row at all, not a KeyError.
+        fake_boto3 = MagicMock()
+        mock_client = MagicMock()
+        fake_boto3.client.return_value = mock_client
+        mock_client.get_item.return_value = {
+            "Item": {
+                "story_slug#run_id": {"S": "my-story-slug#run-123"},
+                "status": {"S": "rejected"},
+                "reason": {"S": "rejected via /reject PR comment"},
+                "updated": {"S": "2026-11-04T00:00:00Z"},
+            }
+        }
+
+        with patch.dict(sys.modules, {"boto3": fake_boto3}):
+            result = get_stage_status("my-story-slug", "run-123")
+
+        assert result is None
