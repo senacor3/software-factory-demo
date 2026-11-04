@@ -13,8 +13,9 @@ This directory is independent of software-factory's own Python tooling: nothing
 here is built, tested, or linted with `uv`/pytest/ruff. It has its own CI
 workflow, `.github/workflows/freight-tenders.yml`, running on every push/PR
 touching `freight-tenders/**`. software-factory's own pipeline
-(`.github/workflows/software-factory.yml`) also builds/tests/lints this app as
-part of its `checks` job, via commands named in
+(`.github/workflows/analysis.yml`, `implementation-checks-review.yml`,
+`merge.yml`) also builds/tests/lints this app as part of the `checks` job in
+`implementation-checks-review.yml`, via commands named in
 `.github/post-implementation-checks.yml` — so a dispatched story touching
 `freight-tenders/` is checked by both.
 

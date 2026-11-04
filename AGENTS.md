@@ -12,7 +12,7 @@ A gated pipeline that proves AI-agent-generated code quality mechanically — bu
 
 ## Where things are
 
-- Pipeline workflow: `.github/workflows/software-factory.yml` (the six-job pipeline); per-repo mechanical-check commands and toolchain versions: `.github/post-implementation-checks.yml` (CAP-5/AD-6).
+- Pipeline workflow: `.github/workflows/analysis.yml`, `implementation-checks-review.yml`, `merge.yml` (the six-job pipeline, split into three `workflow_dispatch`-triggered files at the plan-approval/evidence-approval gate boundaries, AD-2); per-repo mechanical-check commands and toolchain versions: `.github/post-implementation-checks.yml` (CAP-5/AD-6).
 - Demo app, backend: `freight-tenders/backend/AGENTS.md`
 - Demo app, frontend: `freight-tenders/frontend/AGENTS.md`
 

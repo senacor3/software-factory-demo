@@ -1,0 +1,91 @@
+name: analysis
+
+# First of the software-factory pipeline's three dispatchable files (AD-2): this one
+# runs the `analysis` job alone and exposes `story-slug`/`run-id` as job outputs for
+# whatever dispatches `implementation-checks-review.yml` next to pass along as its
+# own `workflow_dispatch` inputs. `run-id` is computed exactly once, here, from this
+# file's own `github.run_id` -- never re-derived downstream.
+#
+# See _bmad-output/initiative-light-factory/architecture-light-factory/
+# architecture-light-factory.md for the decisions (AD-n) the comments below cite.
+
+on:
+  workflow_dispatch:
+    inputs:
+      story_file:
+        description: "Path to the triggering story file (stories/<project>/<story-slug>.md, project software-factory or freight-tenders, e.g. stories/software-factory/trivial-test-story.md)"
+        required: true
+        type: string
+
+# Keyed on the raw story_file input (not a derived slug) -- the concurrency
+# key is evaluated at trigger time from the workflow's own context, before
+# any job runs, so it cannot read a job output. A second dispatch for the
+# same story_file while a run is still in flight -- including one paused at
+# a gate -- cancels that run outright. The guard is per input path, not per
+# story-slug: several paths can still derive one slug (AD-15, deferred-work.md).
+concurrency:
+  group: analysis-${{ github.event.inputs.story_file }}
+  cancel-in-progress: true
+
+jobs:
+  analysis:
+    name: "Analysis"
+    runs-on: ubuntu-24.04
+    # AD-5/AD-12: contents:write + pull-requests:write scope the new deterministic
+    # open_implementation_pr.py script's git push + gh pr create, nothing else -- the
+    # analysis agent's own tool-allowlist stays read-only (Read Grep Glob) regardless.
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      story-slug: ${{ steps.derive.outputs.story-slug }}
+      run-id: ${{ steps.derive.outputs.run-id }}
+      # The analysis status (AD-10's enum), written by analysis_graph.py; whatever
+      # dispatches `implementation-checks-review.yml` next reads it to decide
+      # whether to dispatch at all (AD-13) -- that decision lives outside this file.
+      status: ${{ steps.analyze.outputs.status }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          cache-dependency-glob: |
+            factory/graph/**/*.py
+            factory/scripts/**/*.py
+
+      - name: Derive story-slug and run-id
+        id: derive
+        run: |
+          uv run factory/scripts/state_io.py derive \
+            --story-file "${{ github.event.inputs.story_file }}" \
+            --github-run-id "${{ github.run_id }}" \
+            >> "$GITHUB_OUTPUT"
+
+      - name: Install Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code@latest
+
+      # Runs the analysis skill via analysis_graph.py (CAP-1 intake judgment, CAP-2
+      # proposal) -- see story-job-1-intake-analysis-plan.md. CLAUDE_CODE_OAUTH_TOKEN is
+      # read automatically by the `claude` CLI from the environment (AD-9), live-verified
+      # 2026-10-02 (run 36970131400). GH_TOKEN authenticates the `gh` CLI calls inside
+      # open_implementation_pr.py once a non-halted result proceeds to open the PR
+      # (AD-12) -- the job's `permissions:` block above only grants the API scope; `gh`
+      # itself needs a token explicitly in its environment or every `gh pr list`/`gh pr
+      # create` call fails auth, even though the permission is correctly present.
+      - name: Run analysis
+        id: analyze
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          uv run factory/graph/analysis_graph.py \
+            --story-file "${{ github.event.inputs.story_file }}" \
+            --story-slug "${{ steps.derive.outputs.story-slug }}" \
+            --run-id "${{ steps.derive.outputs.run-id }}"
