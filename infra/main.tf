@@ -99,6 +99,8 @@ resource "aws_iam_role_policy" "lambda_logs" {
 
 # Least-privilege: this Lambda's own table access only, no attributes beyond
 # the partition key (control-plane state only, never git-committed content).
+# dynamodb:UpdateItem (AD-19) backs claim_merge_conflict_attempt's atomic ADD --
+# GetItem/PutItem already covered get_stage_status/mark_terminal/record_stage_status.
 resource "aws_iam_role_policy" "lambda_dynamodb" {
   name = "lambda-dynamodb"
   role = aws_iam_role.lambda_exec.id
@@ -110,6 +112,7 @@ resource "aws_iam_role_policy" "lambda_dynamodb" {
       Action = [
         "dynamodb:GetItem",
         "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
       ]
       Resource = aws_dynamodb_table.orchestrator_state.arn
     }]

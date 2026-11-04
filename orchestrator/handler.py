@@ -16,7 +16,9 @@ rejected) rather than falling through to a later check:
    verified via constant-time comparison against the configured shared
    secret. Same immediate-reject-on-mismatch behavior as the webhook check.
    Once verified, the body is parsed and acted on -- see
-   `_handle_stage_callback`.
+   `_handle_stage_callback`, or, when the body carries an `"action"` key
+   (AD-19's `claim-merge-conflict-attempt` request shape), see
+   `_handle_claim_merge_conflict_attempt` instead.
 3. UI OAuth (reserved stub, AD-17/AD-23) -- `Authorization` present but
    neither of the above matched: rejected as "not yet implemented", a
    reason distinct from the generic unrecognized-caller rejection, so
@@ -132,6 +134,9 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         if verify_stage_callback_secret(
             stage_callback_header, credentials["stage_callback_secret"]
         ):
+            if "action" in json.loads(raw_body):
+                count = _handle_claim_merge_conflict_attempt(raw_body)
+                return _accepted("stage-callback", attempt=count)
             _handle_stage_callback(raw_body, credentials["github_pat"])
             return _accepted("stage-callback")
         return _rejected("invalid stage-callback secret")
@@ -159,8 +164,10 @@ def _raw_body(event: dict[str, Any]) -> bytes:
     return body.encode("utf-8")
 
 
-def _accepted(caller_type: str) -> dict[str, Any]:
-    return _response(200, {"status": "accepted", "caller": caller_type})
+def _accepted(caller_type: str, **extra: Any) -> dict[str, Any]:
+    body = {"status": "accepted", "caller": caller_type}
+    body.update(extra)
+    return _response(200, body)
 
 
 def _rejected(reason: str) -> dict[str, Any]:
@@ -267,6 +274,20 @@ def _handle_stage_callback(raw_body: bytes, token: str) -> None:
         token, f".factory/{story_slug}/{run_id}/plan.md", pr["head"]["ref"]
     )
     github_app.post_comment(token, pr["number"], _render_plan_approval_summary(plan_body))
+
+
+def _handle_claim_merge_conflict_attempt(raw_body: bytes) -> int:
+    """Parse the secret-verified `{"action": "claim-merge-conflict-attempt", ...}`
+    body (AD-19) and claim the next merge-conflict attempt count for this story/run
+    via `dynamodb_state.claim_merge_conflict_attempt`'s atomic `UpdateItem` ADD --
+    the orchestrator-owned counter `merge_conflict_graph.py`'s bounded resolution
+    loop claims before every attempt, never incremented by the agent or a
+    local/in-job variable, so it survives a job retry.
+    """
+    payload = json.loads(raw_body)
+    story_slug = payload["story-slug"]
+    run_id = payload["run-id"]
+    return dynamodb_state.claim_merge_conflict_attempt(story_slug, run_id)
 
 
 _PLAN_SECTION_HEADERS = ("## Proposal", "## Subtasks", "## Tests")

@@ -48,8 +48,99 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  detect-conflict:
+    name: "Detect merge conflict"
+    runs-on: ubuntu-24.04
+    # AD-19: contents:read only -- a pure probe, never pushes. Checks out the feature
+    # branch and attempts (then always aborts) a real `git merge --no-commit --no-ff`
+    # against main, deciding whether `resolve-conflict` is needed at all -- the common,
+    # no-conflict case never pays for an agent invocation, Node install, or Claude Code
+    # CLI setup (see the plan's Design Notes).
+    permissions:
+      contents: read
+    outputs:
+      has-conflict: ${{ steps.detect.outputs.has-conflict }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          cache-dependency-glob: |
+            factory/graph/**/*.py
+            factory/scripts/**/*.py
+
+      - name: Detect merge conflict against main
+        id: detect
+        run: |
+          uv run factory/scripts/attempt_target_merge.py \
+            --story-slug "${{ github.event.inputs.story-slug }}" \
+            --run-id "${{ github.event.inputs.run-id }}" \
+            --target main \
+            >> "$GITHUB_OUTPUT"
+
+  resolve-conflict:
+    name: "Resolve merge conflict"
+    needs: detect-conflict
+    # AD-19: runs only when `detect-conflict` found a real conflict -- `!cancelled()`
+    # keeps it off a concurrency-cancelled run, same posture as this file's other jobs.
+    if: ${{ !cancelled() && needs.detect-conflict.outputs.has-conflict == 'true' }}
+    runs-on: ubuntu-24.04
+    # AD-19: contents:write for the final commit/push once the agent resolves -- the
+    # agent's own tool-allowlist stays Read/Write/Edit/Grep/Glob regardless (no
+    # Bash/git/merge/admin tool ever reaches it).
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          cache-dependency-glob: |
+            factory/graph/**/*.py
+            factory/scripts/**/*.py
+
+      - name: Install Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code@latest
+
+      # AD-19's bounded merge-conflict-resolution loop: repeats the merge attempt for
+      # itself (handling the rare case where main moved since the probe), and -- while
+      # still conflicted and the orchestrator-claimed attempt count is under the cap --
+      # re-engages the merge-conflict-resolution skill and re-checks the same
+      # conflicted paths for leftover markers. Hard cap 2; cap-out fails this step (and
+      # so this job), aborting the merge first. CLAUDE_CODE_OAUTH_TOKEN is read
+      # automatically by the `claude` CLI from the environment (AD-9).
+      # ORCHESTRATOR_FUNCTION_URL/STAGE_CALLBACK_SECRET are human-supplied repo
+      # configuration (see analysis.yml).
+      - name: Run bounded merge-conflict-resolution loop
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          uv run factory/graph/merge_conflict_graph.py \
+            --story-slug "${{ github.event.inputs.story-slug }}" \
+            --run-id "${{ github.event.inputs.run-id }}" \
+            --target main \
+            --orchestrator-url "${{ vars.ORCHESTRATOR_FUNCTION_URL }}" \
+            --stage-callback-secret "${{ secrets.STAGE_CALLBACK_SECRET }}"
+
   merge:
     name: "Merge"
+    needs: [detect-conflict, resolve-conflict]
+    # AD-19: proceeds when `detect-conflict` found no conflict, or when
+    # `resolve-conflict` ran and resolved it -- `resolve-conflict` is `skipped` (not
+    # `success`) on the no-conflict path, so only one of the two sides is ever true.
+    # The output is matched against the literal `false`, an allow-list -- an empty or
+    # unknown value keeps this job from running rather than letting it through.
+    # `!cancelled()` preserves this job's prior behavior on a concurrency-cancelled run.
+    if: ${{ !cancelled() && (needs.detect-conflict.outputs.has-conflict == 'false' || needs.resolve-conflict.result == 'success') }}
     runs-on: ubuntu-24.04
     # AD-5/AD-14: contents:write + pull-requests:write scope merge_story.py's `gh pr
     # merge --squash --delete-branch` call -- a deterministic script, never an agent

@@ -20,7 +20,12 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from dynamodb_state import get_stage_status, mark_terminal, record_stage_status  # noqa: E402
+from dynamodb_state import (  # noqa: E402
+    claim_merge_conflict_attempt,
+    get_stage_status,
+    mark_terminal,
+    record_stage_status,
+)
 
 
 class TestMarkTerminal:
@@ -63,6 +68,42 @@ class TestRecordStageStatus:
         assert item["stage"] == {"S": "analysis"}
         assert item["status"] == {"S": "ready-for-review"}
         assert "updated" in item
+
+
+class TestClaimMergeConflictAttempt:
+    def test_issues_update_item_add_and_returns_new_count(self):
+        fake_boto3 = MagicMock()
+        mock_client = MagicMock()
+        fake_boto3.client.return_value = mock_client
+        mock_client.update_item.return_value = {
+            "Attributes": {"merge_conflict_attempts": {"N": "1"}}
+        }
+
+        with patch.dict(sys.modules, {"boto3": fake_boto3}):
+            result = claim_merge_conflict_attempt("my-story-slug", "run-123")
+
+        fake_boto3.client.assert_called_once_with("dynamodb")
+        mock_client.update_item.assert_called_once_with(
+            TableName="light-factory-orchestrator-state",
+            Key={"story_slug#run_id": {"S": "my-story-slug#run-123"}},
+            UpdateExpression="ADD merge_conflict_attempts :one",
+            ExpressionAttributeValues={":one": {"N": "1"}},
+            ReturnValues="UPDATED_NEW",
+        )
+        assert result == 1
+
+    def test_second_claim_returns_the_next_incremented_count(self):
+        fake_boto3 = MagicMock()
+        mock_client = MagicMock()
+        fake_boto3.client.return_value = mock_client
+        mock_client.update_item.return_value = {
+            "Attributes": {"merge_conflict_attempts": {"N": "2"}}
+        }
+
+        with patch.dict(sys.modules, {"boto3": fake_boto3}):
+            result = claim_merge_conflict_attempt("my-story-slug", "run-123")
+
+        assert result == 2
 
 
 class TestGetStageStatus:

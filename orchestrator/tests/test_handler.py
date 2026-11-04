@@ -150,6 +150,47 @@ class TestHandlerDispatch:
         assert response["statusCode"] == 200
         assert json.loads(response["body"])["caller"] == "github-webhook"
 
+    def test_claim_merge_conflict_attempt_action_returns_attempt_count(self, _mock_credentials):
+        raw_body = json.dumps(
+            {
+                "action": "claim-merge-conflict-attempt",
+                "story-slug": "my-story-slug",
+                "run-id": "run-7",
+            }
+        ).encode("utf-8")
+        event = _event({"X-Stage-Callback-Secret": _STAGE_CALLBACK_SECRET}, body=raw_body.decode())
+
+        with patch(
+            "handler.dynamodb_state.claim_merge_conflict_attempt", return_value=1
+        ) as mock_claim, patch("handler.dynamodb_state.record_stage_status") as mock_record:
+            response = handler(event, None)
+
+        assert response["statusCode"] == 200
+        body = json.loads(response["body"])
+        assert body["status"] == "accepted"
+        assert body["caller"] == "stage-callback"
+        assert body["attempt"] == 1
+        mock_claim.assert_called_once_with("my-story-slug", "run-7")
+        mock_record.assert_not_called()
+
+    def test_plain_stage_callback_body_has_no_attempt_field(self, _mock_credentials):
+        # Entry 6/7's existing {"stage", "story-slug", "run-id", "status"} shape is
+        # untouched -- no "action" key means _handle_stage_callback, not the new claim
+        # dispatch, and the response body carries no "attempt" field.
+        raw_body = _stage_callback_payload("merge", "merged")
+        event = _event({"X-Stage-Callback-Secret": _STAGE_CALLBACK_SECRET}, body=raw_body.decode())
+
+        with patch("handler.dynamodb_state.record_stage_status") as mock_record, patch(
+            "handler.dynamodb_state.claim_merge_conflict_attempt"
+        ) as mock_claim:
+            response = handler(event, None)
+
+        assert response["statusCode"] == 200
+        body = json.loads(response["body"])
+        assert "attempt" not in body
+        mock_record.assert_called_once()
+        mock_claim.assert_not_called()
+
     def test_header_lookup_is_case_insensitive(self, _mock_credentials):
         # Function URL / client header casing is not guaranteed -- handler.py
         # must lowercase-key headers itself rather than relying on exact case.

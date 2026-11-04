@@ -1,15 +1,20 @@
 """dynamodb_state -- the orchestrator's DynamoDB access: two writes (marking a
 run terminal when a human posts `/reject` on its PR, AD-2 entry 2; and
-recording a workflow's own stage-completion status, AD-17's addendum, entry 6)
-plus one read (this entry: which gate, if any, is current for a story/run).
+recording a workflow's own stage-completion status, AD-17's addendum, entry 6),
+one read (this entry: which gate, if any, is current for a story/run), and one
+atomic counter claim (AD-19: the bounded merge-conflict-resolution loop's attempt
+count).
 
-The two writes are plain `PutItem`s; the read is a plain `GetItem` -- all
+`mark_terminal`/`record_stage_status` are plain `PutItem`s; `get_stage_status` is a
+plain `GetItem`; `claim_merge_conflict_attempt` is an `UpdateItem` `ADD` -- all
 against the control-plane table `light-factory-orchestrator-state` (must
 match `local.table_name` in `infra/main.tf`), keyed on the composite
 partition key `story_slug#run_id` (AD-17's addendum) -- not yet AD-20's
-atomic conditional write (entry 9's scope). That matches the IAM policy
-already granted to the Lambda's role (`dynamodb:GetItem`/`dynamodb:PutItem`
-only, see `infra/main.tf`'s `lambda_dynamodb` policy).
+atomic conditional write (entry 9's scope; the `ADD` here is a different kind
+of atomicity -- a race-safe increment, not a conditional write). That matches
+the IAM policy already granted to the Lambda's role (`dynamodb:GetItem`/
+`dynamodb:PutItem`/`dynamodb:UpdateItem`, see `infra/main.tf`'s
+`lambda_dynamodb` policy).
 
 Lazy `import boto3`, mirroring `handler._load_github_app_credentials` --
 importing this module never requires boto3 to be installed (useful for
@@ -69,6 +74,31 @@ def record_stage_status(story_slug: str, run_id: str, stage: str, status: str) -
             "updated": {"S": _now()},
         },
     )
+
+
+def claim_merge_conflict_attempt(story_slug: str, run_id: str) -> int:
+    """Atomically claim the next merge-conflict-resolution attempt number for this
+    story/run via `UpdateItem`'s `ADD` (AD-19) and return the new count.
+
+    `ADD merge_conflict_attempts :one` starts the attribute at 1 when it doesn't
+    exist yet -- no `if_not_exists` needed -- so the first claim for a story/run needs
+    no separate initialization. This is the orchestrator-owned counter the bounded
+    merge-conflict-resolution loop claims before every attempt: never incremented by
+    the agent, never a local/in-job variable, so it survives a job retry. Not yet
+    AD-20's atomic conditional write (entry 9's scope) -- same deferred-atomicity
+    posture as `mark_terminal`/`record_stage_status`'s plain PutItems.
+    """
+    import boto3
+
+    client = boto3.client("dynamodb")
+    response = client.update_item(
+        TableName=_TABLE_NAME,
+        Key={"story_slug#run_id": {"S": f"{story_slug}#{run_id}"}},
+        UpdateExpression="ADD merge_conflict_attempts :one",
+        ExpressionAttributeValues={":one": {"N": "1"}},
+        ReturnValues="UPDATED_NEW",
+    )
+    return int(response["Attributes"]["merge_conflict_attempts"]["N"])
 
 
 def get_stage_status(story_slug: str, run_id: str) -> dict[str, str] | None:
