@@ -877,6 +877,26 @@ describe('TenderDetail', () => {
       expect(element.querySelector('[data-testid="close-tender"]')).not.toBeNull();
     });
 
+    it('shows the edit link to the edit page for an open tender only', async () => {
+      const element = await render(OPEN_TENDER);
+
+      const link = element.querySelector('[data-testid="edit-tender"]');
+      expect(link?.textContent).toContain('Bearbeiten');
+      expect(link?.getAttribute('href')).toBe('/tenders/1/edit');
+    });
+
+    it('hides the edit link for a closed tender', async () => {
+      const element = await render(CLOSED_TENDER);
+
+      expect(element.querySelector('[data-testid="edit-tender"]')).toBeNull();
+    });
+
+    it('hides the edit link for an awarded tender', async () => {
+      const element = await render({ ...OPEN_TENDER, status: 'AWARDED', awardedOfferId: 20 });
+
+      expect(element.querySelector('[data-testid="edit-tender"]')).toBeNull();
+    });
+
     it('updates the page in place after a successful award', async () => {
       const element = await render(AWARD_TENDER);
 

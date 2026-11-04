@@ -3,9 +3,21 @@
   text-align: right;
 }
 
+.page-header-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: calc(2 * var(--space-unit));
+}
+
 @media (max-width: 600px) {
   .close-error {
     text-align: left;
+  }
+
+  /* Like the close button, the actions stack below the title instead of squeezing it. */
+  .page-header-actions {
+    flex-direction: column;
+    width: 100%;
   }
 }
 

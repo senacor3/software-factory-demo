@@ -1,7 +1,11 @@
 package com.senacor.freighttenders.tender;
 
+import jakarta.validation.Validator;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
+import org.springframework.context.support.StaticApplicationContext;
+import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 /** Shared test data: a complete, valid tender and the JSON request body that creates it. */
 final class TenderFixtures {
@@ -17,6 +21,17 @@ final class TenderFixtures {
           + "\"dangerousGoods\":false,\"temperatureControlled\":false,\"currency\":\"EUR\"}";
 
   private TenderFixtures() {}
+
+  /** A real bean validator whose constraint validators see {@code clock}, as in the application. */
+  static Validator validator(Clock clock) {
+    StaticApplicationContext context = new StaticApplicationContext();
+    context.getBeanFactory().registerSingleton("clock", clock);
+    context.refresh();
+    LocalValidatorFactoryBean factoryBean = new LocalValidatorFactoryBean();
+    factoryBean.setApplicationContext(context);
+    factoryBean.afterPropertiesSet();
+    return factoryBean;
+  }
 
   static Tender tender() {
     return tender("Hamburg", "Rotterdam");

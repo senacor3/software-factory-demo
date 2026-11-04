@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -29,6 +30,13 @@ public class TenderController {
       @Valid @RequestBody CreateTenderRequest request) {
     Tender tender = tenderService.createTender(request);
     return ResponseEntity.status(HttpStatus.CREATED).body(TenderResponse.from(tender));
+  }
+
+  // No @Valid: the service validates after loading the tender, so 404 precedes 400 and 409.
+  @PutMapping("/{id}")
+  public TenderResponse updateTender(
+      @PathVariable Long id, @RequestBody CreateTenderRequest request) {
+    return TenderResponse.from(tenderService.updateTender(id, request));
   }
 
   @PostMapping("/{id}/close")

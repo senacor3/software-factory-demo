@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -70,6 +71,62 @@ class TenderControllerTest {
     ArgumentCaptor<CreateTenderRequest> captor = ArgumentCaptor.forClass(CreateTenderRequest.class);
     verify(tenderService).createTender(captor.capture());
     assertThat(captor.getValue()).isEqualTo(TenderFixtures.request());
+  }
+
+  @Test
+  void updateTenderReturns200WithTheUpdatedTender() throws Exception {
+    Tender tender = TenderFixtures.tender();
+    ReflectionTestUtils.setField(tender, "id", 1L);
+    given(tenderService.updateTender(eq(1L), any(CreateTenderRequest.class))).willReturn(tender);
+
+    mockMvc
+        .perform(
+            put("/api/tenders/{id}", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(TenderFixtures.VALID_REQUEST_JSON))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value(1))
+        .andExpect(jsonPath("$.status").value("OPEN"));
+
+    ArgumentCaptor<CreateTenderRequest> captor = ArgumentCaptor.forClass(CreateTenderRequest.class);
+    verify(tenderService).updateTender(eq(1L), captor.capture());
+    assertThat(captor.getValue()).isEqualTo(TenderFixtures.request());
+  }
+
+  @Test
+  void updateTenderMapsInvalidLockedClosedAndMissingToTheirStatuses() throws Exception {
+    given(tenderService.updateTender(eq(1L), any(CreateTenderRequest.class)))
+        .willThrow(
+            new InvalidTenderException(
+                List.of(new TenderExceptionHandler.Violation("bidDeadline", "must not be in the past"))));
+    given(tenderService.updateTender(eq(2L), any(CreateTenderRequest.class)))
+        .willThrow(new TenderLockedFieldsException(2L, List.of("commodity")));
+    given(tenderService.updateTender(eq(3L), any(CreateTenderRequest.class)))
+        .willThrow(new TenderClosedException(3L, TenderStatus.CLOSED));
+    given(tenderService.updateTender(eq(4L), any(CreateTenderRequest.class)))
+        .willThrow(new TenderNotFoundException(4L));
+
+    mockMvc
+        .perform(
+            put("/api/tenders/{id}", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(TenderFixtures.VALID_REQUEST_JSON))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.violations[0].field").value("bidDeadline"));
+    for (long id : new long[] {2L, 3L}) {
+      mockMvc
+          .perform(
+              put("/api/tenders/{id}", id)
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(TenderFixtures.VALID_REQUEST_JSON))
+          .andExpect(status().isConflict());
+    }
+    mockMvc
+        .perform(
+            put("/api/tenders/{id}", 4L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(TenderFixtures.VALID_REQUEST_JSON))
+        .andExpect(status().isNotFound());
   }
 
   @Test

@@ -1,9 +1,15 @@
 package com.senacor.freighttenders.tender;
 
+import com.senacor.freighttenders.tender.TenderExceptionHandler.Violation;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
 
@@ -19,9 +25,12 @@ public class TenderService {
 
   private final Clock clock;
 
-  public TenderService(TenderRepository tenderRepository, Clock clock) {
+  private final Validator validator;
+
+  public TenderService(TenderRepository tenderRepository, Clock clock, Validator validator) {
     this.tenderRepository = tenderRepository;
     this.clock = clock;
+    this.validator = validator;
   }
 
   public Tender createTender(CreateTenderRequest request) {
@@ -43,6 +52,102 @@ public class TenderService {
             request.temperatureMinC(),
             request.temperatureMaxC(),
             request.currency()));
+  }
+
+  /**
+   * Replaces the data fields of an open tender. Checks run in this order: unknown id (404), invalid
+   * body (400), tender not open (409), locked fields changed on a tender with offers (409).
+   */
+  public Tender updateTender(Long id, CreateTenderRequest request) {
+    Tender tender = getTenderOrThrow(id);
+    validateUpdate(tender, request);
+    rejectIfClosed(tender);
+    if (!tender.getOffers().isEmpty()) {
+      List<String> changed = changedLockedFields(tender, request);
+      if (!changed.isEmpty()) {
+        throw new TenderLockedFieldsException(tender.getId(), changed);
+      }
+    }
+    tender.update(
+        request.origin().toAddress(),
+        request.destination().toAddress(),
+        request.pickupDate(),
+        request.deliveryDate(),
+        request.bidDeadline(),
+        request.commodity(),
+        request.weightKg(),
+        request.loadingMeters(),
+        request.palletCount(),
+        request.equipmentType(),
+        request.dangerousGoods(),
+        request.adrClass(),
+        request.temperatureControlled(),
+        request.temperatureMinC(),
+        request.temperatureMaxC(),
+        request.currency());
+    return tenderRepository.save(tender);
+  }
+
+  private void validateUpdate(Tender tender, CreateTenderRequest request) {
+    List<Violation> violations = new ArrayList<>();
+    // The class-level constraint is skipped: it would reject any stored past date, so the same
+    // rules are evaluated below with the stored dates exempt.
+    for (ConstraintViolation<CreateTenderRequest> violation : validator.validate(request)) {
+      if (violation.getConstraintDescriptor().getAnnotation() instanceof ValidCreateTenderRequest) {
+        continue;
+      }
+      violations.add(new Violation(violation.getPropertyPath().toString(), violation.getMessage()));
+    }
+    violations.sort(Comparator.comparing(Violation::field).thenComparing(Violation::message));
+    violations.addAll(
+        CreateTenderRequestValidator.check(
+            request, LocalDate.now(clock), tender.getPickupDate(), tender.getBidDeadline()));
+    if (!violations.isEmpty()) {
+      throw new InvalidTenderException(violations);
+    }
+  }
+
+  private static List<String> changedLockedFields(Tender tender, CreateTenderRequest request) {
+    List<String> changed = new ArrayList<>();
+    addIfDifferent(changed, "origin", tender.getOrigin(), request.origin().toAddress());
+    addIfDifferent(
+        changed, "destination", tender.getDestination(), request.destination().toAddress());
+    addIfDifferent(changed, "pickupDate", tender.getPickupDate(), request.pickupDate());
+    addIfDifferent(changed, "commodity", tender.getCommodity(), request.commodity());
+    addIfDifferent(changed, "weightKg", tender.getWeightKg(), request.weightKg());
+    if (compareDecimals(tender.getLoadingMeters(), request.loadingMeters()) != 0) {
+      changed.add("loadingMeters");
+    }
+    addIfDifferent(changed, "palletCount", tender.getPalletCount(), request.palletCount());
+    addIfDifferent(changed, "equipmentType", tender.getEquipmentType(), request.equipmentType());
+    addIfDifferent(
+        changed, "dangerousGoods", tender.isDangerousGoods(), request.dangerousGoods());
+    addIfDifferent(changed, "adrClass", tender.getAdrClass(), request.adrClass());
+    addIfDifferent(
+        changed,
+        "temperatureControlled",
+        tender.isTemperatureControlled(),
+        request.temperatureControlled());
+    addIfDifferent(
+        changed, "temperatureMinC", tender.getTemperatureMinC(), request.temperatureMinC());
+    addIfDifferent(
+        changed, "temperatureMaxC", tender.getTemperatureMaxC(), request.temperatureMaxC());
+    addIfDifferent(changed, "currency", tender.getCurrency(), request.currency());
+    return changed;
+  }
+
+  private static void addIfDifferent(
+      List<String> changed, String field, Object stored, Object requested) {
+    if (!Objects.equals(stored, requested)) {
+      changed.add(field);
+    }
+  }
+
+  private static int compareDecimals(BigDecimal stored, BigDecimal requested) {
+    if (stored == null || requested == null) {
+      return stored == requested ? 0 : 1;
+    }
+    return stored.compareTo(requested);
   }
 
   public Tender closeTender(Long id) {

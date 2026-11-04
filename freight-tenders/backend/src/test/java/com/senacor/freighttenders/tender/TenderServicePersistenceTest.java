@@ -23,7 +23,7 @@ import org.springframework.context.annotation.Import;
  * one persistence context, since {@link TenderService} has no {@code @Transactional} of its own.
  */
 @DataJpaTest(properties = "spring.jpa.properties.hibernate.generate_statistics=true")
-@Import({TenderService.class, FixedClockConfiguration.class})
+@Import({TenderService.class, FixedClockConfiguration.class, ValidatorTestConfiguration.class})
 class TenderServicePersistenceTest {
 
   @Autowired private EntityManager entityManager;
@@ -85,6 +85,46 @@ class TenderServicePersistenceTest {
     assertThat(reloaded.getStatus()).isEqualTo(TenderStatus.AWARDED);
     assertThat(reloaded.getAwardedOffer().getId()).isEqualTo(offerId);
     assertThat(reloaded.getAwardedOffer().getSupplierName()).isEqualTo("Second Supplier");
+  }
+
+  @Test
+  void updateTenderPersistsNewValuesAndKeepsOffersAndRemarks() {
+    Tender tender = TenderFixtures.tender();
+    tender.addRemark(new Remark("Remark"));
+    tender.addOffer(TenderFixtures.offer("Supplier", new BigDecimal("100.00")));
+    Long id = tenderRepository.save(tender).getId();
+    entityManager.flush();
+    entityManager.clear();
+    CreateTenderRequest base = TenderFixtures.request();
+    CreateTenderRequest changed =
+        new CreateTenderRequest(
+            base.origin(),
+            base.destination(),
+            base.pickupDate(),
+            LocalDate.of(2026, 10, 25),
+            LocalDate.of(2026, 10, 14),
+            base.commodity(),
+            base.weightKg(),
+            base.loadingMeters(),
+            base.palletCount(),
+            base.equipmentType(),
+            base.dangerousGoods(),
+            base.adrClass(),
+            base.temperatureControlled(),
+            base.temperatureMinC(),
+            base.temperatureMaxC(),
+            base.currency());
+
+    tenderService.updateTender(id, changed);
+    entityManager.flush();
+    entityManager.clear();
+
+    Tender reloaded = tenderRepository.findById(id).orElseThrow();
+    assertThat(reloaded.getDeliveryDate()).isEqualTo(LocalDate.of(2026, 10, 25));
+    assertThat(reloaded.getBidDeadline()).isEqualTo(LocalDate.of(2026, 10, 14));
+    assertThat(reloaded.getStatus()).isEqualTo(TenderStatus.OPEN);
+    assertThat(reloaded.getRemarks()).hasSize(1);
+    assertThat(reloaded.getOffers()).hasSize(1);
   }
 
   @Test

@@ -34,7 +34,7 @@ class TenderServiceTest {
 
   @BeforeEach
   void setUp() {
-    tenderService = new TenderService(tenderRepository, CLOCK);
+    tenderService = new TenderService(tenderRepository, CLOCK, TenderFixtures.validator(CLOCK));
   }
 
   @Test
@@ -167,7 +167,7 @@ class TenderServiceTest {
         .willAnswer(invocation -> invocation.getArgument(0));
     Clock deadlineDay =
         Clock.fixed(Instant.parse("2026-10-16T08:00:00Z"), ZoneId.of("Europe/Berlin"));
-    TenderService service = new TenderService(tenderRepository, deadlineDay);
+    TenderService service = new TenderService(tenderRepository, deadlineDay, TenderFixtures.validator(deadlineDay));
 
     Tender result =
         service.addOffer(
@@ -189,7 +189,8 @@ class TenderServiceTest {
     given(tenderRepository.save(any(Tender.class)))
         .willAnswer(invocation -> invocation.getArgument(0));
     Clock dayAfter = Clock.fixed(Instant.parse("2026-10-17T08:00:00Z"), ZoneId.of("Europe/Berlin"));
-    TenderService service = new TenderService(tenderRepository, dayAfter);
+    TenderService service =
+        new TenderService(tenderRepository, dayAfter, TenderFixtures.validator(dayAfter));
 
     assertThatThrownBy(
             () ->
@@ -213,7 +214,8 @@ class TenderServiceTest {
     tender.close();
     given(tenderRepository.findById(1L)).willReturn(Optional.of(tender));
     Clock dayAfter = Clock.fixed(Instant.parse("2026-10-17T08:00:00Z"), ZoneId.of("Europe/Berlin"));
-    TenderService service = new TenderService(tenderRepository, dayAfter);
+    TenderService service =
+        new TenderService(tenderRepository, dayAfter, TenderFixtures.validator(dayAfter));
 
     assertThatThrownBy(
             () ->
@@ -319,7 +321,9 @@ class TenderServiceTest {
         .willAnswer(invocation -> invocation.getArgument(0));
     Clock dayAfter = Clock.fixed(Instant.parse("2026-10-17T08:00:00Z"), ZoneId.of("Europe/Berlin"));
 
-    Tender result = new TenderService(tenderRepository, dayAfter).awardTender(1L, 10L);
+    Tender result =
+        new TenderService(tenderRepository, dayAfter, TenderFixtures.validator(dayAfter))
+            .awardTender(1L, 10L);
 
     assertThat(result.getStatus()).isEqualTo(TenderStatus.AWARDED);
   }
@@ -352,6 +356,196 @@ class TenderServiceTest {
         .willAnswer(invocation -> invocation.getArgument(0));
 
     assertThat(tenderService.closeTender(1L).getStatus()).isEqualTo(TenderStatus.CLOSED);
+  }
+
+  @Test
+  void updateTenderReplacesDataFieldsAndKeepsStatusAndRemarks() {
+    Tender tender = TenderFixtures.tender();
+    tender.addRemark(new Remark("Keep me"));
+    given(tenderRepository.findById(1L)).willReturn(Optional.of(tender));
+    given(tenderRepository.save(any(Tender.class)))
+        .willAnswer(invocation -> invocation.getArgument(0));
+
+    Tender result =
+        tenderService.updateTender(
+            1L,
+            requestWith(
+                LocalDate.of(2026, 10, 21),
+                LocalDate.of(2026, 10, 23),
+                LocalDate.of(2026, 10, 17),
+                "Neue Ware",
+                new BigDecimal("12.0")));
+
+    assertThat(result.getCommodity()).isEqualTo("Neue Ware");
+    assertThat(result.getPickupDate()).isEqualTo(LocalDate.of(2026, 10, 21));
+    assertThat(result.getLoadingMeters()).isEqualByComparingTo("12.0");
+    assertThat(result.getStatus()).isEqualTo(TenderStatus.OPEN);
+    assertThat(result.getRemarks()).hasSize(1);
+  }
+
+  @Test
+  void updateTenderOnUnknownIdThrowsNotFound() {
+    given(tenderRepository.findById(9L)).willReturn(Optional.empty());
+
+    assertThatThrownBy(() -> tenderService.updateTender(9L, TenderFixtures.request()))
+        .isInstanceOf(TenderNotFoundException.class);
+  }
+
+  @Test
+  void updateTenderWithInvalidBodyOnClosedTenderThrowsInvalidNotClosed() {
+    Tender tender = TenderFixtures.tender();
+    tender.close();
+    given(tenderRepository.findById(1L)).willReturn(Optional.of(tender));
+
+    assertThatThrownBy(
+            () ->
+                tenderService.updateTender(
+                    1L,
+                    requestWith(
+                        LocalDate.of(2026, 10, 20),
+                        LocalDate.of(2026, 10, 19),
+                        LocalDate.of(2026, 10, 16),
+                        "Ware",
+                        new BigDecimal("13.6"))))
+        .isInstanceOf(InvalidTenderException.class);
+  }
+
+  @Test
+  void updateTenderOnClosedAndAwardedTendersThrowsClosed() {
+    Tender closed = TenderFixtures.tender();
+    closed.close();
+    given(tenderRepository.findById(1L)).willReturn(Optional.of(closed));
+
+    assertThatThrownBy(() -> tenderService.updateTender(1L, TenderFixtures.request()))
+        .isInstanceOf(TenderClosedException.class);
+    verify(tenderRepository, never()).save(any(Tender.class));
+  }
+
+  @Test
+  void updateTenderAcceptsStoredPastBidDeadlineButRejectsAnotherPastDate() {
+    Tender tender = tenderWithBidDeadline(LocalDate.of(2026, 10, 10));
+    given(tenderRepository.findById(1L)).willReturn(Optional.of(tender));
+    given(tenderRepository.save(any(Tender.class)))
+        .willAnswer(invocation -> invocation.getArgument(0));
+
+    Tender result =
+        tenderService.updateTender(
+            1L,
+            requestWith(
+                LocalDate.of(2026, 10, 20),
+                LocalDate.of(2026, 10, 22),
+                LocalDate.of(2026, 10, 10),
+                "Ware",
+                new BigDecimal("13.6")));
+    assertThat(result.getBidDeadline()).isEqualTo(LocalDate.of(2026, 10, 10));
+
+    assertThatThrownBy(
+            () ->
+                tenderService.updateTender(
+                    1L,
+                    requestWith(
+                        LocalDate.of(2026, 10, 20),
+                        LocalDate.of(2026, 10, 22),
+                        LocalDate.of(2026, 10, 11),
+                        "Ware",
+                        new BigDecimal("13.6"))))
+        .isInstanceOfSatisfying(
+            InvalidTenderException.class,
+            exception ->
+                assertThat(exception.getViolations())
+                    .extracting(TenderExceptionHandler.Violation::field)
+                    .containsExactly("bidDeadline"));
+  }
+
+  @Test
+  void updateTenderWithOffersRejectsChangedLockedFieldsNamingThem() {
+    Tender tender = tenderWithOffer(LocalDate.of(2026, 10, 30));
+    given(tenderRepository.findById(1L)).willReturn(Optional.of(tender));
+
+    assertThatThrownBy(
+            () ->
+                tenderService.updateTender(
+                    1L,
+                    requestWith(
+                        LocalDate.of(2026, 10, 21),
+                        LocalDate.of(2026, 10, 22),
+                        LocalDate.of(2026, 10, 16),
+                        "Andere Ware",
+                        new BigDecimal("13.6"))))
+        .isInstanceOf(TenderLockedFieldsException.class)
+        .hasMessageContaining("pickupDate")
+        .hasMessageContaining("commodity");
+    assertThat(tender.getCommodity()).isEqualTo("Maschinenteile auf Europaletten");
+    verify(tenderRepository, never()).save(any(Tender.class));
+  }
+
+  @Test
+  void updateTenderWithOffersAllowsDeliveryDateAndBidDeadlineAndIgnoresDecimalScale() {
+    Tender tender = tenderWithOffer(LocalDate.of(2026, 10, 30));
+    given(tenderRepository.findById(1L)).willReturn(Optional.of(tender));
+    given(tenderRepository.save(any(Tender.class)))
+        .willAnswer(invocation -> invocation.getArgument(0));
+
+    Tender result =
+        tenderService.updateTender(
+            1L,
+            requestWith(
+                LocalDate.of(2026, 10, 20),
+                LocalDate.of(2026, 10, 25),
+                LocalDate.of(2026, 10, 18),
+                "Maschinenteile auf Europaletten",
+                new BigDecimal("13.60")));
+
+    assertThat(result.getDeliveryDate()).isEqualTo(LocalDate.of(2026, 10, 25));
+    assertThat(result.getBidDeadline()).isEqualTo(LocalDate.of(2026, 10, 18));
+  }
+
+  private static CreateTenderRequest requestWith(
+      LocalDate pickup,
+      LocalDate delivery,
+      LocalDate deadline,
+      String commodity,
+      BigDecimal loadingMeters) {
+    CreateTenderRequest base = TenderFixtures.request();
+    return new CreateTenderRequest(
+        base.origin(),
+        base.destination(),
+        pickup,
+        delivery,
+        deadline,
+        commodity,
+        base.weightKg(),
+        loadingMeters,
+        base.palletCount(),
+        base.equipmentType(),
+        base.dangerousGoods(),
+        base.adrClass(),
+        base.temperatureControlled(),
+        base.temperatureMinC(),
+        base.temperatureMaxC(),
+        base.currency());
+  }
+
+  private static Tender tenderWithBidDeadline(LocalDate bidDeadline) {
+    Tender tender = TenderFixtures.tender();
+    tender.update(
+        tender.getOrigin(),
+        tender.getDestination(),
+        tender.getPickupDate(),
+        tender.getDeliveryDate(),
+        bidDeadline,
+        tender.getCommodity(),
+        tender.getWeightKg(),
+        tender.getLoadingMeters(),
+        tender.getPalletCount(),
+        tender.getEquipmentType(),
+        tender.isDangerousGoods(),
+        tender.getAdrClass(),
+        tender.isTemperatureControlled(),
+        tender.getTemperatureMinC(),
+        tender.getTemperatureMaxC(),
+        tender.getCurrency());
+    return tender;
   }
 
   private static Tender tenderWithOffer(LocalDate validUntil) {

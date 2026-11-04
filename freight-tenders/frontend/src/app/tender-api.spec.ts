@@ -124,6 +124,29 @@ describe('TenderApiService', () => {
     expect(COUNTRY_LABELS['DE']).toBe('Deutschland');
   });
 
+  it('calls PUT /api/tenders/:id with the full request body', () => {
+    const request = {
+      origin: { country: 'DE', postalCode: '20457', city: 'Hamburg' },
+      destination: { country: 'NL', postalCode: '3011 AA', city: 'Rotterdam' },
+      pickupDate: '2099-10-20',
+      deliveryDate: '2099-10-22',
+      bidDeadline: '2099-10-16',
+      commodity: 'Maschinenteile auf Europaletten',
+      weightKg: 18500,
+      loadingMeters: 13.6,
+      equipmentType: 'CURTAIN_SIDER' as const,
+      dangerousGoods: false,
+      temperatureControlled: false,
+      currency: 'EUR' as const,
+    };
+    service.update(42, request).subscribe();
+
+    const req = httpMock.expectOne('/api/tenders/42');
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual(request);
+    req.flush({});
+  });
+
   it('calls POST /api/tenders/:id/remarks with the text', () => {
     service.addRemark(42, 'Bitte schnell liefern').subscribe();
 

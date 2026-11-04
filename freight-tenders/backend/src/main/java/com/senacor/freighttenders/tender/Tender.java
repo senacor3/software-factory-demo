@@ -115,6 +115,82 @@ public class Tender {
       Integer temperatureMinC,
       Integer temperatureMaxC,
       Currency currency) {
+    applyData(
+        origin,
+        destination,
+        pickupDate,
+        deliveryDate,
+        bidDeadline,
+        commodity,
+        weightKg,
+        loadingMeters,
+        palletCount,
+        equipmentType,
+        dangerousGoods,
+        adrClass,
+        temperatureControlled,
+        temperatureMinC,
+        temperatureMaxC,
+        currency);
+  }
+
+  /**
+   * Replaces the 16 data fields. Id, status, remarks, offers and awarded offer are left alone. Like
+   * the other mutators this does not enforce any rule; {@link TenderService#updateTender} does.
+   */
+  public void update(
+      Address origin,
+      Address destination,
+      LocalDate pickupDate,
+      LocalDate deliveryDate,
+      LocalDate bidDeadline,
+      String commodity,
+      Integer weightKg,
+      BigDecimal loadingMeters,
+      Integer palletCount,
+      EquipmentType equipmentType,
+      boolean dangerousGoods,
+      String adrClass,
+      boolean temperatureControlled,
+      Integer temperatureMinC,
+      Integer temperatureMaxC,
+      Currency currency) {
+    applyData(
+        origin,
+        destination,
+        pickupDate,
+        deliveryDate,
+        bidDeadline,
+        commodity,
+        weightKg,
+        loadingMeters,
+        palletCount,
+        equipmentType,
+        dangerousGoods,
+        adrClass,
+        temperatureControlled,
+        temperatureMinC,
+        temperatureMaxC,
+        currency);
+  }
+
+  private void applyData(
+      Address origin,
+      Address destination,
+      LocalDate pickupDate,
+      LocalDate deliveryDate,
+      LocalDate bidDeadline,
+      String commodity,
+      Integer weightKg,
+      BigDecimal loadingMeters,
+      Integer palletCount,
+      EquipmentType equipmentType,
+      boolean dangerousGoods,
+      String adrClass,
+      boolean temperatureControlled,
+      Integer temperatureMinC,
+      Integer temperatureMaxC,
+      Currency currency) {
     this.origin = origin;
     this.destination = destination;
     this.pickupDate = pickupDate;

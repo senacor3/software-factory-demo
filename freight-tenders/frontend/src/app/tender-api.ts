@@ -154,6 +154,11 @@ export class TenderApiService {
     return this.http.post<TenderSummary>('/api/tenders', request);
   }
 
+  // Failures surface as an HttpErrorResponse, so the edit page can tell a 409 from other errors.
+  update(id: number, request: CreateTenderRequest): Observable<TenderSummary> {
+    return this.http.put<TenderSummary>(`/api/tenders/${id}`, request);
+  }
+
   detail(id: number): Observable<TenderDetail> {
     return this.http.get<TenderDetail>(`/api/tenders/${id}`);
   }

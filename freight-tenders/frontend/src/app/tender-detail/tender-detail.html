@@ -19,15 +19,24 @@
       </div>
 
       @if (isOpen()) {
-        <button
-          type="button"
-          class="btn-secondary"
-          data-testid="close-tender"
-          [disabled]="closing()"
-          (click)="onClose()"
-        >
-          Ausschreibung schließen
-        </button>
+        <div class="page-header-actions">
+          <a
+            class="btn-secondary"
+            data-testid="edit-tender"
+            [routerLink]="['/tenders', currentTender.id, 'edit']"
+          >
+            Bearbeiten
+          </a>
+          <button
+            type="button"
+            class="btn-secondary"
+            data-testid="close-tender"
+            [disabled]="closing()"
+            (click)="onClose()"
+          >
+            Ausschreibung schließen
+          </button>
+        </div>
       }
     </header>
 

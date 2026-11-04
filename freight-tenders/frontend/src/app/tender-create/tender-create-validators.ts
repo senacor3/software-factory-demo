@@ -33,8 +33,28 @@ export const oneFractionDigit: ValidatorFn = (control) => {
     : null;
 };
 
-export const pickupNotInPast: ValidatorFn = (control) =>
-  isFilled(control.value) && control.value < todayIso() ? { pickupInPast: true } : null;
+// The dates of the tender being edited. A past date equal to the stored one is accepted, since
+// the backend only applies the "today or later" rules to dates the update changes.
+export interface LoadedDates {
+  pickupDate: string;
+  bidDeadline: string;
+}
+
+export function pickupNotInPastUnlessUnchanged(loaded: () => string | null): ValidatorFn {
+  return (control) =>
+    isFilled(control.value) && control.value < todayIso() && control.value !== loaded()
+      ? { pickupInPast: true }
+      : null;
+}
+
+export function deadlineNotInPastUnlessUnchanged(loaded: () => string | null): ValidatorFn {
+  return (control) =>
+    isFilled(control.value) && control.value < todayIso() && control.value !== loaded()
+      ? { deadlineInPast: true }
+      : null;
+}
+
+export const pickupNotInPast: ValidatorFn = pickupNotInPastUnlessUnchanged(() => null);
 
 export const deliveryNotBeforePickup: ValidatorFn = (control) => {
   const pickup = sibling(control, 'pickupDate');
@@ -43,8 +63,7 @@ export const deliveryNotBeforePickup: ValidatorFn = (control) => {
     : null;
 };
 
-export const deadlineNotInPast: ValidatorFn = (control) =>
-  isFilled(control.value) && control.value < todayIso() ? { deadlineInPast: true } : null;
+export const deadlineNotInPast: ValidatorFn = deadlineNotInPastUnlessUnchanged(() => null);
 
 export const deadlineNotAfterPickup: ValidatorFn = (control) => {
   const pickup = sibling(control, 'pickupDate');
