@@ -98,7 +98,9 @@ class TenderControllerTest {
     given(tenderService.updateTender(eq(1L), any(CreateTenderRequest.class)))
         .willThrow(
             new InvalidTenderException(
-                List.of(new TenderExceptionHandler.Violation("bidDeadline", "must not be in the past"))));
+                List.of(
+                    new TenderExceptionHandler.Violation(
+                        "bidDeadline", "must not be in the past"))));
     given(tenderService.updateTender(eq(2L), any(CreateTenderRequest.class)))
         .willThrow(new TenderLockedFieldsException(2L, List.of("commodity")));
     given(tenderService.updateTender(eq(3L), any(CreateTenderRequest.class)))

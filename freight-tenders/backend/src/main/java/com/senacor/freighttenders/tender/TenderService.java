@@ -120,8 +120,7 @@ public class TenderService {
     }
     addIfDifferent(changed, "palletCount", tender.getPalletCount(), request.palletCount());
     addIfDifferent(changed, "equipmentType", tender.getEquipmentType(), request.equipmentType());
-    addIfDifferent(
-        changed, "dangerousGoods", tender.isDangerousGoods(), request.dangerousGoods());
+    addIfDifferent(changed, "dangerousGoods", tender.isDangerousGoods(), request.dangerousGoods());
     addIfDifferent(changed, "adrClass", tender.getAdrClass(), request.adrClass());
     addIfDifferent(
         changed,

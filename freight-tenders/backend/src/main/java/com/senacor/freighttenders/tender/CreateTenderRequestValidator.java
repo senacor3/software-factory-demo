@@ -84,16 +84,13 @@ public class CreateTenderRequestValidator
 
     if (Boolean.TRUE.equals(request.temperatureControlled())) {
       if (request.equipmentType() != null && request.equipmentType() != EquipmentType.REEFER) {
-        violations.add(
-            new Violation("equipmentType", "must be REEFER when temperatureControlled"));
+        violations.add(new Violation("equipmentType", "must be REEFER when temperatureControlled"));
       }
       if (request.temperatureMinC() == null) {
-        violations.add(
-            new Violation("temperatureMinC", "is required when temperatureControlled"));
+        violations.add(new Violation("temperatureMinC", "is required when temperatureControlled"));
       }
       if (request.temperatureMaxC() == null) {
-        violations.add(
-            new Violation("temperatureMaxC", "is required when temperatureControlled"));
+        violations.add(new Violation("temperatureMaxC", "is required when temperatureControlled"));
       }
       if (request.temperatureMinC() != null
           && request.temperatureMaxC() != null

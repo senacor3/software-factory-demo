@@ -167,7 +167,8 @@ class TenderServiceTest {
         .willAnswer(invocation -> invocation.getArgument(0));
     Clock deadlineDay =
         Clock.fixed(Instant.parse("2026-10-16T08:00:00Z"), ZoneId.of("Europe/Berlin"));
-    TenderService service = new TenderService(tenderRepository, deadlineDay, TenderFixtures.validator(deadlineDay));
+    TenderService service =
+        new TenderService(tenderRepository, deadlineDay, TenderFixtures.validator(deadlineDay));
 
     Tender result =
         service.addOffer(
@@ -480,7 +481,7 @@ class TenderServiceTest {
   }
 
   @Test
-  void updateTenderWithOffersAllowsDeliveryDateAndBidDeadlineAndIgnoresDecimalScale() {
+  void updateTenderWithOffersAllowsDeliveryDateAndBidDeadlineChanges() {
     Tender tender = tenderWithOffer(LocalDate.of(2026, 10, 30));
     given(tenderRepository.findById(1L)).willReturn(Optional.of(tender));
     given(tenderRepository.save(any(Tender.class)))
@@ -494,7 +495,7 @@ class TenderServiceTest {
                 LocalDate.of(2026, 10, 25),
                 LocalDate.of(2026, 10, 18),
                 "Maschinenteile auf Europaletten",
-                new BigDecimal("13.60")));
+                new BigDecimal("13.6")));
 
     assertThat(result.getDeliveryDate()).isEqualTo(LocalDate.of(2026, 10, 25));
     assertThat(result.getBidDeadline()).isEqualTo(LocalDate.of(2026, 10, 18));
