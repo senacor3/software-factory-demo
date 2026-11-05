@@ -20,6 +20,7 @@ from unittest.mock import patch
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import check_run_terminal
 import open_implementation_pr
 import state_io
 
@@ -402,6 +403,26 @@ def test_supersede_prior_prs_closes_the_remaining_prior_pr_when_only_one_is_term
         ["gh", "pr", "comment", "9", "--body", "Retry of #7"],
         ["gh", "pr", "close", "7", "--comment", "Superseded by #9"],
     ]
+
+
+def test_supersede_prior_prs_wraps_check_run_terminal_failure_as_pr_open_error():
+    calls = []
+    open_prs = [(7, "software-factory/foo/run-1"), (9, "software-factory/foo/run-2")]
+
+    with patch(
+        "open_implementation_pr.subprocess.run", side_effect=_supersession_fake_run(open_prs, calls)
+    ), patch(
+        "open_implementation_pr.check_run_terminal.is_terminal",
+        side_effect=check_run_terminal.CheckRunTerminalError("orchestrator unreachable"),
+    ):
+        with pytest.raises(open_implementation_pr.PROpenError, match="orchestrator unreachable"):
+            open_implementation_pr.supersede_prior_prs(
+                "foo",
+                "run-2",
+                9,
+                orchestrator_url="https://orchestrator.example/callback",
+                stage_callback_secret="the-shared-secret",
+            )
 
 
 def test_supersede_prior_prs_without_orchestrator_config_closes_unconditionally():

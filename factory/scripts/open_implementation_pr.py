@@ -202,13 +202,16 @@ def supersede_prior_prs(
         return []
 
     if orchestrator_url is not None and stage_callback_secret is not None:
-        prior = [
-            (number, head_ref)
-            for number, head_ref in prior
-            if not check_run_terminal.is_terminal(
-                orchestrator_url, stage_callback_secret, story_slug, head_ref[len(prefix) :]
-            )
-        ]
+        try:
+            prior = [
+                (number, head_ref)
+                for number, head_ref in prior
+                if not check_run_terminal.is_terminal(
+                    orchestrator_url, stage_callback_secret, story_slug, head_ref[len(prefix) :]
+                )
+            ]
+        except check_run_terminal.CheckRunTerminalError as e:
+            raise PROpenError(str(e)) from e
         if not prior:
             return []
 
