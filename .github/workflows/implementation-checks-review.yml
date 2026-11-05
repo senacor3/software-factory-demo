@@ -13,7 +13,7 @@ name: implementation-checks-review
 # before this workflow is ever dispatched. This file only ever runs once
 # `/approve` has already triggered the `workflow_dispatch` call; nothing
 # GitHub-native gates it anymore. (The repo-settings `plan-approval` Environment
-# resource itself is left in place until a later entry removes it.)
+# resource itself has been removed -- entry 10.)
 #
 # `implementation`'s own `outputs:` re-expose its two workflow_dispatch inputs
 # (`story-slug`/`run-id`) as job outputs purely so every later job in this file
@@ -22,13 +22,11 @@ name: implementation-checks-review
 # instead of a job in another file. `run-id` itself is never recomputed here --
 # it is accepted verbatim from whatever dispatched this file (analysis.yml).
 #
-# Also carries a `close-rejected-pr`-equivalent job for this file's own gate
-# (plan-approval): cross-file `needs:` is impossible, so AD-16's existing
-# reject-cleanup mechanism is duplicated per downstream file rather than removed
-# (superseded by this entry's direct /reject webhook handling -- this job is now
-# effectively dead weight on the Gate-1 reject path, since `/reject` closes the
-# PR itself before this file is ever dispatched again; left in place per this
-# entry's own boundaries -- removing it is entry 10's scope, not this one's).
+# The per-file reject-cleanup job that used to live here for this file's own
+# gate (plan-approval) has been removed (entry 10): AD-16's reject-cleanup
+# mechanism is superseded by the orchestrator's direct `/reject` webhook
+# handling (entries 5/7), which closes the PR itself before this file is ever
+# dispatched again -- no trailing job, no polling, no review-history lookup.
 #
 # See _bmad-output/initiative-light-factory/architecture-light-factory/
 # architecture-light-factory.md for the decisions (AD-n) the comments below cite.
@@ -288,7 +286,7 @@ jobs:
     # conclusion (backlog bug 4): `checks` ends `success` on a failed check, and a
     # `checks` job that itself failed (a crashed step, a failed setup) has nothing
     # this loop could repair. `!cancelled()` keeps it off a concurrency-cancelled
-    # run, same as `close-rejected-pr` below.
+    # run.
     if: ${{ !cancelled() && needs.checks.result == 'success' && needs.checks.outputs.any-check-failed == 'true' }}
     runs-on: ubuntu-24.04
     # AD-5/AD-6: contents:write scopes checkout_branch.py's git fetch/checkout and
@@ -470,55 +468,3 @@ jobs:
             --story-slug "${{ needs.implementation.outputs.story-slug }}" \
             --run-id "${{ needs.implementation.outputs.run-id }}" \
             --status-file ".factory/${{ needs.implementation.outputs.story-slug }}/${{ needs.implementation.outputs.run-id }}/review.md"
-
-  close-rejected-pr:
-    name: "Close PR on gate reject"
-    needs: implementation
-    # AD-2/AD-16: a reviewer rejecting plan-approval leaves `implementation` with
-    # result `failure` and zero steps run -- indistinguishable from an ordinary
-    # crash by `needs.implementation.result` alone -- and skips every job after it
-    # in this file. So this job runs whenever `implementation` failed, and
-    # close_rejected_pr.py decides from the run's own review history whether that
-    # was a reject. `!cancelled()` keeps it off a concurrency-cancelled (superseded,
-    # AD-15) run, whose PR the superseding run closes itself; a successful run has
-    # no `failure` result and never gets here. Reads story-slug/run-id straight from
-    # this file's own workflow_dispatch inputs -- not via `needs.implementation.
-    # outputs.*` -- so this job never depends on `implementation` having run any
-    # step to produce them, which matters exactly on the reject path this job exists
-    # for.
-    if: ${{ !cancelled() && needs.implementation.result == 'failure' }}
-    runs-on: ubuntu-24.04
-    # AD-5: actions:read scopes the review-history call (`gh api
-    # .../actions/runs/<id>/approvals`), pull-requests:write the `gh pr list` + `gh pr
-    # close --comment` calls, contents:read the checkout -- no push, no merge, no
-    # branch deletion. A deterministic script, never an agent (no `claude` CLI
-    # invocation anywhere in this job).
-    permissions:
-      actions: read
-      contents: read
-      pull-requests: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v10.2.0
-        with:
-          cache-dependency-glob: |
-            factory/graph/**/*.py
-            factory/scripts/**/*.py
-
-      # The gate checked is this file's own: plan-approval, hardcoded -- this file
-      # only ever gates `implementation` on it. --github-run-id is the numeric id the
-      # review-history API wants, this file's own `github.run_id` (never another
-      # file's). An ordinary failure exits 0 with "not a reject" and leaves the PR
-      # open; only a `gh`/API failure fails this step.
-      - name: Close PR if the gate was rejected
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          uv run factory/scripts/close_rejected_pr.py \
-            --story-slug "${{ github.event.inputs.story-slug }}" \
-            --run-id "${{ github.event.inputs.run-id }}" \
-            --github-run-id "${{ github.run_id }}" \
-            --gate plan-approval
