@@ -115,6 +115,80 @@ def test_complete_with_open_questions_writes_awaiting_clarification(tmp_path):
     mock_cap_notice.assert_not_called()
 
 
+# --- orchestrator_url/stage_callback_secret pass-through (AD-20's addendum) ---------------
+
+
+def test_orchestrator_params_pass_through_to_open_pr_for_story_when_supplied(tmp_path):
+    result = _result()
+    fake_pr = {"branch": "software-factory/foo/run-1", "pr_number": 1, "pr_url": "https://example/1"}
+    with patch("analysis_graph.subprocess.run", return_value=_fake_proc(stdout=_cli_output(result))), \
+         patch("analysis_graph.open_implementation_pr.open_pr_for_story", return_value=fake_pr) as mock_open_pr:
+        analysis_graph.run_analysis(
+            "stories/software-factory/foo.md",
+            "foo",
+            "run-1",
+            state_base=tmp_path,
+            orchestrator_url="https://orchestrator.example/callback",
+            stage_callback_secret="the-shared-secret",
+        )
+
+    mock_open_pr.assert_called_once_with(
+        "foo",
+        "run-1",
+        state_base=tmp_path,
+        cwd=None,
+        orchestrator_url="https://orchestrator.example/callback",
+        stage_callback_secret="the-shared-secret",
+    )
+
+
+def test_cli_main_passes_orchestrator_params_through_to_run_analysis(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    with patch(
+        "analysis_graph.run_analysis", return_value={"status": "ready-for-review"}
+    ) as mock_run_analysis:
+        analysis_graph.main(
+            [
+                "--story-file",
+                "stories/software-factory/foo.md",
+                "--story-slug",
+                "foo",
+                "--run-id",
+                "run-1",
+                "--orchestrator-url",
+                "https://orchestrator.example/callback",
+                "--stage-callback-secret",
+                "the-shared-secret",
+            ]
+        )
+
+    mock_run_analysis.assert_called_once_with(
+        "stories/software-factory/foo.md",
+        "foo",
+        "run-1",
+        claude_bin="claude",
+        orchestrator_url="https://orchestrator.example/callback",
+        stage_callback_secret="the-shared-secret",
+    )
+
+
+def test_cli_main_defaults_orchestrator_params_to_none(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    with patch(
+        "analysis_graph.run_analysis", return_value={"status": "ready-for-review"}
+    ) as mock_run_analysis:
+        analysis_graph.main(_MAIN_ARGS)
+
+    mock_run_analysis.assert_called_once_with(
+        "stories/software-factory/foo.md",
+        "foo",
+        "run-1",
+        claude_bin="claude",
+        orchestrator_url=None,
+        stage_callback_secret=None,
+    )
+
+
 # --- cap-reached path (AD-13's bounded-rounds mechanism, ticket 2.2) ----------------------
 
 

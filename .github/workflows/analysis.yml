@@ -88,7 +88,9 @@ jobs:
           uv run factory/graph/analysis_graph.py \
             --story-file "${{ github.event.inputs.story_file }}" \
             --story-slug "${{ steps.derive.outputs.story-slug }}" \
-            --run-id "${{ steps.derive.outputs.run-id }}"
+            --run-id "${{ steps.derive.outputs.run-id }}" \
+            --orchestrator-url "${{ vars.ORCHESTRATOR_FUNCTION_URL }}" \
+            --stage-callback-secret "${{ secrets.STAGE_CALLBACK_SECRET }}"
 
       # Entry 6 (AD-17 caller type c): reports this job's own concrete stage status
       # (plan.md's `status` field -- ready-for-review, awaiting-clarification, or

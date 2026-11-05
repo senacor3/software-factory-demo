@@ -344,6 +344,81 @@ def test_supersede_prior_prs_posts_retry_comment_before_a_failing_close():
     ]
 
 
+# --- supersede_prior_prs's orchestrator-state check (AD-20's addendum) -------------------
+
+
+def test_supersede_prior_prs_skips_a_prior_pr_the_orchestrator_reports_terminal():
+    calls = []
+    open_prs = [(7, "software-factory/foo/run-1"), (9, "software-factory/foo/run-2")]
+
+    with patch(
+        "open_implementation_pr.subprocess.run", side_effect=_supersession_fake_run(open_prs, calls)
+    ), patch(
+        "open_implementation_pr.check_run_terminal.is_terminal", return_value=True
+    ) as mock_is_terminal:
+        closed = open_implementation_pr.supersede_prior_prs(
+            "foo",
+            "run-2",
+            9,
+            orchestrator_url="https://orchestrator.example/callback",
+            stage_callback_secret="the-shared-secret",
+        )
+
+    # #7's own run already reported terminal by the orchestrator: not closed, not
+    # commented, excluded from the returned list.
+    assert closed == []
+    mock_is_terminal.assert_called_once_with(
+        "https://orchestrator.example/callback", "the-shared-secret", "foo", "run-1"
+    )
+    assert calls == [SUPERSESSION_QUERY]
+
+
+def test_supersede_prior_prs_closes_the_remaining_prior_pr_when_only_one_is_terminal():
+    calls = []
+    open_prs = [
+        (5, "software-factory/foo/run-1a"),
+        (7, "software-factory/foo/run-1b"),
+        (9, "software-factory/foo/run-2"),
+    ]
+
+    def fake_is_terminal(_url, _secret, _story_slug, run_id):
+        return run_id == "run-1a"
+
+    with patch(
+        "open_implementation_pr.subprocess.run", side_effect=_supersession_fake_run(open_prs, calls)
+    ), patch(
+        "open_implementation_pr.check_run_terminal.is_terminal", side_effect=fake_is_terminal
+    ):
+        closed = open_implementation_pr.supersede_prior_prs(
+            "foo",
+            "run-2",
+            9,
+            orchestrator_url="https://orchestrator.example/callback",
+            stage_callback_secret="the-shared-secret",
+        )
+
+    assert closed == [7]
+    assert calls[1:] == [
+        ["gh", "pr", "comment", "9", "--body", "Retry of #7"],
+        ["gh", "pr", "close", "7", "--comment", "Superseded by #9"],
+    ]
+
+
+def test_supersede_prior_prs_without_orchestrator_config_closes_unconditionally():
+    # Both orchestrator params default to None -- behavior is unchanged from before
+    # this entry, and check_run_terminal.is_terminal is never called.
+    calls = []
+    open_prs = [(7, "software-factory/foo/run-1"), (9, "software-factory/foo/run-2")]
+
+    with patch(
+        "open_implementation_pr.subprocess.run", side_effect=_supersession_fake_run(open_prs, calls)
+    ), patch("open_implementation_pr.check_run_terminal.is_terminal") as mock_is_terminal:
+        closed = open_implementation_pr.supersede_prior_prs("foo", "run-2", 9)
+
+    assert closed == [7]
+    mock_is_terminal.assert_not_called()
+
+
 # --- open_pr_for_story runs supersession on both return paths --------------------------------
 
 
@@ -380,6 +455,65 @@ def test_fresh_create_supersedes_predecessor_after_the_new_pr_exists(tmp_path):
         ["gh", "pr", "comment", "9", "--body", "Retry of #7"],
         ["gh", "pr", "close", "7", "--comment", "Superseded by #9"],
     ]
+
+
+def test_open_pr_for_story_threads_orchestrator_params_through_on_idempotent_reuse(tmp_path):
+    def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
+        if _is_head_query(cmd):
+            return _ok(_pr_list_output([{"number": 7, "url": "https://github.com/org/repo/pull/7"}]))
+        raise AssertionError(f"unexpected subprocess call: {cmd}")
+
+    with patch("open_implementation_pr.subprocess.run", side_effect=fake_run), patch(
+        "open_implementation_pr.supersede_prior_prs"
+    ) as mock_supersede:
+        open_implementation_pr.open_pr_for_story(
+            "foo",
+            "run-1",
+            state_base=tmp_path,
+            orchestrator_url="https://orchestrator.example/callback",
+            stage_callback_secret="the-shared-secret",
+        )
+
+    mock_supersede.assert_called_once_with(
+        "foo",
+        "run-1",
+        7,
+        cwd=None,
+        orchestrator_url="https://orchestrator.example/callback",
+        stage_callback_secret="the-shared-secret",
+    )
+
+
+def test_open_pr_for_story_threads_orchestrator_params_through_on_fresh_create(tmp_path):
+    calls = []
+
+    def fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):
+        calls.append(cmd)
+        if _is_head_query(cmd):
+            if calls.count(cmd) == 1:
+                return _ok(_pr_list_output([]))
+            return _ok(_pr_list_output([{"number": 1, "url": "https://github.com/org/repo/pull/1"}]))
+        return _ok()
+
+    with patch("open_implementation_pr.subprocess.run", side_effect=fake_run), patch(
+        "open_implementation_pr.supersede_prior_prs"
+    ) as mock_supersede:
+        open_implementation_pr.open_pr_for_story(
+            "foo",
+            "run-1",
+            state_base=tmp_path,
+            orchestrator_url="https://orchestrator.example/callback",
+            stage_callback_secret="the-shared-secret",
+        )
+
+    mock_supersede.assert_called_once_with(
+        "foo",
+        "run-1",
+        1,
+        cwd=None,
+        orchestrator_url="https://orchestrator.example/callback",
+        stage_callback_secret="the-shared-secret",
+    )
 
 
 def test_same_run_id_rerun_completes_an_interrupted_supersession(tmp_path):

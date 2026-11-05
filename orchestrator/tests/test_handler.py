@@ -191,6 +191,52 @@ class TestHandlerDispatch:
         mock_record.assert_called_once()
         mock_claim.assert_not_called()
 
+    def test_check_run_terminal_action_returns_terminal_field(self, _mock_credentials):
+        raw_body = json.dumps(
+            {
+                "action": "check-run-terminal",
+                "story-slug": "my-story-slug",
+                "run-id": "run-7",
+            }
+        ).encode("utf-8")
+        event = _event({"X-Stage-Callback-Secret": _STAGE_CALLBACK_SECRET}, body=raw_body.decode())
+
+        with patch(
+            "handler.dynamodb_state.is_terminal", return_value=True
+        ) as mock_is_terminal, patch(
+            "handler.dynamodb_state.record_stage_status"
+        ) as mock_record, patch(
+            "handler.dynamodb_state.claim_merge_conflict_attempt"
+        ) as mock_claim:
+            response = handler(event, None)
+
+        assert response["statusCode"] == 200
+        body = json.loads(response["body"])
+        assert body["status"] == "accepted"
+        assert body["caller"] == "stage-callback"
+        assert body["terminal"] is True
+        assert "attempt" not in body
+        mock_is_terminal.assert_called_once_with("my-story-slug", "run-7")
+        mock_record.assert_not_called()
+        mock_claim.assert_not_called()
+
+    def test_check_run_terminal_action_returns_false_when_not_terminal(self, _mock_credentials):
+        raw_body = json.dumps(
+            {
+                "action": "check-run-terminal",
+                "story-slug": "my-story-slug",
+                "run-id": "run-7",
+            }
+        ).encode("utf-8")
+        event = _event({"X-Stage-Callback-Secret": _STAGE_CALLBACK_SECRET}, body=raw_body.decode())
+
+        with patch("handler.dynamodb_state.is_terminal", return_value=False):
+            response = handler(event, None)
+
+        assert response["statusCode"] == 200
+        body = json.loads(response["body"])
+        assert body["terminal"] is False
+
     def test_header_lookup_is_case_insensitive(self, _mock_credentials):
         # Function URL / client header casing is not guaranteed -- handler.py
         # must lowercase-key headers itself rather than relying on exact case.
@@ -257,6 +303,27 @@ class TestStageCallback:
             assert "do the thing" in args[2]
             assert "Subtasks: 2" in args[2]
             assert "Tests: 1" in args[2]
+
+    def test_duplicate_analysis_ready_for_review_callback_posts_no_second_summary(
+        self, _mock_credentials
+    ):
+        # A redelivered stage-completion callback: record_stage_status's conditional
+        # UpdateItem (AD-20's addendum) reports no fresh transition, so this call
+        # must not find the PR or post the AD-4 summary a second time.
+        with (
+            patch("handler.dynamodb_state.record_stage_status", return_value=False) as mock_record,
+            patch("handler.github_app.find_pull_request_by_branch") as mock_find_pr,
+            patch("handler.github_app.post_comment") as mock_post_comment,
+        ):
+            raw_body = _stage_callback_payload("analysis", "ready-for-review")
+            response = handler(_stage_callback_event(raw_body), None)
+
+            assert response["statusCode"] == 200
+            mock_record.assert_called_once_with(
+                "my-story-slug", "run-7", "analysis", "ready-for-review"
+            )
+            mock_find_pr.assert_not_called()
+            mock_post_comment.assert_not_called()
 
     def test_analysis_awaiting_clarification_records_status_posts_no_comment(
         self, _mock_credentials
@@ -385,6 +452,7 @@ class TestCommentCommandGrammar:
                 "handler.dynamodb_state.get_stage_status",
                 return_value={"stage": "analysis", "status": "ready-for-review"},
             ),
+            patch("handler.dynamodb_state.claim_gate_action", return_value=True),
         ):
             mock_get_pr.return_value = {
                 "head": {"ref": "software-factory/my-story-slug/run-7"}
@@ -413,6 +481,7 @@ class TestCommentCommandGrammar:
                 "handler.dynamodb_state.get_stage_status",
                 return_value={"stage": "implementation-checks-review", "status": "resolved"},
             ),
+            patch("handler.dynamodb_state.claim_gate_action", return_value=True),
         ):
             mock_get_pr.return_value = {
                 "head": {"ref": "software-factory/my-story-slug/run-7"}
@@ -471,6 +540,34 @@ class TestCommentCommandGrammar:
             mock_dispatch.assert_not_called()
             mock_post_comment.assert_not_called()
 
+    def test_duplicate_approve_with_claim_already_taken_is_a_no_op(self, _mock_credentials):
+        # Same gate, same (stage, status, action) key already claimed by a prior
+        # delivery of this exact /approve -- AD-20's addendum: dynamodb_state.claim_gate_action
+        # returns False, so this redelivery dispatches/comments nothing a second time.
+        with (
+            patch("handler.github_app.get_pull_request") as mock_get_pr,
+            patch("handler.github_app.dispatch_workflow") as mock_dispatch,
+            patch("handler.github_app.post_comment") as mock_post_comment,
+            patch(
+                "handler.dynamodb_state.get_stage_status",
+                return_value={"stage": "analysis", "status": "ready-for-review"},
+            ),
+            patch("handler.dynamodb_state.claim_gate_action", return_value=False) as mock_claim,
+        ):
+            mock_get_pr.return_value = {
+                "head": {"ref": "software-factory/my-story-slug/run-7"}
+            }
+
+            raw_body = _issue_comment_payload("/approve")
+            response = handler(_webhook_event(raw_body), None)
+
+            assert response["statusCode"] == 200
+            mock_claim.assert_called_once_with(
+                "my-story-slug", "run-7", "analysis", "ready-for-review", "approve"
+            )
+            mock_dispatch.assert_not_called()
+            mock_post_comment.assert_not_called()
+
     def test_rework_appends_feedback_and_redispatches_analysis(self, _mock_credentials):
         with (
             patch("handler.github_app.get_pull_request") as mock_get_pr,
@@ -482,6 +579,7 @@ class TestCommentCommandGrammar:
                 "handler.dynamodb_state.get_stage_status",
                 return_value={"stage": "analysis", "status": "ready-for-review"},
             ),
+            patch("handler.dynamodb_state.claim_gate_action", return_value=True),
         ):
             mock_get_pr.return_value = {
                 "head": {"ref": "software-factory/my-story-slug/run-7"}
@@ -522,6 +620,7 @@ class TestCommentCommandGrammar:
                 "handler.dynamodb_state.get_stage_status",
                 return_value={"stage": "analysis", "status": "ready-for-review"},
             ),
+            patch("handler.dynamodb_state.claim_gate_action", return_value=True),
         ):
             mock_get_pr.return_value = {
                 "head": {"ref": "software-factory/my-story-slug/run-7"}
@@ -557,6 +656,7 @@ class TestCommentCommandGrammar:
                 "handler.dynamodb_state.get_stage_status",
                 return_value={"stage": "analysis", "status": "ready-for-review"},
             ),
+            patch("handler.dynamodb_state.claim_gate_action") as mock_claim,
         ):
             mock_get_pr.return_value = {
                 "head": {"ref": "software-factory/my-story-slug/run-7"}
@@ -569,6 +669,10 @@ class TestCommentCommandGrammar:
             response = handler(_webhook_event(raw_body), None)
 
             assert response["statusCode"] == 200
+            # The story file was never resolved -- the claim must not be burned on a
+            # not-found outcome, so a later /rework retry at this same gate still gets
+            # the same explanatory rejection instead of silently no-opping forever.
+            mock_claim.assert_not_called()
             mock_update_file.assert_not_called()
             mock_dispatch.assert_not_called()
             mock_post_comment.assert_called_once()
@@ -646,6 +750,42 @@ class TestCommentCommandGrammar:
             mock_dispatch.assert_not_called()
             mock_post_comment.assert_not_called()
 
+    def test_duplicate_rework_with_claim_already_taken_is_a_no_op(self, _mock_credentials):
+        # Same gate, same (stage, status, action) key already claimed by a prior
+        # delivery of this exact /rework -- AD-20's addendum: dynamodb_state.claim_gate_action
+        # returns False, so this redelivery commits/dispatches/comments nothing a second time.
+        # The claim is checked only after the story file is resolved (so a not-found
+        # outcome never burns it), so get_file_content IS still called here -- only the
+        # commit/dispatch/comment that would follow a successful claim are skipped.
+        with (
+            patch("handler.github_app.get_pull_request") as mock_get_pr,
+            patch("handler.github_app.get_file_content") as mock_get_file,
+            patch("handler.github_app.update_file_content") as mock_update_file,
+            patch("handler.github_app.dispatch_workflow") as mock_dispatch,
+            patch("handler.github_app.post_comment") as mock_post_comment,
+            patch(
+                "handler.dynamodb_state.get_stage_status",
+                return_value={"stage": "analysis", "status": "ready-for-review"},
+            ),
+            patch("handler.dynamodb_state.claim_gate_action", return_value=False) as mock_claim,
+        ):
+            mock_get_pr.return_value = {
+                "head": {"ref": "software-factory/my-story-slug/run-7"}
+            }
+            mock_get_file.return_value = ("original story text\n", "sha-123")
+
+            raw_body = _issue_comment_payload("/rework please also handle X")
+            response = handler(_webhook_event(raw_body), None)
+
+            assert response["statusCode"] == 200
+            mock_get_file.assert_called_once()
+            mock_claim.assert_called_once_with(
+                "my-story-slug", "run-7", "analysis", "ready-for-review", "rework"
+            )
+            mock_update_file.assert_not_called()
+            mock_dispatch.assert_not_called()
+            mock_post_comment.assert_not_called()
+
     def test_reject_marks_terminal_closes_pr_and_comments(self, _mock_credentials):
         with (
             patch("handler.github_app.get_pull_request") as mock_get_pr,
@@ -666,6 +806,30 @@ class TestCommentCommandGrammar:
             assert mock_mark_terminal.call_args[0][1] == "run-7"
             mock_close_pr.assert_called_once_with(_GITHUB_PAT, 42)
             mock_post_comment.assert_called_once()
+
+    def test_duplicate_reject_with_mark_terminal_returning_false_is_a_no_op(
+        self, _mock_credentials
+    ):
+        # A redelivered /reject webhook: mark_terminal's conditional UpdateItem
+        # (AD-20's addendum) reports no fresh transition, so this call must not
+        # close or comment on the PR a second time.
+        with (
+            patch("handler.github_app.get_pull_request") as mock_get_pr,
+            patch("handler.dynamodb_state.mark_terminal", return_value=False) as mock_mark_terminal,
+            patch("handler.github_app.close_pull_request") as mock_close_pr,
+            patch("handler.github_app.post_comment") as mock_post_comment,
+        ):
+            mock_get_pr.return_value = {
+                "head": {"ref": "software-factory/my-story-slug/run-7"}
+            }
+
+            raw_body = _issue_comment_payload("/reject")
+            response = handler(_webhook_event(raw_body), None)
+
+            assert response["statusCode"] == 200
+            mock_mark_terminal.assert_called_once()
+            mock_close_pr.assert_not_called()
+            mock_post_comment.assert_not_called()
 
     def test_reject_on_a_pr_with_a_non_matching_branch_makes_no_close_or_comment_call(
         self, _mock_credentials

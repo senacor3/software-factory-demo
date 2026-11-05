@@ -16,9 +16,11 @@ rejected) rather than falling through to a later check:
    verified via constant-time comparison against the configured shared
    secret. Same immediate-reject-on-mismatch behavior as the webhook check.
    Once verified, the body is parsed and acted on -- see
-   `_handle_stage_callback`, or, when the body carries an `"action"` key
-   (AD-19's `claim-merge-conflict-attempt` request shape), see
-   `_handle_claim_merge_conflict_attempt` instead.
+   `_handle_stage_callback`, or, when the body carries an `"action"` key,
+   routed by that action's value to either `_handle_claim_merge_conflict_attempt`
+   (AD-19's `claim-merge-conflict-attempt` request shape) or
+   `_handle_check_run_terminal` (AD-20's addendum's `check-run-terminal`
+   request shape).
 3. UI OAuth (reserved stub, AD-17/AD-23) -- `Authorization` present but
    neither of the above matched: rejected as "not yet implemented", a
    reason distinct from the generic unrecognized-caller rejection, so
@@ -29,12 +31,14 @@ A request matching none of the three is rejected as unrecognized, with a
 reason distinguishable from a signature failure.
 
 Stage-completion callback handling (entry 6, AD-17 caller type c) is real:
-`dynamodb_state.record_stage_status` records every callback's stage/status, and --
-only for the `analysis` workflow's `ready-for-review` status -- the PR's AD-4
+`dynamodb_state.record_stage_status` records every callback's stage/status via a
+conditional `UpdateItem` (AD-20's addendum) -- a duplicate callback redelivery reports
+no transition and skips the rest -- and -- only for the `analysis` workflow's
+`ready-for-review` status, and only on a fresh transition -- the PR's AD-4
 plan-approval summary is rendered from `plan.md` and posted here too (see
 `_handle_stage_callback`), replacing the old in-job call site in
-`analysis_graph.py`. Not yet AD-20's atomic conditional write (entry 9's scope). A
-successful dispatch returns 200 naming the recognized caller type. The old
+`analysis_graph.py`. A successful dispatch returns 200 naming the recognized caller
+type. The old
 `_verify_post_comment` diagnostic backdoor (entry 2) is gone: leaving an
 unauthenticated path reachable alongside real caller-type auth would contradict
 this story's own "unrecognized caller is rejected" criterion.
@@ -134,7 +138,11 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         if verify_stage_callback_secret(
             stage_callback_header, credentials["stage_callback_secret"]
         ):
-            if "action" in json.loads(raw_body):
+            body = json.loads(raw_body)
+            if "action" in body:
+                if body["action"] == "check-run-terminal":
+                    terminal = _handle_check_run_terminal(raw_body)
+                    return _accepted("stage-callback", terminal=terminal)
                 count = _handle_claim_merge_conflict_attempt(raw_body)
                 return _accepted("stage-callback", attempt=count)
             _handle_stage_callback(raw_body, credentials["github_pat"])
@@ -260,7 +268,8 @@ def _handle_stage_callback(raw_body: bytes, token: str) -> None:
     run_id = payload["run-id"]
     status = payload["status"]
 
-    dynamodb_state.record_stage_status(story_slug, run_id, stage, status)
+    if not dynamodb_state.record_stage_status(story_slug, run_id, stage, status):
+        return
 
     if stage != "analysis" or status != "ready-for-review":
         return
@@ -288,6 +297,19 @@ def _handle_claim_merge_conflict_attempt(raw_body: bytes) -> int:
     story_slug = payload["story-slug"]
     run_id = payload["run-id"]
     return dynamodb_state.claim_merge_conflict_attempt(story_slug, run_id)
+
+
+def _handle_check_run_terminal(raw_body: bytes) -> bool:
+    """Parse the secret-verified `{"action": "check-run-terminal", ...}` body
+    (AD-20's addendum) and report whether this story/run's control-plane row is
+    already terminal via `dynamodb_state.is_terminal` -- the check
+    `open_implementation_pr.py`'s supersession path calls before closing/commenting
+    on a prior PR, so it doesn't race a concurrent `/reject` deciding the same PR.
+    """
+    payload = json.loads(raw_body)
+    story_slug = payload["story-slug"]
+    run_id = payload["run-id"]
+    return dynamodb_state.is_terminal(story_slug, run_id)
 
 
 _PLAN_SECTION_HEADERS = ("## Proposal", "## Subtasks", "## Tests")
@@ -365,18 +387,22 @@ def _parse_branch(head_ref: str) -> tuple[str, str] | None:
     return parts[1], parts[2]
 
 
-def _current_gate(story_slug: str, run_id: str) -> str | None:
+def _current_gate(story_slug: str, run_id: str) -> tuple[str | None, dict | None]:
     """Which gate, if any, is current for this story/run (this entry, AD-20:
     "checks the actual current state... before acting"), via a plain
     `GetItem` read (`dynamodb_state.get_stage_status`) and the
-    `_GATE_BY_STAGE_STATUS` lookup. `None` for no row, an unmapped
-    `(stage, status)` pair (e.g. `stage=="merge"`), or any stage/status this
-    pipeline hasn't reported yet.
+    `_GATE_BY_STAGE_STATUS` lookup. Returns `(gate, row)`, both `None`
+    together for no row; `(None, row)` for an unmapped `(stage, status)` pair
+    (e.g. `stage=="merge"`) or any stage/status this pipeline hasn't reported
+    yet. The raw row is returned alongside the mapped gate name so callers
+    have the exact `(stage, status)` key to pass to
+    `dynamodb_state.claim_gate_action` (AD-20's addendum) without a second
+    read.
     """
     row = dynamodb_state.get_stage_status(story_slug, run_id)
     if row is None:
-        return None
-    return _GATE_BY_STAGE_STATUS.get((row["stage"], row["status"]))
+        return None, None
+    return _GATE_BY_STAGE_STATUS.get((row["stage"], row["status"])), row
 
 
 def _handle_approve(token: str, pr_number: int) -> None:
@@ -385,7 +411,10 @@ def _handle_approve(token: str, pr_number: int) -> None:
     `plan-approval` -> `implementation-checks-review.yml` (unchanged from
     entry 5), `evidence-approval` -> `merge.yml` (new) -- then post a
     confirmation comment. Neither gate current: silent no-op, no GitHub API
-    call at all (per this entry's I/O matrix).
+    call at all (per this entry's I/O matrix). A duplicate `/approve` for the
+    same gate: `dynamodb_state.claim_gate_action` (AD-20's addendum) returns
+    `False` and this is a silent no-op too, same shape as the no-gate-current
+    case -- no second dispatch/comment.
     """
     pr = github_app.get_pull_request(token, pr_number)
     parsed = _parse_branch(pr["head"]["ref"])
@@ -393,12 +422,17 @@ def _handle_approve(token: str, pr_number: int) -> None:
         return
     story_slug, run_id = parsed
 
-    gate = _current_gate(story_slug, run_id)
+    gate, row = _current_gate(story_slug, run_id)
     if gate == "plan-approval":
         workflow = _IMPLEMENTATION_CHECKS_REVIEW_WORKFLOW
     elif gate == "evidence-approval":
         workflow = _MERGE_WORKFLOW
     else:
+        return
+
+    if not dynamodb_state.claim_gate_action(
+        story_slug, run_id, row["stage"], row["status"], "approve"
+    ):
         return
 
     github_app.dispatch_workflow(
@@ -412,9 +446,11 @@ def _handle_approve(token: str, pr_number: int) -> None:
 
 
 def _handle_reject(token: str, pr_number: int) -> None:
-    """`/reject`: mark the run terminal in DynamoDB (PutItem only, matching
-    the IAM policy already granted), close the PR, and post an
-    explanatory comment. Terminal for this run -- no re-dispatch.
+    """`/reject`: mark the run terminal in DynamoDB via `dynamodb_state.mark_terminal`'s
+    conditional `UpdateItem` (AD-20's addendum), close the PR, and post an explanatory
+    comment. Terminal for this run -- no re-dispatch. A duplicate `/reject` webhook
+    redelivery: `mark_terminal` returns `False` (already terminal) and this is a
+    silent no-op too -- no second close/comment.
 
     Same guard as `_handle_approve`/`_handle_rework`: a PR whose head
     branch doesn't match this pipeline's own naming scheme (AD-12/AD-20)
@@ -428,7 +464,10 @@ def _handle_reject(token: str, pr_number: int) -> None:
         return
     story_slug, run_id = parsed
 
-    dynamodb_state.mark_terminal(story_slug, run_id, "rejected via /reject PR comment")
+    if not dynamodb_state.mark_terminal(
+        story_slug, run_id, "rejected via /reject PR comment"
+    ):
+        return
     github_app.close_pull_request(token, pr_number)
     github_app.post_comment(
         token,
@@ -452,6 +491,14 @@ def _handle_rework(token: str, pr_number: int, feedback: str) -> None:
     whichever responds -- deterministic, since slugs are globally unique
     and the other path must 404. Not found under either -> a rejected
     response naming the problem, per this story's own I/O matrix.
+
+    `dynamodb_state.claim_gate_action` (AD-20's addendum) is only called
+    once the story file is actually resolved, right before the commit --
+    not before. Claiming earlier would burn the claim on a not-found
+    outcome, turning every later `/rework` retry at this same unchanged
+    gate into a silent no-op instead of the same explanatory rejection
+    comment each time. A duplicate `/rework` for the same gate (claim
+    returns `False`): silent no-op, no second commit/dispatch/comment.
     """
     pr = github_app.get_pull_request(token, pr_number)
     parsed = _parse_branch(pr["head"]["ref"])
@@ -459,7 +506,8 @@ def _handle_rework(token: str, pr_number: int, feedback: str) -> None:
         return
     story_slug, run_id = parsed
 
-    if _current_gate(story_slug, run_id) != "plan-approval":
+    gate, row = _current_gate(story_slug, run_id)
+    if gate != "plan-approval":
         return
 
     resolved = _resolve_story_file(token, story_slug)
@@ -473,6 +521,11 @@ def _handle_rework(token: str, pr_number: int, feedback: str) -> None:
         )
         return
     story_path, content, sha = resolved
+
+    if not dynamodb_state.claim_gate_action(
+        story_slug, run_id, row["stage"], row["status"], "rework"
+    ):
+        return
 
     new_content = content.rstrip("\n") + "\n\n" + feedback + "\n"
     github_app.update_file_content(

@@ -199,6 +199,8 @@ def run_analysis(
     claude_bin: str = "claude",
     state_base: str | os.PathLike = state_io.FACTORY_DIR,
     cwd: str | os.PathLike | None = None,
+    orchestrator_url: str | None = None,
+    stage_callback_secret: str | None = None,
 ) -> dict:
     """Run the single analysis invocation and route to one of the three I/O Matrix
     outcomes. Returns the written state on the two write outcomes. Raises AnalysisHalted
@@ -235,9 +237,18 @@ def run_analysis(
         body=_render_decisions_body(result),
     )
 
+    # orchestrator_url/stage_callback_secret (AD-20's addendum) are forwarded as extra
+    # kwargs only when supplied, so a caller that never passes them (every existing
+    # caller/test) sees the exact same open_pr_for_story call as before this entry.
+    open_pr_kwargs = {}
+    if orchestrator_url is not None:
+        open_pr_kwargs["orchestrator_url"] = orchestrator_url
+    if stage_callback_secret is not None:
+        open_pr_kwargs["stage_callback_secret"] = stage_callback_secret
+
     try:
         pr = open_implementation_pr.open_pr_for_story(
-            story_slug, run_id, state_base=state_base, cwd=cwd
+            story_slug, run_id, state_base=state_base, cwd=cwd, **open_pr_kwargs
         )
         if status == "awaiting-clarification":
             open_implementation_pr.label_clarification_round(pr["pr_number"], cwd=cwd)
@@ -323,10 +334,27 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--story-slug", required=True)
     p.add_argument("--run-id", required=True)
     p.add_argument("--claude-bin", default="claude", help="override for testing; defaults to the claude CLI on PATH")
+    p.add_argument(
+        "--orchestrator-url",
+        default=None,
+        help="the orchestrator's Function URL (optional; enables the check-run-terminal supersession check, AD-20's addendum)",
+    )
+    p.add_argument(
+        "--stage-callback-secret",
+        default=None,
+        help="the shared stage-callback secret (optional; enables the check-run-terminal supersession check, AD-20's addendum)",
+    )
     args = p.parse_args(argv)
 
     try:
-        outcome = run_analysis(args.story_file, args.story_slug, args.run_id, claude_bin=args.claude_bin)
+        outcome = run_analysis(
+            args.story_file,
+            args.story_slug,
+            args.run_id,
+            claude_bin=args.claude_bin,
+            orchestrator_url=args.orchestrator_url,
+            stage_callback_secret=args.stage_callback_secret,
+        )
     except AnalysisHalted as e:
         print(f"analysis halted: {e.reason}", file=sys.stderr)
         return 1

@@ -36,6 +36,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import check_run_terminal
 import state_io
 
 
@@ -144,6 +145,8 @@ def supersede_prior_prs(
     new_pr_number: int,
     *,
     cwd: str | os.PathLike | None = None,
+    orchestrator_url: str | None = None,
+    stage_callback_secret: str | None = None,
 ) -> list[int]:
     """AD-15's supersession rule: post one "Retry of #M" comment on `new_pr_number`, then
     close every other open PR for this story-slug with a "Superseded by #N" comment.
@@ -154,6 +157,15 @@ def supersede_prior_prs(
     mode, so this lists open PRs repo-wide (`--limit 100`, same unpaginated PoC limitation)
     and filters client-side on `software-factory/<story_slug>/` with the trailing slash (so
     slug `foo` never matches `foo-bar`), excluding `run_id`'s own branch.
+
+    `orchestrator_url`/`stage_callback_secret` (AD-20's addendum): when both are set, each
+    remaining prior PR's own run-id (parsed from its `headRefName`, which the query above
+    already returns) is checked via `check_run_terminal.is_terminal` against the
+    orchestrator's control plane -- a prior PR whose run the orchestrator has already
+    marked terminal (e.g. a concurrent `/reject` on it) is excluded before the "Retry of"
+    comment and close loop, so this job doesn't race that decision and double-comment/close
+    an already-terminal PR. When either is `None` (the default), this check is skipped
+    entirely -- behavior is unchanged from before this entry.
 
     Never `--delete-branch` and never touches state directories (AD-10/AD-12/AD-15).
     Comments first, closes second: a failure part-way leaves the back-link complete, and a
@@ -180,7 +192,7 @@ def supersede_prior_prs(
     prefix = f"software-factory/{story_slug}/"
     own_branch = f"software-factory/{story_slug}/{run_id}"
     prior = sorted(
-        pr["number"]
+        (pr["number"], pr.get("headRefName", ""))
         for pr in prs
         if pr.get("headRefName", "").startswith(prefix)
         and pr.get("headRefName") != own_branch
@@ -189,14 +201,26 @@ def supersede_prior_prs(
     if not prior:
         return []
 
-    retry_of = ", ".join(f"#{number}" for number in prior)
+    if orchestrator_url is not None and stage_callback_secret is not None:
+        prior = [
+            (number, head_ref)
+            for number, head_ref in prior
+            if not check_run_terminal.is_terminal(
+                orchestrator_url, stage_callback_secret, story_slug, head_ref[len(prefix) :]
+            )
+        ]
+        if not prior:
+            return []
+
+    prior_numbers = [number for number, _ in prior]
+    retry_of = ", ".join(f"#{number}" for number in prior_numbers)
     _run(["gh", "pr", "comment", str(new_pr_number), "--body", f"Retry of {retry_of}"], cwd=cwd)
-    for number in prior:
+    for number in prior_numbers:
         _run(
             ["gh", "pr", "close", str(number), "--comment", f"Superseded by #{new_pr_number}"],
             cwd=cwd,
         )
-    return prior
+    return prior_numbers
 
 
 def open_pr_for_story(
@@ -206,19 +230,30 @@ def open_pr_for_story(
     target_branch: str = "main",
     state_base: str | os.PathLike = state_io.FACTORY_DIR,
     cwd: str | os.PathLike | None = None,
+    orchestrator_url: str | None = None,
+    stage_callback_secret: str | None = None,
 ) -> dict:
     """Create the isolated branch, commit plan.md/decisions.md, push, and open the PR.
 
     Idempotent: returns the existing open PR's info if one is already open for this
     branch, without creating anything new. Either way, supersedes this story-slug's other
-    open PRs (AD-15, `supersede_prior_prs`) before returning. Raises PROpenError on any
-    git/gh failure.
+    open PRs (AD-15, `supersede_prior_prs`) before returning -- `orchestrator_url`/
+    `stage_callback_secret` are threaded straight through to both `supersede_prior_prs`
+    call sites below (AD-20's addendum; `None`/`None` is a no-op there, unchanged
+    behavior). Raises PROpenError on any git/gh failure.
     """
     branch = f"software-factory/{story_slug}/{run_id}"
 
     existing = find_open_pr(branch, cwd=cwd)
     if existing is not None:
-        supersede_prior_prs(story_slug, run_id, existing["pr_number"], cwd=cwd)
+        supersede_prior_prs(
+            story_slug,
+            run_id,
+            existing["pr_number"],
+            cwd=cwd,
+            orchestrator_url=orchestrator_url,
+            stage_callback_secret=stage_callback_secret,
+        )
         return existing
 
     state_directory = state_io.state_dir(story_slug, run_id, base=state_base)
@@ -261,7 +296,14 @@ def open_pr_for_story(
     created = find_open_pr(branch, cwd=cwd)
     if created is None:
         raise PROpenError(f"gh pr create reported success but no open PR found for branch {branch!r}")
-    supersede_prior_prs(story_slug, run_id, created["pr_number"], cwd=cwd)
+    supersede_prior_prs(
+        story_slug,
+        run_id,
+        created["pr_number"],
+        cwd=cwd,
+        orchestrator_url=orchestrator_url,
+        stage_callback_secret=stage_callback_secret,
+    )
     return created
 
 
